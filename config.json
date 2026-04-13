@@ -4,32 +4,52 @@
     "version": "0.1.0",
     "debug": false
   },
+  "hardware": {
+    "button_pin": 17,
+    "alarm_pin": 27,
+    "alarm_message": "Inspection Alert: Threshold exceeded!",
+    "threshold": 0.85,
+    "template_path": "templates/reference.png",
+    "camera_index": 0
+  },
   "inspection": {
     "image_path": "images/",
     "output_path": "output/",
     "file_formats": [".jpg", ".png", ".bmp"],
-    "max_image_size": 4096
+    "max_image_size": 4096,
+    "save_captured_images": true,
+    "save_failed_inspections": true
   },
   "opencv": {
-    "display_window": true,
+    "display_window": false,
     "window_name": "VisInsp Viewer",
-    "wait_key_delay": 0
+    "wait_key_delay": 0,
+    "template_match_method": "TM_CCOEFF_NORMED"
   },
   "processing": {
-    "resize_enabled": true,
+    "resize_enabled": false,
     "target_width": 800,
     "target_height": 600,
     "maintain_aspect_ratio": true,
-    "grayscale_conversion": false
+    "grayscale_conversion": true
+  },
+  "gpio": {
+    "mode": "BCM",
+    "button_pull_up": true,
+    "debounce_delay": 0.2,
+    "cleanup_on_exit": true
   },
   "detection": {
-    "threshold": 127,
+    "threshold": 0.85,
     "min_contour_area": 100,
-    "max_contour_area": 10000
+    "max_contour_area": 10000,
+    "match_method": "template"
   },
   "logging": {
     "enabled": true,
     "level": "INFO",
-    "log_file": "visinsp.log"
+    "log_file": "visinsp.log",
+    "log_inspections": true,
+    "log_alarms": true
   }
 }
