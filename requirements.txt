@@ -4,6 +4,9 @@
 opencv-python>=4.8.0
 numpy>=1.24.0
 
+# Raspberry Pi GPIO support
+RPi.GPIO>=0.7.1
+
 # Optional: Additional computer vision libraries
 # opencv-contrib-python>=4.8.0
 

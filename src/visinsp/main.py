@@ -5,10 +5,30 @@ This module contains the main functionality for the VisInsp project.
 """
 
 import sys
-from typing import Optional
+import time
+from datetime import datetime
+from typing import Optional, Dict, Any
 import cv2
 import numpy as np
+try:
+    import RPi.GPIO as GPIO
+    GPIO_AVAILABLE = True
+except (ImportError, RuntimeError):
+    GPIO_AVAILABLE = False
+    print("Warning: RPi.GPIO not available. GPIO functionality will be disabled.")
+
 from .config import load_config, Config
+
+
+# Hardware configuration array
+HARDWARE_CONFIG: Dict[str, Any] = {
+    'BUTTON_PIN': 17,      # GPIO pin for button input
+    'ALARM_PIN': 27,       # GPIO pin for alarm output
+    'ALARM_MESSAGE': 'Inspection Alert: Threshold exceeded!',
+    'THRESHOLD': 0.85,     # Detection confidence threshold
+    'TEMPLATE': None,      # Template image for matching (loaded at runtime)
+    'CAMERA': 0,           # Camera device index (0 for default camera)
+}
 
 
 def hello_visinsp(name: Optional[str] = None) -> str:
