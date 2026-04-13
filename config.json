@@ -1,0 +1,35 @@
+{
+  "app": {
+    "name": "VisInsp",
+    "version": "0.1.0",
+    "debug": false
+  },
+  "inspection": {
+    "image_path": "images/",
+    "output_path": "output/",
+    "file_formats": [".jpg", ".png", ".bmp"],
+    "max_image_size": 4096
+  },
+  "opencv": {
+    "display_window": true,
+    "window_name": "VisInsp Viewer",
+    "wait_key_delay": 0
+  },
+  "processing": {
+    "resize_enabled": true,
+    "target_width": 800,
+    "target_height": 600,
+    "maintain_aspect_ratio": true,
+    "grayscale_conversion": false
+  },
+  "detection": {
+    "threshold": 127,
+    "min_contour_area": 100,
+    "max_contour_area": 10000
+  },
+  "logging": {
+    "enabled": true,
+    "level": "INFO",
+    "log_file": "visinsp.log"
+  }
+}

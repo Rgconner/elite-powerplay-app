@@ -8,6 +8,7 @@ import sys
 from typing import Optional
 import cv2
 import numpy as np
+from .config import load_config, Config
 
 
 def hello_visinsp(name: Optional[str] = None) -> str:
@@ -25,15 +26,27 @@ def hello_visinsp(name: Optional[str] = None) -> str:
     return "Hello from VisInsp!"
 
 
-def run() -> None:
+def run(config: Optional[Config] = None) -> None:
     """
     Main entry point for the VisInsp application.
+    
+    Args:
+        config: Optional Config object. If None, will attempt to load from default location.
     
     This function demonstrates basic functionality and can be extended
     with your specific visual inspection logic.
     """
+    # Load configuration
+    if config is None:
+        try:
+            config = load_config()
+        except FileNotFoundError:
+            print("Warning: No configuration file found. Using defaults.")
+            config = Config()
+    
     print("=" * 50)
-    print("VisInsp - Visual Inspection Module")
+    app_name = config.get('app.name', 'VisInsp')
+    print(f"{app_name} - Visual Inspection Module")
     print("=" * 50)
     print()
     
@@ -45,9 +58,17 @@ def run() -> None:
     print(greeting)
     print()
     
-    # Display OpenCV version
+    # Display version information
+    print(f"App version: {config.get('app.version', 'unknown')}")
     print(f"OpenCV version: {cv2.__version__}")
     print(f"NumPy version: {np.__version__}")
+    print()
+    
+    # Display configuration info
+    print("Configuration:")
+    print(f"  Debug mode: {config.get('app.debug', False)}")
+    print(f"  Image path: {config.get('inspection.image_path', 'images/')}")
+    print(f"  Output path: {config.get('inspection.output_path', 'output/')}")
     print()
     
     # Add your visual inspection logic here
@@ -55,8 +76,8 @@ def run() -> None:
     print()
     print("To get started:")
     print("1. Add your inspection logic to this module")
-    print("2. Import and use functions from other modules")
-    print("3. Extend functionality as needed")
+    print("2. Modify config.json to customize settings")
+    print("3. Use config.get() to access configuration values")
     print()
     print("=" * 50)
 
