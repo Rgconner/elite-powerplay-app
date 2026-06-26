@@ -1,0 +1,17 @@
+{
+  "audio_file": "audio.mp4",
+  "completed_at": "2026-06-26T17:12:17.326107200+00:00",
+  "created_at": "2026-06-26T16:36:41.841185700+00:00",
+  "detected_summary_language": "en",
+  "devices": {
+    "microphone": "Microphone (Anker PowerConf C200)",
+    "system_audio": "Speakers (Realtek USB Audio)"
+  },
+  "duration_seconds": 1266.22,
+  "meeting_id": null,
+  "meeting_name": "Meeting 2026-06-26_11-36-41",
+  "sample_rate": 48000,
+  "status": "completed",
+  "transcript_file": "transcripts.json",
+  "version": "1.0"
+}

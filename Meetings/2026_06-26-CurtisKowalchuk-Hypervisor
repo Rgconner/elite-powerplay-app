@@ -1,0 +1,36 @@
+# Meeting Summary: IBM and Client Discussion on VMware Exit, OpenShift Virtualization, and Data Center Consolidation
+
+**Meeting ID:** meeting-dace886e-7a54-4c9e-b339-561d701f3c9f
+**Date:** June 26, 2026 at 12:12 PM
+**Copied on:** June 26, 2026 at 12:34 PM
+
+---
+
+**Summary**
+
+The meeting focused on the status of an RFP regarding the client's transition away from VMware to an OpenShift-based virtualization platform. IBM representatives (Russ, Dom, and Michael) discussed the technical scope, specifically the use of OpenShift for VM hosting versus containers, and the need for a more detailed services engagement to define migration timelines and costs. The client (Curtis) shared insights into their broader data center consolidation and application rationalization goals, noting that the project is slated for a January start due to budget constraints. The team agreed to schedule a follow-up meeting with IBM's automation SMEs to explore solutions for data center consolidation.
+
+**Key Decisions**
+
+* The current RFP proposal focuses on a straight virtualization replacement using the OpenShift virtualization engine rather than a container-heavy approach.
+
+* A follow-up meeting will be scheduled for the week of the 6th to include IBM's automation SMEs.
+
+**Action Items**
+
+| **Owner** | Task                                                                           | Due             | Reference Transcript Segment | Segment Time stamp |
+| --------- | ------------------------------------------------------------------------------ | --------------- | ---------------------------- | ------------------ |
+| Russ/Dom  | Coordinate a follow-up meeting with Kim Seitel and automation SMEs             | Week of the 6th | [17:21]                      | 17:21              |
+| Russ/Dom  | Follow up with Curtis regarding the specific time slot for the week of the 6th | Week of the 6th | [20:13]                      | 20:13              |
+
+**Discussion Highlights**
+
+* **RFP Status and Technology:** The proposal includes OpenShift virtualization and Ansible for migration. While OpenShift is a container platform, the client's current need is for a virtualization replacement. The client noted they primarily move container workloads to GCP.
+
+* **Migration Services:** There is a significant difference in cost and scope between a rapid migration (e.g., 8,000 VMs in 2 months) and a "teach to fish" approach over a year or two. A whiteboard session with the services team is needed to define the precise engagement.
+
+* **Budget and Timeline:** The client confirmed there is no funding for the project in the current year, meaning the project will likely start in January.
+
+* **Data Center Consolidation:** Curtis identified data center consolidation as his primary project for the next few years, involving hardware life cycle analysis, application rationalization, and moving workloads to GCP.
+
+* **Automation and Collaboration:** IBM plans to bring in Kim Seitel and other automation SMEs to align with the client's goals regarding data center consolidation and infrastructure operations.

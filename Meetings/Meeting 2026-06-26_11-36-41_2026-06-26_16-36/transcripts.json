@@ -1,0 +1,2527 @@
+{
+  "last_updated": "2026-06-26T17:12:17.325207+00:00",
+  "segments": [
+    {
+      "audio_end_time": 3.85,
+      "audio_start_time": 0.0,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:36:46",
+      "duration": 3.85,
+      "id": "seg_0",
+      "sequence_id": 0,
+      "text": "Obviously."
+    },
+    {
+      "audio_end_time": 6.43,
+      "audio_start_time": 3.78,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:36:48",
+      "duration": 2.65,
+      "id": "seg_1",
+      "sequence_id": 1,
+      "text": "Price is the biggest factor there."
+    },
+    {
+      "audio_end_time": 10.42,
+      "audio_start_time": 6.36,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:36:53",
+      "duration": 4.06,
+      "id": "seg_2",
+      "sequence_id": 2,
+      "text": "But it's not the only factor."
+    },
+    {
+      "audio_end_time": 12.16,
+      "audio_start_time": 10.68,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:36:54",
+      "duration": 1.48,
+      "id": "seg_3",
+      "sequence_id": 3,
+      "text": "If there's any"
+    },
+    {
+      "audio_end_time": 17.8,
+      "audio_start_time": 12.9,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:37:00",
+      "duration": 4.9,
+      "id": "seg_4",
+      "sequence_id": 4,
+      "text": "Issues, concerns, uh full functionality, those kinds of things based on what"
+    },
+    {
+      "audio_end_time": 20.62,
+      "audio_start_time": 17.73,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:37:03",
+      "duration": 2.89,
+      "id": "seg_5",
+      "sequence_id": 5,
+      "text": "We're using right now and what we plan to use going forward."
+    },
+    {
+      "audio_end_time": 21.4,
+      "audio_start_time": 20.4,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:37:03",
+      "duration": 1.0,
+      "id": "seg_6",
+      "sequence_id": 6,
+      "text": "Okay."
+    },
+    {
+      "audio_end_time": 27.88,
+      "audio_start_time": 22.68,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:37:10",
+      "duration": 5.2,
+      "id": "seg_7",
+      "sequence_id": 7,
+      "text": "Michael, remind me, did did we were we able to get um"
+    },
+    {
+      "audio_end_time": 30.04,
+      "audio_start_time": 28.05,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:37:12",
+      "duration": 1.99,
+      "id": "seg_8",
+      "sequence_id": 8,
+      "text": "IBM's T SL"
+    },
+    {
+      "audio_end_time": 34.57,
+      "audio_start_time": 30.39,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:37:16",
+      "duration": 4.18,
+      "id": "seg_9",
+      "sequence_id": 9,
+      "text": "Uh licensing offering for VMware into the proposal."
+    },
+    {
+      "audio_end_time": 50.29,
+      "audio_start_time": 35.82,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:37:32",
+      "duration": 14.47,
+      "id": "seg_10",
+      "sequence_id": 10,
+      "text": "No, the the proposal was open ship virtualization with uh Ansible to help with the migration for a short period of time, and then we had professional services in there. But that's kind of curse where I was gonna ask a couple of quick things."
+    },
+    {
+      "audio_end_time": 58.21,
+      "audio_start_time": 50.04,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:37:41",
+      "duration": 8.17,
+      "id": "seg_11",
+      "sequence_id": 11,
+      "text": "I'm assuming when you mentioned kinda the POC that was last year before I was part of the account team, is that correct when you say you kinda did a POC?"
+    },
+    {
+      "audio_end_time": 59.71,
+      "audio_start_time": 58.68,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:37:41",
+      "duration": 1.03,
+      "id": "seg_12",
+      "sequence_id": 12,
+      "text": "Uh."
+    },
+    {
+      "audio_end_time": 63.1,
+      "audio_start_time": 61.08,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:37:45",
+      "duration": 2.02,
+      "id": "seg_13",
+      "sequence_id": 13,
+      "text": "Oh okay."
+    },
+    {
+      "audio_end_time": 64.18,
+      "audio_start_time": 63.18,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:37:46",
+      "duration": 1.0,
+      "id": "seg_14",
+      "sequence_id": 14,
+      "text": "Without"
+    },
+    {
+      "audio_end_time": 75.79,
+      "audio_start_time": 65.4,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:37:58",
+      "duration": 10.39,
+      "id": "seg_15",
+      "sequence_id": 15,
+      "text": "I'm assuming it went well enough to where we were included in the RFP, but is there was there any kind of feedback or the reason I bring it up is since you weren't part of it and I wasn't part of it, is there any"
+    },
+    {
+      "audio_end_time": 82.81,
+      "audio_start_time": 75.81,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:38:05",
+      "duration": 7.0,
+      "id": "seg_16",
+      "sequence_id": 16,
+      "text": "interest in kind of having a here's where we are today. Things maybe have changed a little bit. Here's you know"
+    },
+    {
+      "audio_end_time": 85.39,
+      "audio_start_time": 82.59,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:38:07",
+      "duration": 2.8,
+      "id": "seg_17",
+      "sequence_id": 17,
+      "text": "Technology discussion with the team that did that."
+    },
+    {
+      "audio_end_time": 86.74000000000001,
+      "audio_start_time": 85.2,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:38:08",
+      "duration": 1.54,
+      "id": "seg_18",
+      "sequence_id": 18,
+      "text": "Yeah."
+    },
+    {
+      "audio_end_time": 91.54,
+      "audio_start_time": 89.79,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:38:13",
+      "duration": 1.75,
+      "id": "seg_19",
+      "sequence_id": 19,
+      "text": "You know, I'm I'm not sure."
+    },
+    {
+      "audio_end_time": 92.62,
+      "audio_start_time": 91.29,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:38:14",
+      "duration": 1.33,
+      "id": "seg_20",
+      "sequence_id": 20,
+      "text": "Sure what"
+    },
+    {
+      "audio_end_time": 93.82,
+      "audio_start_time": 92.34,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:38:16",
+      "duration": 1.48,
+      "id": "seg_21",
+      "sequence_id": 21,
+      "text": "The"
+    },
+    {
+      "audio_end_time": 95.26,
+      "audio_start_time": 93.81,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:38:17",
+      "duration": 1.45,
+      "id": "seg_22",
+      "sequence_id": 22,
+      "text": "Yeah, yeah."
+    },
+    {
+      "audio_end_time": 99.73,
+      "audio_start_time": 95.04,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:38:22",
+      "duration": 4.69,
+      "id": "seg_23",
+      "sequence_id": 23,
+      "text": "Obviously if there are major changes or anything like that, that'd probably be a good discussion."
+    },
+    {
+      "audio_end_time": 110.08,
+      "audio_start_time": 102.27,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:38:32",
+      "duration": 7.81,
+      "id": "seg_24",
+      "sequence_id": 24,
+      "text": "I don't think there was any questions. Obviously, you know, for us, open ship was by far the biggest change."
+    },
+    {
+      "audio_end_time": 116.77,
+      "audio_start_time": 112.35,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:38:39",
+      "duration": 4.42,
+      "id": "seg_25",
+      "sequence_id": 25,
+      "text": "New Nutanix, VMware, they're they're fairly similar in"
+    },
+    {
+      "audio_end_time": 130.36,
+      "audio_start_time": 116.85,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:38:53",
+      "duration": 13.51,
+      "id": "seg_26",
+      "sequence_id": 26,
+      "text": "in look and feel and functionality. Hyper V is a little bit of a shift because it's just a Microsoft product and everything. Microsoft is a little different. Uh OpenShift, you know, by by and large it is more of a"
+    },
+    {
+      "audio_end_time": 131.95,
+      "audio_start_time": 130.17,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:38:53",
+      "duration": 1.78,
+      "id": "seg_27",
+      "sequence_id": 27,
+      "text": "Container platform."
+    },
+    {
+      "audio_end_time": 134.62,
+      "audio_start_time": 132.24,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:38:56",
+      "duration": 2.38,
+      "id": "seg_28",
+      "sequence_id": 28,
+      "text": "And and it's definitely uh uh"
+    },
+    {
+      "audio_end_time": 136.15,
+      "audio_start_time": 134.52,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:38:58",
+      "duration": 1.63,
+      "id": "seg_29",
+      "sequence_id": 29,
+      "text": "You know, a change from"
+    },
+    {
+      "audio_end_time": 138.07,
+      "audio_start_time": 135.9,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:39:00",
+      "duration": 2.17,
+      "id": "seg_30",
+      "sequence_id": 30,
+      "text": "Problem of management."
+    },
+    {
+      "audio_end_time": 140.04999999999998,
+      "audio_start_time": 137.85,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:39:02",
+      "duration": 2.2,
+      "id": "seg_31",
+      "sequence_id": 31,
+      "text": "Style."
+    },
+    {
+      "audio_end_time": 143.41,
+      "audio_start_time": 140.04,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:39:06",
+      "duration": 3.37,
+      "id": "seg_32",
+      "sequence_id": 32,
+      "text": "uh from the VMware once. So it was a little bit different."
+    },
+    {
+      "audio_end_time": 150.07,
+      "audio_start_time": 143.28,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:39:12",
+      "duration": 6.79,
+      "id": "seg_33",
+      "sequence_id": 33,
+      "text": "And and so Michael, I mean that's a that's a point is you know, d changes in the technology is the um"
+    },
+    {
+      "audio_end_time": 153.7,
+      "audio_start_time": 150.06,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:39:16",
+      "duration": 3.64,
+      "id": "seg_34",
+      "sequence_id": 34,
+      "text": "addition of of of VMs to"
+    },
+    {
+      "audio_end_time": 158.5,
+      "audio_start_time": 153.66,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:39:21",
+      "duration": 4.84,
+      "id": "seg_35",
+      "sequence_id": 35,
+      "text": "OpenShift, I don't know if that was in was announced yet or part of the"
+    },
+    {
+      "audio_end_time": 162.22,
+      "audio_start_time": 158.58,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:39:24",
+      "duration": 3.64,
+      "id": "seg_36",
+      "sequence_id": 36,
+      "text": "offering when they did the did the uh evaluation."
+    },
+    {
+      "audio_end_time": 164.26000000000002,
+      "audio_start_time": 162.93,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:39:26",
+      "duration": 1.33,
+      "id": "seg_37",
+      "sequence_id": 37,
+      "text": "Yes, I"
+    },
+    {
+      "audio_end_time": 166.81,
+      "audio_start_time": 164.37,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:39:29",
+      "duration": 2.44,
+      "id": "seg_38",
+      "sequence_id": 38,
+      "text": "We did have meetings uh with"
+    },
+    {
+      "audio_end_time": 180.01,
+      "audio_start_time": 167.37,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:39:42",
+      "duration": 12.64,
+      "id": "seg_39",
+      "sequence_id": 39,
+      "text": "some of the technical team um throughout the fall and and you know the winter and stuff there. And they you know we did we did discuss that it we are able to host traditional VMs on the platform and and how that"
+    },
+    {
+      "audio_end_time": 183.49,
+      "audio_start_time": 180.96,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:39:45",
+      "duration": 2.53,
+      "id": "seg_40",
+      "sequence_id": 40,
+      "text": "So that was definitely you know."
+    },
+    {
+      "audio_end_time": 185.83,
+      "audio_start_time": 183.66,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:39:47",
+      "duration": 2.17,
+      "id": "seg_41",
+      "sequence_id": 41,
+      "text": "Covered in our discussions."
+    },
+    {
+      "audio_end_time": 201.73,
+      "audio_start_time": 185.76,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:40:04",
+      "duration": 15.97,
+      "id": "seg_42",
+      "sequence_id": 42,
+      "text": "Yeah, and and for the purposes of the R of P and this is kind of where as we if if we kind of make it to let's say the next step, there's there's some more discussions we want to have because what we kind of propose was our OpenShift virtualization engine, which is is uh strictly for virtualization."
+    },
+    {
+      "audio_end_time": 210.16,
+      "audio_start_time": 201.48,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:40:12",
+      "duration": 8.68,
+      "id": "seg_43",
+      "sequence_id": 43,
+      "text": "Uh and then if you do want to run some containers, that would be some a little bit of a different tweak to the licensing depending on I know that was in the RP that"
+    },
+    {
+      "audio_end_time": 211.96,
+      "audio_start_time": 209.97,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:40:13",
+      "duration": 1.99,
+      "id": "seg_44",
+      "sequence_id": 44,
+      "text": "Uh there was some future."
+    },
+    {
+      "audio_end_time": 219.01,
+      "audio_start_time": 212.91,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:40:21",
+      "duration": 6.1,
+      "id": "seg_45",
+      "sequence_id": 45,
+      "text": "Desire to run containers, but for the purposes I believe of the RP it was just a straight virtualization replacement."
+    },
+    {
+      "audio_end_time": 221.29,
+      "audio_start_time": 218.94,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:40:22",
+      "duration": 2.35,
+      "id": "seg_46",
+      "sequence_id": 46,
+      "text": "Exactly."
+    },
+    {
+      "audio_end_time": 236.14,
+      "audio_start_time": 222.0,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:40:38",
+      "duration": 14.14,
+      "id": "seg_47",
+      "sequence_id": 47,
+      "text": "I mean there might be a couple of little tiny container farms um you know kicking around for test beds, but we're generally not running containers on prem. If we are if we do have any type of containerization, we just move that out to G C P"
+    },
+    {
+      "audio_end_time": 241.42,
+      "audio_start_time": 236.67,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:40:43",
+      "duration": 4.75,
+      "id": "seg_48",
+      "sequence_id": 48,
+      "text": "Okay. Okay. And then it so that helps and I appreciate that. If"
+    },
+    {
+      "audio_end_time": 243.73,
+      "audio_start_time": 241.65,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:40:45",
+      "duration": 2.08,
+      "id": "seg_49",
+      "sequence_id": 49,
+      "text": "Point is if the team"
+    },
+    {
+      "audio_end_time": 254.71,
+      "audio_start_time": 243.78,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:40:57",
+      "duration": 10.93,
+      "id": "seg_50",
+      "sequence_id": 50,
+      "text": "is interested in kind of a updated POC slash deep dive where we can definitely do that, so just keep that in mind. And um around the services piece, I know we had an hour with you"
+    },
+    {
+      "audio_end_time": 260.44,
+      "audio_start_time": 254.43,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:41:02",
+      "duration": 6.01,
+      "id": "seg_51",
+      "sequence_id": 51,
+      "text": "Uh maybe a little bit more uh when we kinda did the oral presentation after the proposal came through."
+    },
+    {
+      "audio_end_time": 274.23999999999995,
+      "audio_start_time": 260.28,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:41:16",
+      "duration": 13.96,
+      "id": "seg_52",
+      "sequence_id": 52,
+      "text": "But there was we definitely had some services in there. We had a TAM, we had migration services, we had some uh managed Ansible which can greatly help with the migration. But we were basing that on quite a bit of assumptions from the R of B"
+    },
+    {
+      "audio_end_time": 275.14,
+      "audio_start_time": 274.05,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:41:17",
+      "duration": 1.09,
+      "id": "seg_53",
+      "sequence_id": 53,
+      "text": "So"
+    },
+    {
+      "audio_end_time": 284.23,
+      "audio_start_time": 275.61,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:41:26",
+      "duration": 8.62,
+      "id": "seg_54",
+      "sequence_id": 54,
+      "text": "At some point, if you guys have the appetite, it might make sense for us to get on another call or have a meeting where we bring in the services team and dive a little deeper."
+    },
+    {
+      "audio_end_time": 286.48,
+      "audio_start_time": 284.13,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:41:28",
+      "duration": 2.35,
+      "id": "seg_55",
+      "sequence_id": 55,
+      "text": "into what your outcomes are."
+    },
+    {
+      "audio_end_time": 290.83000000000004,
+      "audio_start_time": 286.41,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:41:32",
+      "duration": 4.42,
+      "id": "seg_56",
+      "sequence_id": 56,
+      "text": "Because like you said, it if it you know it's it's a very different engagement if you want"
+    },
+    {
+      "audio_end_time": 294.28000000000003,
+      "audio_start_time": 290.61,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:41:36",
+      "duration": 3.67,
+      "id": "seg_57",
+      "sequence_id": 57,
+      "text": "All eight thousand VMs migrated in two months versus"
+    },
+    {
+      "audio_end_time": 309.88,
+      "audio_start_time": 294.03,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:41:52",
+      "duration": 15.85,
+      "id": "seg_58",
+      "sequence_id": 58,
+      "text": "We teach you to fish a little bit and give you the the playbooks to migrate them yourself and then over the next year or two you can migrate them, right? There's there's a quite a big range of what that service has cost to look like. So I think it might make sense for us to grab another hour or"
+    },
+    {
+      "audio_end_time": 317.08,
+      "audio_start_time": 309.84,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:41:59",
+      "duration": 7.24,
+      "id": "seg_59",
+      "sequence_id": 59,
+      "text": "have our services team come out and meet with you guys in person and maybe whiteboard what exactly that looks like. So we can give you a more"
+    },
+    {
+      "audio_end_time": 328.21,
+      "audio_start_time": 317.76,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:42:10",
+      "duration": 10.45,
+      "id": "seg_60",
+      "sequence_id": 60,
+      "text": "I guess precise services engagement. I think the licensing is a licensing that's pretty easy. It's more about to your point earlier, like how much will it cost for you to get from point A to point B."
+    },
+    {
+      "audio_end_time": 333.28,
+      "audio_start_time": 330.39,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:42:14",
+      "duration": 2.89,
+      "id": "seg_61",
+      "sequence_id": 61,
+      "text": "Yeah I didn't I did the stuff with the team next week. Yeah."
+    },
+    {
+      "audio_end_time": 336.37,
+      "audio_start_time": 333.9,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:42:17",
+      "duration": 2.47,
+      "id": "seg_62",
+      "sequence_id": 62,
+      "text": "We'll see what what their thoughts are on that."
+    },
+    {
+      "audio_end_time": 337.09000000000003,
+      "audio_start_time": 336.12,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:42:18",
+      "duration": 0.97,
+      "id": "seg_63",
+      "sequence_id": 63,
+      "text": "Okay."
+    },
+    {
+      "audio_end_time": 355.42,
+      "audio_start_time": 352.38,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:42:36",
+      "duration": 3.04,
+      "id": "seg_64",
+      "sequence_id": 64,
+      "text": "Uh get the opportunity to include uh artists."
+    },
+    {
+      "audio_end_time": 356.40999999999997,
+      "audio_start_time": 355.38,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:42:38",
+      "duration": 1.03,
+      "id": "seg_65",
+      "sequence_id": 65,
+      "text": "Uh"
+    },
+    {
+      "audio_end_time": 363.4,
+      "audio_start_time": 358.38,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:42:44",
+      "duration": 5.02,
+      "id": "seg_66",
+      "sequence_id": 66,
+      "text": "um organization to talk about maybe that bridge"
+    },
+    {
+      "audio_end_time": 367.99,
+      "audio_start_time": 363.42,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:42:49",
+      "duration": 4.57,
+      "id": "seg_67",
+      "sequence_id": 67,
+      "text": "Coverage for the bridge from VMware to to not VMware."
+    },
+    {
+      "audio_end_time": 369.94,
+      "audio_start_time": 367.92,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:42:51",
+      "duration": 2.02,
+      "id": "seg_68",
+      "sequence_id": 68,
+      "text": "in terms of support."
+    },
+    {
+      "audio_end_time": 373.39,
+      "audio_start_time": 370.02,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:42:54",
+      "duration": 3.37,
+      "id": "seg_69",
+      "sequence_id": 69,
+      "text": "support cost where we are we support it"
+    },
+    {
+      "audio_end_time": 375.01,
+      "audio_start_time": 373.17,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:42:56",
+      "duration": 1.84,
+      "id": "seg_70",
+      "sequence_id": 70,
+      "text": "directly with IBM."
+    },
+    {
+      "audio_end_time": 379.12,
+      "audio_start_time": 374.97,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:43:00",
+      "duration": 4.15,
+      "id": "seg_71",
+      "sequence_id": 71,
+      "text": "uh staff we support VMware and so we offer we feel"
+    },
+    {
+      "audio_end_time": 381.52,
+      "audio_start_time": 378.99,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:43:02",
+      "duration": 2.53,
+      "id": "seg_72",
+      "sequence_id": 72,
+      "text": "Now a definitely a better price."
+    },
+    {
+      "audio_end_time": 383.71,
+      "audio_start_time": 381.48,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:43:05",
+      "duration": 2.23,
+      "id": "seg_73",
+      "sequence_id": 73,
+      "text": "But a higher quality"
+    },
+    {
+      "audio_end_time": 384.64,
+      "audio_start_time": 383.64,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:43:06",
+      "duration": 1.0,
+      "id": "seg_74",
+      "sequence_id": 74,
+      "text": "Um"
+    },
+    {
+      "audio_end_time": 386.23,
+      "audio_start_time": 384.39,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:43:07",
+      "duration": 1.84,
+      "id": "seg_75",
+      "sequence_id": 75,
+      "text": "Offering then what"
+    },
+    {
+      "audio_end_time": 387.91,
+      "audio_start_time": 385.98,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:43:09",
+      "duration": 1.93,
+      "id": "seg_76",
+      "sequence_id": 76,
+      "text": "VMware is currently doing."
+    },
+    {
+      "audio_end_time": 397.78,
+      "audio_start_time": 393.48,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:43:18",
+      "duration": 4.3,
+      "id": "seg_77",
+      "sequence_id": 77,
+      "text": "So you said I know with the vacation things are a little crazy, Curtis and"
+    },
+    {
+      "audio_end_time": 400.39,
+      "audio_start_time": 397.59,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:43:21",
+      "duration": 2.8,
+      "id": "seg_78",
+      "sequence_id": 78,
+      "text": "Do you have an idea of"
+    },
+    {
+      "audio_end_time": 402.61,
+      "audio_start_time": 400.86,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:43:24",
+      "duration": 1.75,
+      "id": "seg_79",
+      "sequence_id": 79,
+      "text": "When you"
+    },
+    {
+      "audio_end_time": 413.29,
+      "audio_start_time": 402.39,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:43:34",
+      "duration": 10.9,
+      "id": "seg_80",
+      "sequence_id": 80,
+      "text": "Like not only make a decision, but when when would you want to s like it's assuming you moved away from VMware, when would you kind of in a perfect world wanna kinda start looking at migrating and getting things going?"
+    },
+    {
+      "audio_end_time": 417.55,
+      "audio_start_time": 415.05,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:43:38",
+      "duration": 2.5,
+      "id": "seg_81",
+      "sequence_id": 81,
+      "text": "Well, I mean ideally uh"
+    },
+    {
+      "audio_end_time": 425.53,
+      "audio_start_time": 418.89,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:43:47",
+      "duration": 6.64,
+      "id": "seg_82",
+      "sequence_id": 82,
+      "text": "We would start right away, but the problem is that there's no funding for any such project in the in this year's budget."
+    },
+    {
+      "audio_end_time": 431.26,
+      "audio_start_time": 425.4,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:43:52",
+      "duration": 5.86,
+      "id": "seg_83",
+      "sequence_id": 83,
+      "text": "Um so realistically it would be more of a you know hit the ground running"
+    },
+    {
+      "audio_end_time": 433.48,
+      "audio_start_time": 431.07,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:43:54",
+      "duration": 2.41,
+      "id": "seg_84",
+      "sequence_id": 84,
+      "text": "January kind of thing."
+    },
+    {
+      "audio_end_time": 439.03,
+      "audio_start_time": 437.28,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:44:00",
+      "duration": 1.75,
+      "id": "seg_85",
+      "sequence_id": 85,
+      "text": "Looks like somebody might land it."
+    },
+    {
+      "audio_end_time": 440.83,
+      "audio_start_time": 439.02,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:44:02",
+      "duration": 1.81,
+      "id": "seg_86",
+      "sequence_id": 86,
+      "text": "Yeah, it's"
+    },
+    {
+      "audio_end_time": 446.14,
+      "audio_start_time": 441.3,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:44:07",
+      "duration": 4.84,
+      "id": "seg_87",
+      "sequence_id": 87,
+      "text": "Curtis, how you doing? So sorry about that. My flight got delayed this morning. I"
+    },
+    {
+      "audio_end_time": 447.79,
+      "audio_start_time": 446.01,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:44:09",
+      "duration": 1.78,
+      "id": "seg_88",
+      "sequence_id": 88,
+      "text": "I just landed uh"
+    },
+    {
+      "audio_end_time": 450.07,
+      "audio_start_time": 447.75,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:44:11",
+      "duration": 2.32,
+      "id": "seg_89",
+      "sequence_id": 89,
+      "text": "So I apologize. Um"
+    },
+    {
+      "audio_end_time": 452.59,
+      "audio_start_time": 450.18,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:44:14",
+      "duration": 2.41,
+      "id": "seg_90",
+      "sequence_id": 90,
+      "text": "But I know I know you're good hands here with"
+    },
+    {
+      "audio_end_time": 454.06,
+      "audio_start_time": 452.31,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:44:15",
+      "duration": 1.75,
+      "id": "seg_91",
+      "sequence_id": 91,
+      "text": "Rested Michael, so"
+    },
+    {
+      "audio_end_time": 455.02,
+      "audio_start_time": 454.02,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:44:16",
+      "duration": 1.0,
+      "id": "seg_92",
+      "sequence_id": 92,
+      "text": "Um"
+    },
+    {
+      "audio_end_time": 458.61999999999995,
+      "audio_start_time": 456.03,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:44:20",
+      "duration": 2.59,
+      "id": "seg_93",
+      "sequence_id": 93,
+      "text": "Just uh let me know where where we"
+    },
+    {
+      "audio_end_time": 459.61,
+      "audio_start_time": 458.49,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:44:21",
+      "duration": 1.12,
+      "id": "seg_94",
+      "sequence_id": 94,
+      "text": "Well."
+    },
+    {
+      "audio_end_time": 472.09,
+      "audio_start_time": 460.05,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:44:34",
+      "duration": 12.04,
+      "id": "seg_95",
+      "sequence_id": 95,
+      "text": "Yeah, it's a we're we're kinda just w you know getting some ideas of of the scope and timeline and next steps from Curtis on on specifically on the RFP and he's been very forthcoming on kinda where they are and what they're doing. So"
+    },
+    {
+      "audio_end_time": 477.25,
+      "audio_start_time": 471.93,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:44:38",
+      "duration": 5.32,
+      "id": "seg_96",
+      "sequence_id": 96,
+      "text": "Uh yeah, that's that's kinda where we we got through. But I'll let you jump in if there's any questions you had."
+    },
+    {
+      "audio_end_time": 480.19,
+      "audio_start_time": 478.62,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:44:41",
+      "duration": 1.57,
+      "id": "seg_97",
+      "sequence_id": 97,
+      "text": "Yeah, um"
+    },
+    {
+      "audio_end_time": 489.01,
+      "audio_start_time": 480.33,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:44:50",
+      "duration": 8.68,
+      "id": "seg_98",
+      "sequence_id": 98,
+      "text": "No, I I I mean Curtis, first of all, nice to meet you. Um I don't think we've had the pleasure of meeting you. I know you work with um with with our counterpart Mike Johnson."
+    },
+    {
+      "audio_end_time": 496.57,
+      "audio_start_time": 489.3,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:44:58",
+      "duration": 7.27,
+      "id": "seg_99",
+      "sequence_id": 99,
+      "text": "Who's on the power cloud side? Um and I don't know if Ross has explained to you yet. He probably has. Okay."
+    },
+    {
+      "audio_end_time": 508.81,
+      "audio_start_time": 496.38,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:45:11",
+      "duration": 12.43,
+      "id": "seg_100",
+      "sequence_id": 100,
+      "text": "Um so good to finally meet you. Um yeah, I mean the reason we brought in uh Michael uh to this call is obviously he's well versed with the RFP um that's that's going on and"
+    },
+    {
+      "audio_end_time": 509.65,
+      "audio_start_time": 508.53,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:45:11",
+      "duration": 1.12,
+      "id": "seg_101",
+      "sequence_id": 101,
+      "text": "Um"
+    },
+    {
+      "audio_end_time": 513.64,
+      "audio_start_time": 509.4,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:45:15",
+      "duration": 4.24,
+      "id": "seg_102",
+      "sequence_id": 102,
+      "text": "You know, Russ and I wanna kinda be that thought and then"
+    },
+    {
+      "audio_end_time": 520.87,
+      "audio_start_time": 516.93,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:45:22",
+      "duration": 3.94,
+      "id": "seg_103",
+      "sequence_id": 103,
+      "text": "We've been speaking with Tiago."
+    },
+    {
+      "audio_end_time": 522.61,
+      "audio_start_time": 520.92,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:45:24",
+      "duration": 1.69,
+      "id": "seg_104",
+      "sequence_id": 104,
+      "text": "With Trevor No."
+    },
+    {
+      "audio_end_time": 530.41,
+      "audio_start_time": 523.23,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:45:32",
+      "duration": 7.18,
+      "id": "seg_105",
+      "sequence_id": 105,
+      "text": "Yeah, over the past few months and they've mentioned your name a few times. So I you know, I I really just wanted to get on and uh"
+    },
+    {
+      "audio_end_time": 541.4200000000001,
+      "audio_start_time": 530.34,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:45:43",
+      "duration": 11.08,
+      "id": "seg_106",
+      "sequence_id": 106,
+      "text": "introduce ourselves, um, but also just kind of see where things are with with the different uh spectacles on everything and where projects are landing and if there's anything we can"
+    },
+    {
+      "audio_end_time": 542.77,
+      "audio_start_time": 541.65,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:45:43",
+      "duration": 1.12,
+      "id": "seg_107",
+      "sequence_id": 107,
+      "text": "Uh coming in."
+    },
+    {
+      "audio_end_time": 544.24,
+      "audio_start_time": 542.91,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:45:45",
+      "duration": 1.33,
+      "id": "seg_108",
+      "sequence_id": 108,
+      "text": "And help out with."
+    },
+    {
+      "audio_end_time": 548.77,
+      "audio_start_time": 545.43,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:45:49",
+      "duration": 3.34,
+      "id": "seg_109",
+      "sequence_id": 109,
+      "text": "And Curtis, you're you're located in Canada, correct?"
+    },
+    {
+      "audio_end_time": 550.66,
+      "audio_start_time": 548.64,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:45:51",
+      "duration": 2.02,
+      "id": "seg_110",
+      "sequence_id": 110,
+      "text": "Yes, I'm going to do"
+    },
+    {
+      "audio_end_time": 552.1,
+      "audio_start_time": 550.71,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:45:53",
+      "duration": 1.39,
+      "id": "seg_111",
+      "sequence_id": 111,
+      "text": "Oh great."
+    },
+    {
+      "audio_end_time": 556.72,
+      "audio_start_time": 555.57,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:45:57",
+      "duration": 1.15,
+      "id": "seg_112",
+      "sequence_id": 112,
+      "text": "Um"
+    },
+    {
+      "audio_end_time": 595.81,
+      "audio_start_time": 558.51,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:46:40",
+      "duration": 37.3,
+      "id": "seg_113",
+      "sequence_id": 113,
+      "text": "So I again look where that is. Don't let me interrupt the uh the conversation. Well we were kind of a pause. I think we're I think we pretty much wrapped it up from where we are in the RP, and you know, I've offered up some things to to Curtis in regards to more of a a technical deep dive with the the team since when they did their POC was last year before uh I was on board. And then also one of their bigger concerns, Dom, is the is the services and migration and what that would look like. So we talked a little bit about that and potentially maybe getting another meeting set up to dive deeper into exactly what a migration would look like. So I think"
+    },
+    {
+      "audio_end_time": 600.31,
+      "audio_start_time": 595.53,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:46:41",
+      "duration": 4.78,
+      "id": "seg_114",
+      "sequence_id": 114,
+      "text": "At least Curtis, correct me if I'm wrong from from the R and P perspective, you kinda"
+    },
+    {
+      "audio_end_time": 604.18,
+      "audio_start_time": 600.18,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:46:44",
+      "duration": 4.0,
+      "id": "seg_115",
+      "sequence_id": 115,
+      "text": "We know where we are, you know where what we can do for you and what we're willing to do, but"
+    },
+    {
+      "audio_end_time": 610.1800000000001,
+      "audio_start_time": 603.96,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:46:51",
+      "duration": 6.22,
+      "id": "seg_116",
+      "sequence_id": 116,
+      "text": "Yeah, is there anything from I know it was like a 40 page response that we responded back."
+    },
+    {
+      "audio_end_time": 616.42,
+      "audio_start_time": 610.14,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:46:57",
+      "duration": 6.28,
+      "id": "seg_117",
+      "sequence_id": 117,
+      "text": "Was there were there any technical questions or gotcha or anything that came out of the RP that you guys were concerned about?"
+    },
+    {
+      "audio_end_time": 625.0600000000001,
+      "audio_start_time": 618.6,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:47:05",
+      "duration": 6.46,
+      "id": "seg_118",
+      "sequence_id": 118,
+      "text": "Don't think so. I mean I I don't recall. We definitely would have reached back on if there was anything that was still outstanding."
+    },
+    {
+      "audio_end_time": 629.8000000000001,
+      "audio_start_time": 626.1,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:47:10",
+      "duration": 3.7,
+      "id": "seg_119",
+      "sequence_id": 119,
+      "text": "Because I know that that uh Robert now were"
+    },
+    {
+      "audio_end_time": 630.67,
+      "audio_start_time": 629.61,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:47:11",
+      "duration": 1.06,
+      "id": "seg_120",
+      "sequence_id": 120,
+      "text": "Yeah."
+    },
+    {
+      "audio_end_time": 634.96,
+      "audio_start_time": 630.48,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:47:15",
+      "duration": 4.48,
+      "id": "seg_121",
+      "sequence_id": 121,
+      "text": "Going through and validating that that we uh finished everything as far as"
+    },
+    {
+      "audio_end_time": 637.6,
+      "audio_start_time": 634.77,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:47:18",
+      "duration": 2.83,
+      "id": "seg_122",
+      "sequence_id": 122,
+      "text": "You know, checks and balances and making sure we have all our"
+    },
+    {
+      "audio_end_time": 639.8199999999999,
+      "audio_start_time": 637.68,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:47:20",
+      "duration": 2.14,
+      "id": "seg_123",
+      "sequence_id": 123,
+      "text": "Question answered everything. So"
+    },
+    {
+      "audio_end_time": 641.5899999999999,
+      "audio_start_time": 640.05,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:47:22",
+      "duration": 1.54,
+      "id": "seg_124",
+      "sequence_id": 124,
+      "text": "Okay, perfect."
+    },
+    {
+      "audio_end_time": 657.6700000000001,
+      "audio_start_time": 641.34,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:47:38",
+      "duration": 16.33,
+      "id": "seg_125",
+      "sequence_id": 125,
+      "text": "Yeah, so so Don, I don't know if you had anything. I know you mentioned you might have some other topics, but yeah, I don't want to take over the conversation. But that thank you, Curtis. It was very helpful and like I said, we're here, we're ready. Just kinda include us when you when you need to and we'll we'll be on a plane or set up a meeting whenever you're ready."
+    },
+    {
+      "audio_end_time": 663.91,
+      "audio_start_time": 660.0,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:47:44",
+      "duration": 3.91,
+      "id": "seg_126",
+      "sequence_id": 126,
+      "text": "And Curtis, other than kind of the uh the VMware uh"
+    },
+    {
+      "audio_end_time": 667.69,
+      "audio_start_time": 663.87,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:47:48",
+      "duration": 3.82,
+      "id": "seg_127",
+      "sequence_id": 127,
+      "text": "Exit. Uh I know you've we've been having those conversations with Trevor"
+    },
+    {
+      "audio_end_time": 673.0600000000001,
+      "audio_start_time": 667.47,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:47:53",
+      "duration": 5.59,
+      "id": "seg_128",
+      "sequence_id": 128,
+      "text": "to um he mentioned there there might be a few other areas um"
+    },
+    {
+      "audio_end_time": 680.23,
+      "audio_start_time": 672.78,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:48:00",
+      "duration": 7.45,
+      "id": "seg_129",
+      "sequence_id": 129,
+      "text": "That you're working alongside of with Tiago, um, or one of his team members, like Robin Sickle."
+    },
+    {
+      "audio_end_time": 682.06,
+      "audio_start_time": 680.52,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:48:02",
+      "duration": 1.54,
+      "id": "seg_130",
+      "sequence_id": 130,
+      "text": "Or any of the other."
+    },
+    {
+      "audio_end_time": 683.77,
+      "audio_start_time": 682.23,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:48:04",
+      "duration": 1.54,
+      "id": "seg_131",
+      "sequence_id": 131,
+      "text": "Apollo team."
+    },
+    {
+      "audio_end_time": 690.01,
+      "audio_start_time": 683.85,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:48:11",
+      "duration": 6.16,
+      "id": "seg_132",
+      "sequence_id": 132,
+      "text": "Whether that's network standardization or data center consolidation, any other projects that"
+    },
+    {
+      "audio_end_time": 693.49,
+      "audio_start_time": 691.23,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:48:13",
+      "duration": 2.26,
+      "id": "seg_133",
+      "sequence_id": 133,
+      "text": "that you're you're you're currently tackling."
+    },
+    {
+      "audio_end_time": 698.62,
+      "audio_start_time": 693.72,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:48:19",
+      "duration": 4.9,
+      "id": "seg_134",
+      "sequence_id": 134,
+      "text": "Yeah, so I mean the the network standardization that's out of out of my"
+    },
+    {
+      "audio_end_time": 710.2,
+      "audio_start_time": 703.2,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:48:30",
+      "duration": 7.0,
+      "id": "seg_135",
+      "sequence_id": 135,
+      "text": "I I managed the network team for a couple of years and I still don't it's it's all completely over my head. Um"
+    },
+    {
+      "audio_end_time": 716.8,
+      "audio_start_time": 710.37,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:48:37",
+      "duration": 6.43,
+      "id": "seg_136",
+      "sequence_id": 136,
+      "text": "Yeah, so data center consolidation, that is my big rock project for the next few years. Um"
+    },
+    {
+      "audio_end_time": 723.91,
+      "audio_start_time": 716.67,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:48:44",
+      "duration": 7.24,
+      "id": "seg_137",
+      "sequence_id": 137,
+      "text": "Um that's kinda the the building blocks of the new uh BT as we call IT structure going forward."
+    },
+    {
+      "audio_end_time": 729.6999999999999,
+      "audio_start_time": 724.17,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:48:50",
+      "duration": 5.53,
+      "id": "seg_138",
+      "sequence_id": 138,
+      "text": "Um yeah, so I mean that's that's my big one we're going through right now. And uh"
+    },
+    {
+      "audio_end_time": 733.54,
+      "audio_start_time": 729.48,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:48:53",
+      "duration": 4.06,
+      "id": "seg_139",
+      "sequence_id": 139,
+      "text": "doing a lot of analysis on contracts on um"
+    },
+    {
+      "audio_end_time": 747.73,
+      "audio_start_time": 733.74,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:49:09",
+      "duration": 13.99,
+      "id": "seg_140",
+      "sequence_id": 140,
+      "text": "you know, harbor life cycles and uh application rationalization because obviously we have two very large companies that came together, so we have two of everything, or sometimes three, sometimes four, because we were very regionalized on"
+    },
+    {
+      "audio_end_time": 750.0999999999999,
+      "audio_start_time": 747.93,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:49:10",
+      "duration": 2.17,
+      "id": "seg_141",
+      "sequence_id": 141,
+      "text": "Specifically on the bunky side."
+    },
+    {
+      "audio_end_time": 758.47,
+      "audio_start_time": 749.85,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:49:19",
+      "duration": 8.62,
+      "id": "seg_142",
+      "sequence_id": 142,
+      "text": "But a little less regionalized than the fact that we had been working for the past few years on global standards, but we hadn't obviously gotten there."
+    },
+    {
+      "audio_end_time": 760.8100000000001,
+      "audio_start_time": 758.46,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:49:21",
+      "duration": 2.35,
+      "id": "seg_143",
+      "sequence_id": 143,
+      "text": "Uh as far as everything is concerned."
+    },
+    {
+      "audio_end_time": 761.98,
+      "audio_start_time": 760.77,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:49:21",
+      "duration": 1.21,
+      "id": "seg_144",
+      "sequence_id": 144,
+      "text": "So"
+    },
+    {
+      "audio_end_time": 765.1,
+      "audio_start_time": 762.36,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:49:25",
+      "duration": 2.74,
+      "id": "seg_145",
+      "sequence_id": 145,
+      "text": "You know there's there's a lot of uh."
+    },
+    {
+      "audio_end_time": 768.31,
+      "audio_start_time": 765.0,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:49:28",
+      "duration": 3.31,
+      "id": "seg_146",
+      "sequence_id": 146,
+      "text": "Duplicate triplicate apps that we're going through."
+    },
+    {
+      "audio_end_time": 776.4399999999999,
+      "audio_start_time": 768.06,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:49:37",
+      "duration": 8.38,
+      "id": "seg_147",
+      "sequence_id": 147,
+      "text": "And trying to figure out, you know, okay, so in the Canadian data centers, what is gonna be there still at the end of the day in the uh"
+    },
+    {
+      "audio_end_time": 786.1,
+      "audio_start_time": 776.58,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:49:46",
+      "duration": 9.52,
+      "id": "seg_148",
+      "sequence_id": 148,
+      "text": "uh St. Louis Mile data centers what's gonna be there at the end of the day in South America, Europe, and so on and so forth, because some of those stories might write themselves."
+    },
+    {
+      "audio_end_time": 788.26,
+      "audio_start_time": 785.88,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:49:48",
+      "duration": 2.38,
+      "id": "seg_149",
+      "sequence_id": 149,
+      "text": "You know, like it's uh"
+    },
+    {
+      "audio_end_time": 791.74,
+      "audio_start_time": 788.49,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:49:52",
+      "duration": 3.25,
+      "id": "seg_150",
+      "sequence_id": 150,
+      "text": "The uh Rotterdam data centers are gonna disappear."
+    },
+    {
+      "audio_end_time": 795.4300000000001,
+      "audio_start_time": 791.49,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:49:55",
+      "duration": 3.94,
+      "id": "seg_151",
+      "sequence_id": 151,
+      "text": "Well then obviously that makes it a lot easier to either decide."
+    },
+    {
+      "audio_end_time": 797.9799999999999,
+      "audio_start_time": 795.18,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:49:58",
+      "duration": 2.8,
+      "id": "seg_152",
+      "sequence_id": 152,
+      "text": "A we're gonna shut down that data center."
+    },
+    {
+      "audio_end_time": 801.46,
+      "audio_start_time": 799.08,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:50:01",
+      "duration": 2.38,
+      "id": "seg_153",
+      "sequence_id": 153,
+      "text": "Or B we have a lot of"
+    },
+    {
+      "audio_end_time": 807.52,
+      "audio_start_time": 801.36,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:50:07",
+      "duration": 6.16,
+      "id": "seg_154",
+      "sequence_id": 154,
+      "text": "extra hardware there that is still potentially viable and we can use that to host."
+    },
+    {
+      "audio_end_time": 809.98,
+      "audio_start_time": 807.48,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:50:10",
+      "duration": 2.5,
+      "id": "seg_155",
+      "sequence_id": 155,
+      "text": "Other services from other data centers."
+    },
+    {
+      "audio_end_time": 814.6899999999999,
+      "audio_start_time": 809.76,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:50:14",
+      "duration": 4.93,
+      "id": "seg_156",
+      "sequence_id": 156,
+      "text": "So you know that's where the obviously the hardware life cycles tie in there kinda thing. So"
+    },
+    {
+      "audio_end_time": 817.15,
+      "audio_start_time": 814.92,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:50:17",
+      "duration": 2.23,
+      "id": "seg_157",
+      "sequence_id": 157,
+      "text": "Basically um"
+    },
+    {
+      "audio_end_time": 818.4699999999999,
+      "audio_start_time": 817.05,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:50:18",
+      "duration": 1.42,
+      "id": "seg_158",
+      "sequence_id": 158,
+      "text": "Yeah, we've got uh"
+    },
+    {
+      "audio_end_time": 827.38,
+      "audio_start_time": 821.43,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:50:27",
+      "duration": 5.95,
+      "id": "seg_159",
+      "sequence_id": 159,
+      "text": "going through and then obviously in the meantime we're trying to figure out what can be shifted to GCP."
+    },
+    {
+      "audio_end_time": 842.5600000000001,
+      "audio_start_time": 827.19,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:50:43",
+      "duration": 15.37,
+      "id": "seg_160",
+      "sequence_id": 160,
+      "text": "Right. We're not you know, we're not doing lift and shift. It has to be replatformed or at the very least containerized. Um we have a large AWS instance that they just lifted and shifted a a few years ago and now we're"
+    },
+    {
+      "audio_end_time": 852.34,
+      "audio_start_time": 842.52,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:50:52",
+      "duration": 9.82,
+      "id": "seg_161",
+      "sequence_id": 161,
+      "text": "we're paying through the NO's for it. And so we want to get out of that business. Um if it's a VM then it's on premise unless there's a very specific requirement."
+    },
+    {
+      "audio_end_time": 853.63,
+      "audio_start_time": 852.66,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:50:53",
+      "duration": 0.97,
+      "id": "seg_162",
+      "sequence_id": 162,
+      "text": "Yeah."
+    },
+    {
+      "audio_end_time": 861.76,
+      "audio_start_time": 854.37,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:51:02",
+      "duration": 7.39,
+      "id": "seg_163",
+      "sequence_id": 163,
+      "text": "So that's you know, the the lay of the line right now for me for the remainder of the year, aside from the hypervisor stuff. Yeah."
+    },
+    {
+      "audio_end_time": 871.0899999999999,
+      "audio_start_time": 862.29,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:51:11",
+      "duration": 8.8,
+      "id": "seg_164",
+      "sequence_id": 164,
+      "text": "Okay, great. Great. Well this is this is good to uh have context on. And we've been you know we've been speaking with Tiago's team again and and"
+    },
+    {
+      "audio_end_time": 875.86,
+      "audio_start_time": 871.41,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:51:15",
+      "duration": 4.45,
+      "id": "seg_165",
+      "sequence_id": 165,
+      "text": "Very similarly to what Mike Johnson does kind of on the"
+    },
+    {
+      "audio_end_time": 878.2,
+      "audio_start_time": 875.94,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:51:17",
+      "duration": 2.26,
+      "id": "seg_166",
+      "sequence_id": 166,
+      "text": "Uh power and cloud side."
+    },
+    {
+      "audio_end_time": 879.37,
+      "audio_start_time": 878.01,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:51:19",
+      "duration": 1.36,
+      "id": "seg_167",
+      "sequence_id": 167,
+      "text": "For IBM."
+    },
+    {
+      "audio_end_time": 880.87,
+      "audio_start_time": 879.15,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:51:20",
+      "duration": 1.72,
+      "id": "seg_168",
+      "sequence_id": 168,
+      "text": "We have another uh"
+    },
+    {
+      "audio_end_time": 891.13,
+      "audio_start_time": 880.74,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:51:31",
+      "duration": 10.39,
+      "id": "seg_169",
+      "sequence_id": 169,
+      "text": "uh seller that that sits alongside Russ and I. Uh her name is Kim Seitel. I don't know if you've talked with her or met her yet. Um she was currently she was currently with her"
+    },
+    {
+      "audio_end_time": 897.64,
+      "audio_start_time": 890.91,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:51:38",
+      "duration": 6.73,
+      "id": "seg_170",
+      "sequence_id": 170,
+      "text": "at our discussion um in Omaha with with Trevor the other day. Um so she sits over the automation."
+    },
+    {
+      "audio_end_time": 899.89,
+      "audio_start_time": 897.66,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:51:39",
+      "duration": 2.23,
+      "id": "seg_171",
+      "sequence_id": 171,
+      "text": "uh piece of the business. And we've been"
+    },
+    {
+      "audio_end_time": 906.58,
+      "audio_start_time": 899.79,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:51:46",
+      "duration": 6.79,
+      "id": "seg_172",
+      "sequence_id": 172,
+      "text": "working with Thiago and Rob Ben Sickle and Eduardo and a few others and and uh Sal Paulo."
+    },
+    {
+      "audio_end_time": 912.52,
+      "audio_start_time": 907.08,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:51:52",
+      "duration": 5.44,
+      "id": "seg_173",
+      "sequence_id": 173,
+      "text": "And kind of helping explain some of the solutions for that uh"
+    },
+    {
+      "audio_end_time": 916.54,
+      "audio_start_time": 912.42,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:51:56",
+      "duration": 4.12,
+      "id": "seg_174",
+      "sequence_id": 174,
+      "text": "data consolidation, uh data center consolidation."
+    },
+    {
+      "audio_end_time": 918.94,
+      "audio_start_time": 916.32,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:51:58",
+      "duration": 2.62,
+      "id": "seg_175",
+      "sequence_id": 175,
+      "text": "Um and I I think it you know."
+    },
+    {
+      "audio_end_time": 920.02,
+      "audio_start_time": 918.84,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:51:59",
+      "duration": 1.18,
+      "id": "seg_176",
+      "sequence_id": 176,
+      "text": "Ross."
+    },
+    {
+      "audio_end_time": 923.65,
+      "audio_start_time": 920.16,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:52:03",
+      "duration": 3.49,
+      "id": "seg_177",
+      "sequence_id": 177,
+      "text": "Step in here if you if you see another alley too, but"
+    },
+    {
+      "audio_end_time": 929.14,
+      "audio_start_time": 923.94,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:52:09",
+      "duration": 5.2,
+      "id": "seg_178",
+      "sequence_id": 178,
+      "text": "Yeah, I'd love to get another call going with her and some of her other automation."
+    },
+    {
+      "audio_end_time": 930.82,
+      "audio_start_time": 928.92,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:52:10",
+      "duration": 1.9,
+      "id": "seg_179",
+      "sequence_id": 179,
+      "text": "Uh SMEs."
+    },
+    {
+      "audio_end_time": 932.83,
+      "audio_start_time": 930.78,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:52:12",
+      "duration": 2.05,
+      "id": "seg_180",
+      "sequence_id": 180,
+      "text": "Uh just to kind of go over"
+    },
+    {
+      "audio_end_time": 937.84,
+      "audio_start_time": 932.64,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:52:17",
+      "duration": 5.2,
+      "id": "seg_181",
+      "sequence_id": 181,
+      "text": "And and crossroads with what we're hearing with Thiago and and maybe what's"
+    },
+    {
+      "audio_end_time": 940.75,
+      "audio_start_time": 937.8,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:52:20",
+      "duration": 2.95,
+      "id": "seg_182",
+      "sequence_id": 182,
+      "text": "happening uh from your point of view."
+    },
+    {
+      "audio_end_time": 945.82,
+      "audio_start_time": 940.62,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:52:25",
+      "duration": 5.2,
+      "id": "seg_183",
+      "sequence_id": 183,
+      "text": "and and see if we can show you some of these uh solutions um"
+    },
+    {
+      "audio_end_time": 946.63,
+      "audio_start_time": 945.6,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:52:26",
+      "duration": 1.03,
+      "id": "seg_184",
+      "sequence_id": 184,
+      "text": "There."
+    },
+    {
+      "audio_end_time": 952.45,
+      "audio_start_time": 949.8,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:52:32",
+      "duration": 2.65,
+      "id": "seg_185",
+      "sequence_id": 185,
+      "text": "Spectacular. Super, super helpful."
+    },
+    {
+      "audio_end_time": 956.56,
+      "audio_start_time": 953.94,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:52:36",
+      "duration": 2.62,
+      "id": "seg_186",
+      "sequence_id": 186,
+      "text": "Okay. Yeah."
+    },
+    {
+      "audio_end_time": 965.08,
+      "audio_start_time": 957.15,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:52:45",
+      "duration": 7.93,
+      "id": "seg_187",
+      "sequence_id": 187,
+      "text": "Definitely would be interested. Um you know, Giango and I kind of overlap because he used to uh he used to run a lot of these"
+    },
+    {
+      "audio_end_time": 975.07,
+      "audio_start_time": 966.27,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:52:55",
+      "duration": 8.8,
+      "id": "seg_188",
+      "sequence_id": 188,
+      "text": "Yeah, a lot of this environment on the operation side on Monkey pre-merger, whereas now he's he's slowly starting to move to his new roles in"
+    },
+    {
+      "audio_end_time": 979.93,
+      "audio_start_time": 975.09,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:52:59",
+      "duration": 4.84,
+      "id": "seg_189",
+      "sequence_id": 189,
+      "text": "Yeah, and I guess his team is called infrastructure operations or something like that. So"
+    },
+    {
+      "audio_end_time": 981.19,
+      "audio_start_time": 980.22,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:53:00",
+      "duration": 0.97,
+      "id": "seg_190",
+      "sequence_id": 190,
+      "text": "Yeah."
+    },
+    {
+      "audio_end_time": 982.66,
+      "audio_start_time": 980.91,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:53:02",
+      "duration": 1.75,
+      "id": "seg_191",
+      "sequence_id": 191,
+      "text": "It'd be taken over the"
+    },
+    {
+      "audio_end_time": 989.56,
+      "audio_start_time": 982.47,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:53:09",
+      "duration": 7.09,
+      "id": "seg_192",
+      "sequence_id": 192,
+      "text": "the data center and uh the support of the the local heads at P, whereas he's gonna be doing a lot more of the high level"
+    },
+    {
+      "audio_end_time": 997.33,
+      "audio_start_time": 989.34,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:53:17",
+      "duration": 7.99,
+      "id": "seg_193",
+      "sequence_id": 193,
+      "text": "you know, monitoring management, uh you know, incident management, demand management, all those kinds of things. So but yes, I mean"
+    },
+    {
+      "audio_end_time": 1003.96,
+      "audio_start_time": 997.29,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:53:24",
+      "duration": 6.67,
+      "id": "seg_194",
+      "sequence_id": 194,
+      "text": "Him and I and then and then Robert were kinda the trifecta of of operations right now."
+    },
+    {
+      "audio_end_time": 1005.85,
+      "audio_start_time": 1004.7,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:53:25",
+      "duration": 1.15,
+      "id": "seg_195",
+      "sequence_id": 195,
+      "text": "Yeah."
+    },
+    {
+      "audio_end_time": 1009.21,
+      "audio_start_time": 1005.9,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:53:29",
+      "duration": 3.31,
+      "id": "seg_196",
+      "sequence_id": 196,
+      "text": "I mean I definitely would be interested in in those"
+    },
+    {
+      "audio_end_time": 1010.62,
+      "audio_start_time": 1009.29,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:53:30",
+      "duration": 1.33,
+      "id": "seg_197",
+      "sequence_id": 197,
+      "text": "That information."
+    },
+    {
+      "audio_end_time": 1022.2,
+      "audio_start_time": 1011.12,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:53:42",
+      "duration": 11.08,
+      "id": "seg_198",
+      "sequence_id": 198,
+      "text": "Wonderful. Well let's let's set up that conversation next. I think that should be our next step. We'll bring Kim in and some of our other um automation SMEs um and just kind of go go over the"
+    },
+    {
+      "audio_end_time": 1028.56,
+      "audio_start_time": 1023.15,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:53:48",
+      "duration": 5.41,
+      "id": "seg_199",
+      "sequence_id": 199,
+      "text": "uh solutions we've been talking to Thiago and his team about um it sounds like"
+    },
+    {
+      "audio_end_time": 1032.55,
+      "audio_start_time": 1028.61,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:53:52",
+      "duration": 3.94,
+      "id": "seg_200",
+      "sequence_id": 200,
+      "text": "Things are shifting a little bit internally for you guys."
+    },
+    {
+      "audio_end_time": 1035.04,
+      "audio_start_time": 1032.33,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:53:55",
+      "duration": 2.71,
+      "id": "seg_201",
+      "sequence_id": 201,
+      "text": "Rolls and whatnot."
+    },
+    {
+      "audio_end_time": 1037.23,
+      "audio_start_time": 1034.76,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:53:56",
+      "duration": 2.47,
+      "id": "seg_202",
+      "sequence_id": 202,
+      "text": "Yeah, more high level work, which is a little"
+    },
+    {
+      "audio_end_time": 1039.0600000000002,
+      "audio_start_time": 1037.43,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:53:58",
+      "duration": 1.63,
+      "id": "seg_203",
+      "sequence_id": 203,
+      "text": "Which is great. So"
+    },
+    {
+      "audio_end_time": 1042.21,
+      "audio_start_time": 1038.9,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:54:02",
+      "duration": 3.31,
+      "id": "seg_204",
+      "sequence_id": 204,
+      "text": "Let's uh let's let's put that down as a next step."
+    },
+    {
+      "audio_end_time": 1043.98,
+      "audio_start_time": 1041.96,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:54:03",
+      "duration": 2.02,
+      "id": "seg_205",
+      "sequence_id": 205,
+      "text": "Um I don't know if you're"
+    },
+    {
+      "audio_end_time": 1049.1699999999998,
+      "audio_start_time": 1044.6,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:54:09",
+      "duration": 4.57,
+      "id": "seg_206",
+      "sequence_id": 206,
+      "text": "free uh maybe sometime earlier next week and a lot of people are gonna be"
+    },
+    {
+      "audio_end_time": 1051.21,
+      "audio_start_time": 1048.98,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:54:11",
+      "duration": 2.23,
+      "id": "seg_207",
+      "sequence_id": 207,
+      "text": "Taking off time in the streets."
+    },
+    {
+      "audio_end_time": 1052.89,
+      "audio_start_time": 1051.26,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:54:12",
+      "duration": 1.63,
+      "id": "seg_208",
+      "sequence_id": 208,
+      "text": "Um later next week."
+    },
+    {
+      "audio_end_time": 1057.36,
+      "audio_start_time": 1053.63,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:54:17",
+      "duration": 3.73,
+      "id": "seg_209",
+      "sequence_id": 209,
+      "text": "Uh Wednesday is the holiday here in Canada. It's our independent state."
+    },
+    {
+      "audio_end_time": 1058.35,
+      "audio_start_time": 1057.11,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:54:18",
+      "duration": 1.24,
+      "id": "seg_210",
+      "sequence_id": 210,
+      "text": "Oh that's right."
+    },
+    {
+      "audio_end_time": 1066.66,
+      "audio_start_time": 1058.37,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:54:26",
+      "duration": 8.29,
+      "id": "seg_211",
+      "sequence_id": 211,
+      "text": "And then obviously, yeah, the the third is is the holiday in the US, which means the second is likely a holiday for a lot of people as well."
+    },
+    {
+      "audio_end_time": 1068.46,
+      "audio_start_time": 1066.44,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:54:28",
+      "duration": 2.02,
+      "id": "seg_212",
+      "sequence_id": 212,
+      "text": "So on and so forth."
+    },
+    {
+      "audio_end_time": 1070.74,
+      "audio_start_time": 1068.99,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:54:30",
+      "duration": 1.75,
+      "id": "seg_213",
+      "sequence_id": 213,
+      "text": "I'm not."
+    },
+    {
+      "audio_end_time": 1083.58,
+      "audio_start_time": 1070.97,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:54:43",
+      "duration": 12.61,
+      "id": "seg_214",
+      "sequence_id": 214,
+      "text": "Sorry to interrupt, but my wife and I unknowingly were gonna be in Banff next week and didn't realize I get two holidays, I get the Canadian and the United States ticket. I've never been I mean I've been to Banff."
+    },
+    {
+      "audio_end_time": 1085.9199999999998,
+      "audio_start_time": 1083.87,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:54:45",
+      "duration": 2.05,
+      "id": "seg_215",
+      "sequence_id": 215,
+      "text": "A few times, but I've never been to Bampa."
+    },
+    {
+      "audio_end_time": 1091.41,
+      "audio_start_time": 1087.29,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:54:51",
+      "duration": 4.12,
+      "id": "seg_216",
+      "sequence_id": 216,
+      "text": "You know how on a regular day is is busy."
+    },
+    {
+      "audio_end_time": 1099.6,
+      "audio_start_time": 1092.54,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:54:59",
+      "duration": 7.06,
+      "id": "seg_217",
+      "sequence_id": 217,
+      "text": "I'm very concerned. I'm very concerned about how proud of some of the hiking places and lakes are gonna be."
+    },
+    {
+      "audio_end_time": 1103.5,
+      "audio_start_time": 1100.28,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:55:03",
+      "duration": 3.22,
+      "id": "seg_218",
+      "sequence_id": 218,
+      "text": "Uh yeah, so the the week of the sixth it's probably better."
+    },
+    {
+      "audio_end_time": 1104.34,
+      "audio_start_time": 1103.28,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:55:04",
+      "duration": 1.06,
+      "id": "seg_219",
+      "sequence_id": 219,
+      "text": "Okay."
+    },
+    {
+      "audio_end_time": 1109.83,
+      "audio_start_time": 1104.54,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:55:09",
+      "duration": 5.29,
+      "id": "seg_220",
+      "sequence_id": 220,
+      "text": "Just to see some free time available. Um looking at my calendar"
+    },
+    {
+      "audio_end_time": 1111.45,
+      "audio_start_time": 1109.7,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:55:11",
+      "duration": 1.75,
+      "id": "seg_221",
+      "sequence_id": 221,
+      "text": "Right now."
+    },
+    {
+      "audio_end_time": 1118.77,
+      "audio_start_time": 1112.31,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:55:18",
+      "duration": 6.46,
+      "id": "seg_222",
+      "sequence_id": 222,
+      "text": "For some reason most of Monday is wide open, which is very concerning because generally my Mondays are not like that."
+    },
+    {
+      "audio_end_time": 1120.39,
+      "audio_start_time": 1119.09,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:55:20",
+      "duration": 1.3,
+      "id": "seg_223",
+      "sequence_id": 223,
+      "text": "Uh"
+    },
+    {
+      "audio_end_time": 1124.2,
+      "audio_start_time": 1120.2,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:55:24",
+      "duration": 4.0,
+      "id": "seg_224",
+      "sequence_id": 224,
+      "text": "Uh ultimately Wednesday afternoon it is open."
+    },
+    {
+      "audio_end_time": 1125.52,
+      "audio_start_time": 1124.37,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:55:25",
+      "duration": 1.15,
+      "id": "seg_225",
+      "sequence_id": 225,
+      "text": "And then uh"
+    },
+    {
+      "audio_end_time": 1128.94,
+      "audio_start_time": 1125.96,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:55:29",
+      "duration": 2.98,
+      "id": "seg_226",
+      "sequence_id": 226,
+      "text": "Fair amount of time available on Friday."
+    },
+    {
+      "audio_end_time": 1130.17,
+      "audio_start_time": 1128.99,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:55:30",
+      "duration": 1.18,
+      "id": "seg_227",
+      "sequence_id": 227,
+      "text": "Okay, great."
+    },
+    {
+      "audio_end_time": 1136.26,
+      "audio_start_time": 1130.28,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:55:36",
+      "duration": 5.98,
+      "id": "seg_228",
+      "sequence_id": 228,
+      "text": "Great. I'll coordinate with the uh with the automation team. Um definitely wanna have them on that call."
+    },
+    {
+      "audio_end_time": 1139.29,
+      "audio_start_time": 1137.09,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:55:39",
+      "duration": 2.2,
+      "id": "seg_229",
+      "sequence_id": 229,
+      "text": "I'm pretty open on Monday afternoon."
+    },
+    {
+      "audio_end_time": 1141.39,
+      "audio_start_time": 1139.16,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:55:41",
+      "duration": 2.23,
+      "id": "seg_230",
+      "sequence_id": 230,
+      "text": "Um so if they are two, I"
+    },
+    {
+      "audio_end_time": 1143.49,
+      "audio_start_time": 1141.38,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:55:43",
+      "duration": 2.11,
+      "id": "seg_231",
+      "sequence_id": 231,
+      "text": "I'd love to get the conversation out."
+    },
+    {
+      "audio_end_time": 1147.21,
+      "audio_start_time": 1143.21,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:55:48",
+      "duration": 4.0,
+      "id": "seg_232",
+      "sequence_id": 232,
+      "text": "Going as soon as possible. So if not, when they work straight too."
+    },
+    {
+      "audio_end_time": 1153.57,
+      "audio_start_time": 1148.52,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:55:53",
+      "duration": 5.05,
+      "id": "seg_233",
+      "sequence_id": 233,
+      "text": "One thing I was gonna mention is that you know in a former life uh here at IBM"
+    },
+    {
+      "audio_end_time": 1156.9,
+      "audio_start_time": 1153.8,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:55:57",
+      "duration": 3.1,
+      "id": "seg_234",
+      "sequence_id": 234,
+      "text": "I did uh data center migrations."
+    },
+    {
+      "audio_end_time": 1160.56,
+      "audio_start_time": 1156.77,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:56:01",
+      "duration": 3.79,
+      "id": "seg_235",
+      "sequence_id": 235,
+      "text": "for clients coming into IBM. I did that for about six years."
+    },
+    {
+      "audio_end_time": 1161.61,
+      "audio_start_time": 1160.37,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:56:02",
+      "duration": 1.24,
+      "id": "seg_236",
+      "sequence_id": 236,
+      "text": "Both in"
+    },
+    {
+      "audio_end_time": 1162.81,
+      "audio_start_time": 1161.75,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:56:03",
+      "duration": 1.06,
+      "id": "seg_237",
+      "sequence_id": 237,
+      "text": "Um"
+    },
+    {
+      "audio_end_time": 1168.81,
+      "audio_start_time": 1162.8,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:56:09",
+      "duration": 6.01,
+      "id": "seg_238",
+      "sequence_id": 238,
+      "text": "There are regular, you know, physical systems in a data center and then also cloud for"
+    },
+    {
+      "audio_end_time": 1171.84,
+      "audio_start_time": 1169.07,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:56:12",
+      "duration": 2.77,
+      "id": "seg_239",
+      "sequence_id": 239,
+      "text": "I think it's five years between them, six years between them."
+    },
+    {
+      "audio_end_time": 1174.24,
+      "audio_start_time": 1171.56,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:56:15",
+      "duration": 2.68,
+      "id": "seg_240",
+      "sequence_id": 240,
+      "text": "Actually a patent's a data migration, so"
+    },
+    {
+      "audio_end_time": 1178.65,
+      "audio_start_time": 1174.35,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:56:19",
+      "duration": 4.3,
+      "id": "seg_241",
+      "sequence_id": 241,
+      "text": "If there's anything I can help with, don't, you know, don't hesitate to ask."
+    },
+    {
+      "audio_end_time": 1184.32,
+      "audio_start_time": 1180.59,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:56:24",
+      "duration": 3.73,
+      "id": "seg_242",
+      "sequence_id": 242,
+      "text": "It's a skill set I still enjoy, but don't get to use as much as I'd like."
+    },
+    {
+      "audio_end_time": 1191.94,
+      "audio_start_time": 1190.04,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:56:32",
+      "duration": 1.9,
+      "id": "seg_243",
+      "sequence_id": 243,
+      "text": "Um guys, anything else?"
+    },
+    {
+      "audio_end_time": 1210.54,
+      "audio_start_time": 1193.55,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:56:52",
+      "duration": 16.99,
+      "id": "seg_244",
+      "sequence_id": 244,
+      "text": "No, from from my side, first, I appreciate you know answering some of the questions and kind of giving us a little lay of the land on where that RFP is. And I I'll just reiterate again, we're here to answer questions. We're happy to do a deep dive on the services or the technology, whatever comes back from your team. So please, please just let us know."
+    },
+    {
+      "audio_end_time": 1228.78,
+      "audio_start_time": 1213.8,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:57:10",
+      "duration": 14.98,
+      "id": "seg_245",
+      "sequence_id": 245,
+      "text": "Um well Curtis, I'll follow up with the time slot for the week of the 6th. And again, Rest and I are specifically focused and tie two bungi. That is what we wake up every day."
+    },
+    {
+      "audio_end_time": 1238.62,
+      "audio_start_time": 1229.4,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:57:20",
+      "duration": 9.22,
+      "id": "seg_246",
+      "sequence_id": 246,
+      "text": "And think about so please, uh if you have any questions or comments or thoughts that you want to run by us, uh with anything you guys are doing."
+    },
+    {
+      "audio_end_time": 1240.87,
+      "audio_start_time": 1238.67,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:57:21",
+      "duration": 2.2,
+      "id": "seg_247",
+      "sequence_id": 247,
+      "text": "Please do not hesitate to reach out."
+    },
+    {
+      "audio_end_time": 1252.15,
+      "audio_start_time": 1241.73,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:57:33",
+      "duration": 10.42,
+      "id": "seg_248",
+      "sequence_id": 248,
+      "text": "Sorry if I was a little spotty. I'm trying to dodge people in the airport that are talking near me. But uh great great meeting you, Curtis. Um I'll have my camera on next time."
+    },
+    {
+      "audio_end_time": 1260.4,
+      "audio_start_time": 1252.05,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:57:41",
+      "duration": 8.35,
+      "id": "seg_249",
+      "sequence_id": 249,
+      "text": "So you can see me. Um but yeah, uh we will uh talk sometime after the American and Canadian holiday."
+    },
+    {
+      "audio_end_time": 1262.59,
+      "audio_start_time": 1261.11,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:57:43",
+      "duration": 1.48,
+      "id": "seg_250",
+      "sequence_id": 250,
+      "text": "Sounds good."
+    },
+    {
+      "audio_end_time": 1266.22,
+      "audio_start_time": 1262.49,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:57:47",
+      "duration": 3.73,
+      "id": "seg_251",
+      "sequence_id": 251,
+      "text": "Thank you very much. Thanks everybody. Happy rest of your day. Thanks."
+    }
+  ],
+  "total_segments": 252,
+  "version": "1.0"
+}

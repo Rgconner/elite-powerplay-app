@@ -1,0 +1,291 @@
+# Transcript of the Meeting: meeting-110edf6e-fdd8-477e-ac84-108167eef8c9 - Meeting 2026-06-02_09-31-32
+
+## Date: 6/2/2026
+
+[00:38] Mm.  
+[00:40] Um let's go ahead and just get started and when Pakash comes I'll ask him about his  
+[00:45] Question from last time. Um but  
+[00:49] I guess wanted to just let's take a quick pulse on where things landed with the the the data collection and go from there.  
+[00:56] Yeah, I'm sure.  
+[00:58] We have been running through some uh  
+[01:00] Firewall issues, you know.  
+[01:04] And yesterday I copied you all the email. But um fortunately you know just few minutes back before our call I was able to successfully push the save file over to one of the IBM I partitions.  
+[01:33] Thank you.  
+[01:34] So  
+[01:36] You know with the same file, you know, we're able to uh install this performance navigator and I see this job has been scheduled to run at uh zero zero thirty hours tonight.  
+[02:05] But but uh just to let you know again, uh when connecting to  
+[02:09] When the IBM Might.  
+[02:28] So he was a mat A Vector.  
+[02:31] So when I click on new  
+[02:39] There it is.  
+[02:49] Okay. I can follow up with uh Fortune on that.  
+[03:02] And the problem with install approach is that, you know, I quickly wanted to show there is another uh uh uh uh uh uh uh uh uh uh uh you know uh document where we have uh  
+[03:12] that we have come across you know these issues. Uh you know  
+[03:16] When we happen to click on the performance navigator, it was saying unable to write. And then we have asked, you know, one of our team who is responsible for uh managing this Windows server. So I've asked them to know uh reconfigure this performance name for uh IM9. So post which I'm trying to you know this is the first attempt I would like to know try on the call. But then I keep getting this. And then I was unable to write performance navigator. And looks like this issue is not coming up now. However, uh I get this message.  
+[03:52] model X feature code P D D P two does not match any model in the table.  
+[04:02] Um priming this is  
+[04:05] Defender so just a quick question. Do you have access to HMC as well?  
+[04:11] Yes, we do have access.  
+[04:14] From the HMC uh if you have access to HMC, um I think there's um a way to collect from HMC as well, right? So  
+[04:25] Um  
+[04:27] I would also look at the second path.  
+[04:30] In parallel if possible.  
+[04:32] Yeah, I'm the T T T T T T T T T Tim C now.  
+[04:35] Do we have any specific uh you know steps that must be followed? So if you can let me know, I'll go ahead and do it for other uh systems in the environment. So this is where all our servers are out there.  
+[04:47] Yeah, so basically what we are uh I mean at least  
+[04:51] Um  
+[04:53] Well the  
+[04:54] Use the command line  
+[04:56] Um  
+[04:59] If the performance  
+[05:01] Let's look at the performance dashboard.  
+[05:08] Yeah.  
+[05:18] Yeah.  
+[05:19] So we can um extract  
+[05:29] CPU memory.  
+[05:45] We want to be in a JSON format. I think it's a good thing.  
+[05:51] And look at the pasture.  
+[05:56] Just wherever you think the peaks are probably  
+[06:01] Sorry, Craig. Um  
+[06:06] Uh  
+[06:32] Yeah, look for a month and look for  
+[06:36] Yes, I'm trying it out. Yeah, I'm trying.  
+[06:44] I think it's not taking probably we might not have the May first data.  
+[06:50] Yeah.  
+[06:54] Yeah, let me choose last one with data if possible. Yeah, I think we should be having a data from twenty.  
+[07:03] Because I  
+[07:07] Oh that we are on June.  
+[07:10] Yeah, lips.  
+[07:12] Yeah.  
+[07:17] That's fine. Just uh do that and then one  
+[07:28] A day.  
+[07:30] And even  
+[07:35] The whole thing.  
+[07:43] If there is a pattern of steady state frame. So  
+[07:47] We can  
+[08:01] And the steady state let's say is at forty percent of the current allocated value.  
+[08:08] Um and then the bursts happen only once or twice so  
+[08:13] Yeah.  
+[08:22] Um overall.  
+[08:24] PC or really save significant costs.  
+[08:29] It's don't need it.  
+[08:32] Well we have a uh uh uh uh uh uh uh uh uh uh internal tool just here in a second. Okay.  
+[08:38] Uh then that would also tell you maybe if you can take a look at that will also give you the results of you know the CPU and number usage for the U.S. give me a second, let me see if I can pull that performance a bit more.  
+[08:51] Yeah. Yeah.  
+[08:53] Yeah, we have set up an SS HD instances on IBM I think.  
+[09:05] If you have the performance metrics, of  
+[09:08] Yeah, yeah, my things.  
+[09:10] Got it.  
+[09:14] So as far as the workloads itself, um  
+[09:18] May may maybe have some background on the workflows.  
+[09:21] How they're  
+[09:34] And D R is it set up um  
+[09:40] Yes, we do have the  
+[09:43] Show it in place. We'll wait to know the application that's happening.  
+[09:49] And we also have uh power exchange environment.  
+[09:54] So that's only to do it.  
+[09:59] So that's mainly for payload management. Yeah. Yeah.  
+[10:06] So  
+[10:08] I'll do one thing now. So here is information that you can take a look at. Let me see how we can download this.  
+[10:15] Uh  
+[10:16] So disk utilization, memory usage, by pools, and tracking response time for the last thirty days. These are collected uh per partition, not at the frame level.  
+[10:30] Yeah, yeah. Yeah, one minute. Let me see if I can download it.  
+[10:36] CSV.  
+[10:43] So the disc utilization, does it also have IOP or anything?  
+[10:48] I'll I love the  
+[10:50] Okay, because we are still working on this. Sure. Uh you know, we we as we continue to evolve more features will be added to this. Yeah, perfectly. But but at present at present I see uh I have average uh interactive transaction response time, memory usage, waypool, disk, and the CPA play station.  
+[11:12] Yeah yeah. That's perfectly fine. And the pools uh if you have a good view um  
+[11:19] So  
+[11:21] The HMC scans um the reports the Excel format uh frame.  
+[11:27] That gives us information about um  
+[11:32] the total capacity of the systems and then  
+[11:36] Basically break me down and really.  
+[11:43] CPU and uh memory allocations and then  
+[11:48] Also show the pool.  
+[12:05] Might be useful.  
+[12:08] And let me also quickly see if I can find out this option.  
+[12:17] That'd be it's  
+[12:19] Oh six.  
+[12:23] I think we have the data from at least.  
+[12:27] April thirtieth too, until June first. Uh uh  
+[12:32] Let me let me see if I can download any of that fun.  
+[12:41] Think this does contain uh all information because um we are looking at frame level, right? So for all the production uh partitions.  
+[12:49] Yeah.  
+[12:51] CSP.  
+[12:53] Yeah, do one C S V one PDF also. The PDF maybe does it capture the graphs or or  
+[13:28] And we have that time till thirty first.  
+[13:31] Let me let me see if I can.  
+[13:34] Yeah, I think we have broadcast.  
+[13:38] So this is the kind of extract of uh frame level information which does contain all the uh processes and the  
+[13:48] Mm-hmm.  
+[13:49] I think that one more on this one.  
+[13:53] Do you need this full level information?  
+[14:02] Now that um  
+[14:03] Full level also will be helpful. Yes, John.  
+[14:11] It's the S B.  
+[14:14] E the yeah.  
+[14:20] And are there any uh specific uh peak times that you prepare um  
+[14:34] Pretty much.  
+[14:35] Yeah, yeah, I I heard from customer that peak uh businesses or you know the peak window is somewhere between uh June too until September or uh N N N N N N N N N November.  
+[14:47] Okay.  
+[14:48] Yeah.  
+[14:50] So do they adjust um the capacity uh up each year and  
+[15:01] Every year there is an um  
+[15:03] I mean  
+[15:04] Some capacity  
+[15:06] And performance analysis happens and then you  
+[15:11] Frame who and who's that does that? Your team or  
+[15:17] We recently took over.  
+[15:25] So we we we are still, you know, we still continue to run with the existing uh resources. Got it, got it. You're just observing. Yeah, yeah. I think maybe this is the uh idle year I would say, because starting June, right?  
+[15:47] I think I think this would be the ideal time to see how the performance  
+[15:58] So we do have a retail and logistics business unit. Uh with several other partitions that are dedicated for uh logistics and retail groups. So hopefully you know we should be able to know dig down further if you could uh  
+[16:12] Wait, you know, three or four months more and then collect the data. So that would certainly you know, give us a lead as to where do we stand in terms of you know the performance, whether does it cause any the existing resources supply is causing any performance bottleneck or is it sufficient? So we can we can think further into it maybe once and for all we have the data.  
+[16:36] Yeah, that's great. And sometimes um if um the performance information here it they have they don't I mean normally there are tools that uh basically retain performance information for the last two to three years. Um in some  
+[16:54] They basically it's a rolling window.  
+[17:00] we they extract, um, store it uh in the file system somewhere.  
+[17:07] And then  
+[17:09] Let the system uh  
+[17:11] keep humming, right?  
+[17:23] Yeah.  
+[17:25] Last year trends.  
+[17:31] I've chosen last year, but I love to verify the how far we can go and  
+[17:38] What is the dead range?  
+[17:44] It looks like it's starting only from January.  
+[17:48] I think they saw last year last year train.  
+[17:51] I'm not wrong. I think December five two, June well.  
+[17:55] Yeah, yeah. Yeah, any any any any any any any any any any any information is definitely better, right? So we want to um  
+[18:07] the more accurate that we have, um, at least we know  
+[18:12] We are not going to  
+[18:13] undersize or oversize. We want to keep it  
+[18:18] um right sized as much as possible.  
+[18:27] Let me see if I can.  
+[18:31] If we undersize it then you have to  
+[18:34] scramble to adjust it. If you oversize that we're spending more.  
+[18:42] I also have one more thing to look at. Just give a give me a second. Let me see if I have an option. So that will clearly tell us.  
+[18:51] One minute.  
+[19:02] So this is uh ring host, so we are not on P I I I mean uh P ten, so I don't think I can use this uh cloud for power systems. CMC.  
+[19:13] Okay, I was just thinking that you know this plant is also in our uh uh uh uh uh uh uh uh uh uh that doesn't have power then, so I you can't.  
+[19:24] I was just thinking. I used to get the data for other customers but not for calories. So for calories we do have a couple of options. One is through our own uh  
+[19:33] performance collection method. And the other option would be to collect through HMC. So right now if you look at I've collected the sample for last year as well as you know the last month data. I think uh I should be able to know uh extract everything and send it across. Got it. And and and and and and and and and and and and do you also need uh this S R IY traffic as well for last year.  
+[20:00] Sure.  
+[20:06] BIOS is basically supported uh by our control plane in uh the cloud, the power virtual server.  
+[20:15] You don't we don't need to spin up subject dedicated by us servers.  
+[20:30] Okay. And I'm just curious, uh are you okay with the names or would you like me to know  
+[20:36] do it from the scratch, you know, because even I get confused with what I have collected. So I'll do one thing I've been hitting that I've downloaded.  
+[20:44] So every time I clear I would just like to give a name for it. So it'll be more uh  
+[20:49] You know? Yeah, I think that's the one. Thank you, thank you. Just basically that way we we we we we we we know where it came from. The origination and like to do it. Because this way even it makes your jobs a little tough.  
+[21:12] And if you would like, you know, the partition level information.  
+[21:16] Uh like you know, we have to download and yeah, I'll I'll send the partition voice information also for last thirty days.  
+[21:23] Uh that'll that'll give us another uh you know good point to start up with exactly what uh you know, on what days you know we have the busy  
+[21:32] Uh no.  
+[21:35] This massage or the big business has so we should be able to understand with the last thirty days data. Will that be sufficient? Or would you like to go beyond the thirty days and look at sixty or ninety days? Yeah, it's s s s s s s sort of cycle that we run through. So I don't think uh you know, every month wherever we have the monthly maintenance and the batch process runs every night. So it is all common. So it does not change with respect to each month. So I would uh you know, maybe my suggestion is to look at last thirty days data that would be more appropriate to look at rather than looking at ninety days, because nothing changes in terms of you know the processing time or the processing days.  
+[22:17] Yeah. Yeah. On only uh thing based on your earlier information, Prame, what I'm um um um um um um um um um um wanting to make sure is the peak happens between June and September. So make sure that we see that.  
+[22:34] But  
+[22:37] Yeah, one of the month and one.  
+[22:40] outside of those months, uh what does the data look like? So those two  
+[22:44] variations if we can share, right? That that way we know okay for those  
+[22:50] three four months, right? Um we can have a different capacity um expectation and the rest of them  
+[22:59] So  
+[23:02] Um.  
+[23:03] Yeah. Yeah. I'll check with customer. You know through HMC what I'll do, I'll collect one year data for processor, memory, and IO. And uh you know, I'll just name it an year data. And also I'll get a time frame from uh Prakash.  
+[23:18] to understand the big business R so the big business uh  
+[23:23] And outside of it also, you know, if if if if possible, last uh month, I don't know, two months data I'll collect separately. So that you can compare uh peak data versus non peak data.  
+[23:36] Right, thank you. And I'm also basically giving you um just the URL for the perform HMC scanner.  
+[23:45] Um can  
+[23:45] Can take a look at that, um  
+[23:48] page you can download uh entire Excel.  
+[23:52] format that uh also gives  
+[23:55] For us. Um  
+[23:58] uh a nice organized list of all all all all all all all all all all all the L Pers.  
+[24:02] Yeah, so we can we can run HMC scanner report and share with you as well, not a problem. Yeah. Okay. Excellent.  
+[24:10] I'll I'll do one thing. I'll quickly, you know, right after our call, I'll collect this information, I'll name it and send it. And uh in between if I can get some information from Prakash about you know the peak business hours or peak business duration. And uh I'll see what maximum I can collect data. Anyway, I'm collecting the data for an year now. Yeah. Uh in addition, uh I'll also collect you know last month data, last thirty data, thirty days data, or sixty days data. Yes. Yes. Just we want to make sure um if there's a specific pattern and well defined pattern based on that, we can size it. Yeah, yeah.  
+[24:49] And and uh I'll I'll I I'll end up collecting the data for both the frames. Like we have uh at SLO, it's a production location, we have our flash copy and our production systems configure. And at our T loc location, that is our Chicago location, we have uh  
+[25:04] HA partitions. I mean uh HA and back up flash copy partitions.  
+[25:10] So I'll collect for both the uh you know, uh manage systems and set the data accordingly.  
+[25:16] So when you say H A um what do you mean? Um is it literally active active or  
+[25:23] Yes, it's active, active. So the replication happens through power H. So whenever we wanted to fail over from production to H A, right? We call it as DR, yeah. So we actually fail over to HA location. Got it.  
+[25:37] It is not like okay um the actual end users are going to both the locations and there is a thing that happens crisscross. It's only at any given point of time SLO is prod and Chicago is um a DR site. But sometimes customers call it the chain.  
+[26:00] Yeah, yeah. And we do disaster recovery, I mean the uh role swap once a year. So last week we performed a role swap for our uh development partitions. Uh where you know the IASP attached to uh the current development production development partitions will be uh migrated I mean uh over to the PR location. And it'll stay there for a week or ten days. Customers will normally when they wish to log in, right? They will access the same way. So we do have uh a couple of floating IPs that will be paid over to the uh DR server and then we'll configure them uh once the uh once after the role swap is done. So that way you know they'll still continue to access the same IP and log into the system. So they're work as if you know they work on production. Yeah, that makes sense. Just basically what you're doing is uh uh uh uh uh uh uh uh uh uh uh validating the runbook, DR run book.  
+[26:55] Make sure that um nothing is changed in the network layer. All the instructions are still good and you're able to fail over and run and even have true DR. Yeah, we can still exercise the same uh steps.  
+[27:22] That makes sense. Right.  
+[27:25] Great. And corresponding back up flash copy helpers at the site. So this will be used only for the flash copy back up. So business will not log into any of these flash copy or  
+[27:43] The HS systems either. So they'll only log into the uh production system. Only when we do the failover, that's when you know they actually log into the HS systems. But again, uh they will think you know the HS systems are still you know, the production.  
+[27:57] They'll still think you know the H system as some protection systems. So it does not make any difference for them. But for us, yeah, it is a H  
+[28:06] Yeah, agree. And um as far as storage, uh how much storage is it over allocated, um how much free space do you have on all the L power sprint?  
+[28:18] Uh uh maybe we'll have to check with storage team to provide that information. Uh  
+[28:24] But looking at you know each partitions, we do not have the data anti.  
+[28:30] Not sure if we can see that information from the HMC about the amount of storage or the uh the free storage.  
+[28:40] Okay. Yeah, if we can check, uh that's one thing that we uh would be helpful as well.  
+[28:51] Sometimes what happens is um for some specific projects um they might have allocated and they never clean up and let's say they allocated um double the size  
+[29:06] So we don't want to um basically size the same thing, right? Because that's a waste of resources.  
+[29:15] So will this data be helpful?  
+[29:18] I mean the thing you're seeing on the screen.  
+[29:22] You know, system ASP and the uh IASP.  
+[29:28] Yeah. Yeah. I mean this type is um  
+[29:32] Definitely good unless there yeah, th pr pretty much  
+[29:37] for every power if it's Yeah. We have um if the storage team has an Excel format or something.  
+[29:48] So I think yeah, that's that's right. So they can see in a in a clear perspective, we can get the sample of information from the story itself. So Dom uh can you request you know Prakash to engage uh and Sono S DM and  
+[30:05] I know through SDM they can collect the data. However, you know if we could get a mail from customer, right? Uh probably you know we can expedite this.  
+[30:19] So we can get the uh required data from the storage side as well.  
+[30:24] Okay, great.  
+[30:26] And um backups who is responsible for backups and how long are they taking today?  
+[30:33] Yeah, we are uh actually responsible for the back ups.  
+[30:36] I think uh I'll have to check with the operations team to see you know if they maintain any track uh uh uh uh to gather the back up information. I think if I'm not wrong, uh Prakash is already receiving the back up time stamp information, whereas you know, we are not receiving them. I think Prakash should be able to provide it. So every day uh we have a status report, back up status report that is being sent to the uh  
+[30:59] A specific DM.  
+[31:04] So it's all BRMS backups? Yes. Yes. It's all BRMS. And the tapes, um what what what are you using for tapes?  
+[31:15] It's a video.  
+[31:27] Which VTL I'm sorry, maybe a um  
+[31:31] Uh one minute. Let me just quickly check.  
+[32:01] Yeah, it's uh  
+[32:03] Then the EMC that or the  
+[32:06] Yeah. Yeah, EMC the domain. Let me let me once I enter the credentials I can share the screen also. Just give us a minute.  
+[32:22] Maybe that's  
+[32:31] I'll have the login and share you the the PlayStation.  
+[32:42] That's given the next thing.  
+[32:47] Like  
+[33:30] Okay.  
+[34:33] No, we went over.  
+[34:36] And you want to be  
+[34:39] It's just uh just getting it in it among those done. So thank you. Appreciate you.  
+[34:46] Taking the time.  
+[34:48] Okay.  
+[34:50] Yeah, just give me a type hand.  
+[35:13] I think that was ready.  
+[35:15] Okay.  
+[35:25] Well this is our uh SLO data domain.  
+[35:32] Okay, so it's uh used seventy two terabytes.  
+[35:36] Sometimes um  
+[35:39] Need to understand.  
+[35:44] Yeah. We do have it we do have default encryption.  
+[35:50] Uh which of the data is currently being written. So zero and we are latest version.  
+[36:01] There's the Chesse and the C  
+[36:03] And if you like just the file system information.  
+[36:07] Thank uh  
+[36:08] Yeah they should they should tell us. Yeah.  
+[36:12] You can see this, right? Compression factor. I think this will change with aspect for each other. But but this is by default. Encryption is the next one. And the compression factor is also the same.  
+[36:23] Yeah, yeah, me.  
+[36:27] And and we also have you know the automatic replication between our production and the DR site. So within DR we have two data domain. One is a cyber art.  
+[36:39] That's a third data domain. Uh and we also have the same uh I think it's not the same. It's uh the the production one is six nine double zero. I'll have to check uh you know the PR one.  
+[37:05] In the meantime, let's look at the replication side. So we have uh replication currently being enabled between uh production and the DR uh data domain. And within the DR location, I mean the this uh the second data domain between second and uh there's one another uh data domain. We call it a Cyper Ricci.  
+[37:27] Yes. Yeah. So we also have an application in there, but yeah.  
+[37:54] This is uh B if you would like to just make a note of the storage information. Yeah, I can maybe a screenshot also with that. Yeah, you can take a screen shot if you like.  
+[38:08] But uh this one is not six nine double zero if I'm not wrong. Let me confirm that.  
+[38:16] It's  
+[38:17] Uh  
+[38:22] Yeah, it is six nine zero zero and this one is also six nine zero zero. So both uh both uh both are of same uh model.  
+[38:34] Got it. Okay.  
+[38:41] Well, I think it's a very good thing.  
+[38:46] Whereas the third part of the domain is different, I think. Uh  
+[39:22] Yeah, you just have only the first two that are domain. No. Yeah. Yeah.  
+[39:30] Brave. So thank you for taking the time.  
+[39:34] So we'll certainly follow up once you get the HMC scanner and uh the  
+[39:39] Yeah. We will send the G scanner and the last year data. In the meantime I'm also check with Prakash to understand the big business uh months or days. And then outside of it also I'll collect the data, whatever the data that is available, maybe last thirty days or sixty days. Okay possibly.  
+[40:16] about the you know allocated and the uh you know free up space, available space for each partition if they could gather the data from the standard perspective.  
+[40:27] Absolutely.  
+[40:28] Thank you.  
+[40:33] Should do it.  
+[40:34] All right.  
+[40:35] Thank you guys. Thank you, Nsona team. Appreciate it. Mike, any other questions for Nsona before we hop on? No, I just uh appreciate their time, like the vendor was saying. That's very, very helpful.  
+[40:49] This is productive. We're on the right path now. That's excellent. So thank you all.  
+[40:54] Yeah, thanks so much, everyone.  
+[40:59] Thanks, Avon. All right. Take care.  
