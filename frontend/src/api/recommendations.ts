@@ -24,7 +24,7 @@ export async function getRecommendations(
 ): Promise<RecommendationsResponse> {
   const params = new URLSearchParams();
   if (centerSystemId64 != null) {
-    params.set("center", String(centerSystemId64));
+    params.set("center_id", String(centerSystemId64));
   }
   const qs = params.toString() ? `?${params.toString()}` : "";
   const res = await fetch(
