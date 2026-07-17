@@ -1,8 +1,10 @@
 """Elite Dangerous Power Play Analyzer — FastAPI application entry point."""
 
 import logging
+import os
 from contextlib import asynccontextmanager
 
+from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -17,20 +19,38 @@ import models.models  # noqa: F401
 Base.metadata.create_all(bind=engine)
 
 from routers import auth, factions, systems, admin  # noqa: E402
+from routers.admin import run_spansh_ingest_task  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
+# How often to re-run the Spansh bulk ingest (in hours).
+SPANSH_INGEST_INTERVAL_HOURS: int = int(os.getenv("SPANSH_INGEST_INTERVAL_HOURS", "24"))
+
 
 # ---------------------------------------------------------------------------
-# Lifespan — APScheduler startup/shutdown (stub; jobs wired in Sub-Tasks 2/3)
+# Lifespan — APScheduler startup/shutdown
 # ---------------------------------------------------------------------------
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Scheduler startup placeholder — Sub-Tasks 2 & 3 wire actual jobs here.
-    logger.info("Elite Powerplay API starting up.")
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(
+        run_spansh_ingest_task,
+        trigger="interval",
+        hours=SPANSH_INGEST_INTERVAL_HOURS,
+        id="spansh_ingest",
+        max_instances=1,
+        coalesce=True,
+    )
+    scheduler.start()
+    logger.info(
+        "Elite Powerplay API starting up. "
+        "Spansh ingest scheduled every %d hour(s).",
+        SPANSH_INGEST_INTERVAL_HOURS,
+    )
     yield
+    scheduler.shutdown(wait=False)
     logger.info("Elite Powerplay API shutting down.")
 
 
