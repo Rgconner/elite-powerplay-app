@@ -19,12 +19,14 @@ import models.models  # noqa: F401
 Base.metadata.create_all(bind=engine)
 
 from routers import auth, factions, systems, admin  # noqa: E402
-from routers.admin import run_spansh_ingest_task  # noqa: E402
+from routers.admin import run_spansh_ingest_task, run_edsm_sync_task  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
 # How often to re-run the Spansh bulk ingest (in hours).
 SPANSH_INGEST_INTERVAL_HOURS: int = int(os.getenv("SPANSH_INGEST_INTERVAL_HOURS", "24"))
+# How often to run the EDSM Power Play sync (in hours).
+EDSM_SYNC_INTERVAL_HOURS: int = int(os.getenv("EDSM_SYNC_INTERVAL_HOURS", "6"))
 
 
 # ---------------------------------------------------------------------------
@@ -43,11 +45,21 @@ async def lifespan(app: FastAPI):
         max_instances=1,
         coalesce=True,
     )
+    scheduler.add_job(
+        run_edsm_sync_task,
+        trigger="interval",
+        hours=EDSM_SYNC_INTERVAL_HOURS,
+        id="edsm_sync",
+        max_instances=1,
+        coalesce=True,
+    )
     scheduler.start()
     logger.info(
         "Elite Powerplay API starting up. "
-        "Spansh ingest scheduled every %d hour(s).",
+        "Spansh ingest scheduled every %d hour(s), "
+        "EDSM sync scheduled every %d hour(s).",
         SPANSH_INGEST_INTERVAL_HOURS,
+        EDSM_SYNC_INTERVAL_HOURS,
     )
     yield
     scheduler.shutdown(wait=False)
