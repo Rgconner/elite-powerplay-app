@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { RecommendationsResponse, RecommendationItem } from "../api/recommendations";
 import { ppStateColor, PP_STATE_LABELS } from "../constants/ppColors";
 

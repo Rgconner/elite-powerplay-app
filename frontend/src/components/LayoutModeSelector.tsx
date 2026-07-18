@@ -1,4 +1,3 @@
-import React from "react";
 
 export type LayoutMode = "actual" | "radial" | "force";
 

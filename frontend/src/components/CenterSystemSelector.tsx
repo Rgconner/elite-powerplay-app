@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { searchSystems, SystemSearchResult } from "../api/systems";
 import { SelectedSystem } from "../hooks/useSelectionState";
 

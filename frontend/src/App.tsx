@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import TableView from "./pages/TableView";
 import Map2DView from "./pages/Map2DView";
 import Map3DView from "./pages/Map3DView";

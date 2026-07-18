@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { searchFactions, FactionListItem } from "../api/factions";
 
 interface Props {

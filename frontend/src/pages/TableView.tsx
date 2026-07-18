@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { getPowerSystems, PPSystemEntry } from "../api/powers";
 import { getRecommendations, RecommendationsResponse, RecommendationItem } from "../api/recommendations";
 import { useSelectionState } from "../hooks/useSelectionState";
@@ -93,7 +93,7 @@ function ProgressBar({ value }: { value: number | null }) {
 }
 
 /** Days-to-failure cell. */
-function DaysCell({ days, score }: { days: number | null | undefined; score: number | undefined }) {
+function DaysCell({ days }: { days: number | null | undefined }) {
   if (days == null) return <span style={{ color: "#555" }}>—</span>;
   if (days === 0) return <span style={{ color: "#FF4444", fontWeight: 800 }}>NOW</span>;
   const color = days < 2 ? "#FF4444" : days < 5 ? "#FF8C00" : "#D9A84A";
@@ -207,7 +207,7 @@ export default function TableView() {
         const db = fortifyMap.get(b.name)?.days_to_failure ?? Infinity;
         return cmp(da, db, sortDir);
       }
-      return cmp((a as Record<string, unknown>)[sortKey], (b as Record<string, unknown>)[sortKey], sortDir);
+      return cmp((a as unknown as Record<string, unknown>)[sortKey], (b as unknown as Record<string, unknown>)[sortKey], sortDir);
     });
   }, [systems, sortKey, sortDir, fortifyMap, expandSet]);
 
@@ -313,7 +313,7 @@ export default function TableView() {
 
                     {/* Days to failure */}
                     <td style={{ padding: "8px 10px", textAlign: "center" }}>
-                      <DaysCell days={recoItem?.days_to_failure} score={recoItem?.score} />
+                      <DaysCell days={recoItem?.days_to_failure} />
                     </td>
 
                     {/* Reinforcement */}

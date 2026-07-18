@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import * as d3 from "d3";
 import { getPowerSystems, PPSystemEntry } from "../api/powers";
 import { getRecommendations, RecommendationsResponse } from "../api/recommendations";
