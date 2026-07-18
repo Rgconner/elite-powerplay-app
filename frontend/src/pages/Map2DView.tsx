@@ -131,7 +131,7 @@ export default function Map2DView() {
   const [labelH, labelV] = axisLabels(axis);
 
   return (
-    <div style={{ padding: "16px 24px", fontFamily: '-apple-system,"Segoe UI",system-ui,sans-serif', color: "#1f2328" }}>
+    <div style={{ padding: "16px 20px", background: "#0d1117", minHeight: "calc(100vh - 44px)", fontFamily: '-apple-system,"Segoe UI",system-ui,sans-serif', color: "#e6edf3" }}>
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
         <PowerSelector value={powerName} onChange={setPower} />
         <CenterSystemSelector value={centerSystem} onChange={setCenter} />

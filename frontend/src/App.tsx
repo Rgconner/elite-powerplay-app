@@ -7,41 +7,10 @@ import AdminPage from "./pages/AdminPage";
 type Tab = "table" | "map2d" | "map3d";
 
 const TAB_LABELS: Record<Tab, string> = {
-  table: "Table",
-  map2d: "2D Map",
-  map3d: "3D Map",
+  table: "📋 Table",
+  map2d: "🗺 2D Map",
+  map3d: "🌐 3D Map",
 };
-
-const tabBarStyle: React.CSSProperties = {
-  position: "fixed",
-  top: 0,
-  left: 0,
-  right: 0,
-  height: 44,
-  background: "#fff",
-  borderBottom: "1px solid #e5e7eb",
-  display: "flex",
-  alignItems: "center",
-  gap: 0,
-  padding: "0 16px",
-  zIndex: 1000,
-  fontFamily: '-apple-system, "Segoe UI", system-ui, sans-serif',
-};
-
-function tabBtnStyle(active: boolean): React.CSSProperties {
-  return {
-    padding: "0 18px",
-    height: 44,
-    fontSize: 14,
-    fontWeight: active ? 600 : 400,
-    color: active ? "#3b82d4" : "#57606a",
-    background: "none",
-    border: "none",
-    borderBottom: active ? "2px solid #3b82d4" : "2px solid transparent",
-    cursor: "pointer",
-    outline: "none",
-  };
-}
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("table");
@@ -52,31 +21,60 @@ export default function App() {
   }
 
   return (
-    <div style={{ fontFamily: '-apple-system, "Segoe UI", system-ui, sans-serif' }}>
+    <div style={{ fontFamily: '-apple-system,"Segoe UI",system-ui,sans-serif', background: "#0d1117", minHeight: "100vh" }}>
       {/* Tab bar */}
-      <div style={tabBarStyle}>
-        {(["table", "map2d", "map3d"] as Tab[]).map((t) => (
-          <button key={t} onClick={() => setTab(t)} style={tabBtnStyle(tab === t)}>
-            {TAB_LABELS[t]}
-          </button>
-        ))}
+      <div style={{
+        position: "fixed", top: 0, left: 0, right: 0, height: 44,
+        background: "#161b22", borderBottom: "1px solid #30363d",
+        display: "flex", alignItems: "center", gap: 0, padding: "0 12px",
+        zIndex: 1000,
+      }}>
+        {/* Logo / title */}
+        <span style={{
+          fontSize: 13, fontWeight: 700, color: "#ff8c00", letterSpacing: "0.03em",
+          paddingRight: 20, borderRight: "1px solid #30363d", marginRight: 8,
+          whiteSpace: "nowrap",
+        }}>
+          ⭐ Elite PP Analyzer
+        </span>
+
+        {/* Tab buttons */}
+        {(["table", "map2d", "map3d"] as Tab[]).map((t) => {
+          const active = tab === t;
+          return (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              style={{
+                padding: "0 16px", height: 44, fontSize: 13,
+                fontWeight: active ? 600 : 400,
+                color: active ? "#58a6ff" : "#8b949e",
+                background: "none", border: "none",
+                borderBottom: active ? "2px solid #58a6ff" : "2px solid transparent",
+                cursor: "pointer", outline: "none",
+                transition: "color 0.15s",
+              }}
+            >
+              {TAB_LABELS[t]}
+            </button>
+          );
+        })}
 
         {/* Spacer */}
         <div style={{ flex: 1 }} />
 
-        {/* Admin icon — top-right */}
+        {/* Admin button */}
         <button
           onClick={() => setShowAdmin(true)}
-          title="Admin panel"
+          title="Admin panel — data ingestion, scoring weights"
           style={{
-            padding: "5px 12px",
-            fontSize: 13,
-            color: "#57606a",
-            background: "none",
-            border: "1px solid #e5e7eb",
-            borderRadius: 5,
-            cursor: "pointer",
+            padding: "5px 12px", fontSize: 12,
+            color: "#8b949e", background: "none",
+            border: "1px solid #30363d", borderRadius: 5,
+            cursor: "pointer", transition: "color 0.15s, border-color 0.15s",
           }}
+          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = "#e6edf3"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#58a6ff"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = "#8b949e"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#30363d"; }}
         >
           ⚙ Admin
         </button>

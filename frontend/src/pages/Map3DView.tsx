@@ -163,39 +163,39 @@ export default function Map3DView() {
   const expandSet  = useMemo(() => new Set((recommendations?.expand  ?? []).map((r) => r.system_name)), [recommendations]);
 
   return (
-    <div style={{ fontFamily: '-apple-system,"Segoe UI",system-ui,sans-serif', color: "#1f2328" }}>
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", padding: "12px 24px", borderBottom: "1px solid #e5e7eb" }}>
+    <div style={{ fontFamily: '-apple-system,"Segoe UI",system-ui,sans-serif', color: "#e6edf3", background: "#0d1117", minHeight: "calc(100vh - 44px)" }}>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", padding: "12px 20px", borderBottom: "1px solid #30363d" }}>
         <PowerSelector value={powerName} onChange={setPower} />
         <CenterSystemSelector value={centerSystem} onChange={setCenter} />
         <LayoutModeSelector value={layoutMode} onChange={setLayoutMode} />
-        {loading && <span style={{ fontSize: 13, color: "#57606a" }}>Loading…</span>}
-        {systems.length > 0 && !loading && <span style={{ fontSize: 12, color: "#57606a" }}>{systems.length} systems</span>}
+        {loading && <span style={{ fontSize: 13, color: "#8b949e" }}>Loading…</span>}
+        {systems.length > 0 && !loading && <span style={{ fontSize: 12, color: "#8b949e" }}>{systems.length} systems</span>}
       </div>
 
-      <div style={{ display: "flex", gap: 12, padding: "6px 24px", flexWrap: "wrap", alignItems: "center", borderBottom: "1px solid #e5e7eb", background: "#f7f8fa" }}>
+      <div style={{ display: "flex", gap: 12, padding: "6px 20px", flexWrap: "wrap", alignItems: "center", borderBottom: "1px solid #30363d", background: "#161b22" }}>
         {PP_STATES_ORDERED.map((state) => (
-          <span key={state} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#57606a" }}>
+          <span key={state} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#8b949e" }}>
             <span style={{ width: 9, height: 9, borderRadius: "50%", background: ppStateColor(state), display: "inline-block", flexShrink: 0 }} />
             {PP_STATE_LABELS[state] ?? state}
           </span>
         ))}
-        <span style={{ fontSize: 11, color: "#57606a", marginLeft: 4 }}>
+        <span style={{ fontSize: 11, color: "#8b949e", marginLeft: 4 }}>
           · <span style={{ color: "#FFD700" }}>★</span> center · <span style={{ color: "#D94A4A" }}>●</span> Fortify · <span style={{ color: "#4A90D9" }}>●</span> Expand · Drag to rotate · Scroll to zoom
         </span>
       </div>
 
       {powerName && systems.length > 0 ? (
-        <div style={{ height: "calc(100vh - 170px)", background: "#030310" }}>
+        <div style={{ height: "calc(100vh - 130px)", background: "#030310" }}>
           <Canvas camera={{ position: [0, 30, 80], fov: 60 }}>
             <Scene systems={systems} positions={positions} fortifySet={fortifySet} expandSet={expandSet}
               centerSystemId={centerSystem?.id} onHover={setHoveredSystem} />
           </Canvas>
         </div>
       ) : (
-        <div style={{ padding: "32px 24px" }}>
-          {!powerName && <p style={{ color: "#57606a", fontSize: 14 }}>Select a Power to render the 3D map.</p>}
-          {powerName && loading && <p style={{ color: "#57606a", fontSize: 14 }}>Loading systems…</p>}
-          {powerName && !loading && systems.length === 0 && <p style={{ color: "#57606a", fontSize: 14 }}>No system data found. Run a Spansh ingest first.</p>}
+        <div style={{ padding: "32px 20px" }}>
+          {!powerName && <p style={{ color: "#8b949e", fontSize: 14 }}>Select a Power to render the 3D map.</p>}
+          {powerName && loading && <p style={{ color: "#8b949e", fontSize: 14 }}>Loading systems…</p>}
+          {powerName && !loading && systems.length === 0 && <p style={{ color: "#8b949e", fontSize: 14 }}>No system data found. Run a Spansh ingest first.</p>}
         </div>
       )}
 
