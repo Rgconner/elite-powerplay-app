@@ -1,0 +1,126 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Build & publish Docker images to GitHub Container Registry (ghcr.io)
+#
+# Images produced:
+#   ghcr.io/<owner>/elite-powerplay-backend:latest  (FastAPI / uvicorn)
+#   ghcr.io/<owner>/elite-powerplay-frontend:latest (Vite + Nginx)
+#
+# Triggered on:
+#   • Every push to master
+#   • Every pull request targeting master (build-only, no push)
+#   • Manual workflow_dispatch
+#
+# Required secrets  (Settings → Secrets → Actions):
+#   None — uses the built-in GITHUB_TOKEN for ghcr.io access.
+#
+# Optional secrets  (add these to enable runtime features in the container):
+#   SECRET_KEY            — JWT signing secret  (openssl rand -hex 32)
+#   POSTGRES_PASSWORD     — DB password
+#   AI_API_KEY            — OpenAI / LLM key
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Build & Publish Docker Images
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  # Image names are lowercased automatically by the login-action
+  BACKEND_IMAGE:  ghcr.io/${{ github.repository_owner }}/elite-powerplay-backend
+  FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/elite-powerplay-frontend
+
+jobs:
+  # ── Build & push backend ──────────────────────────────────────────────────
+  build-backend:
+    name: Backend (FastAPI)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags & labels)
+        id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.BACKEND_IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix=sha-,format=short
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ── Build & push frontend ─────────────────────────────────────────────────
+  build-frontend:
+    name: Frontend (Vite + Nginx)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags & labels)
+        id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.FRONTEND_IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix=sha-,format=short
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
