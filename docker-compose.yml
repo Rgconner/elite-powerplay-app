@@ -35,11 +35,11 @@ services:
     expose:
       - "8000"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\" 2>/dev/null || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
-      start_period: 15s
+      start_period: 20s
 
   # ── Frontend: Nginx serving the Vite build ───────────────────────────────────
   frontend:

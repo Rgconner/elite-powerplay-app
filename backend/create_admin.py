@@ -13,10 +13,10 @@ import sys
 # Allow running from the backend/ directory without installing the package.
 sys.path.insert(0, os.path.dirname(__file__))
 
-# Ensure DATABASE_URL is set (falls back to the dev default).
+# Ensure DATABASE_URL is set (falls back to the local dev default).
 if not os.environ.get("DATABASE_URL"):
     os.environ["DATABASE_URL"] = (
-        "postgresql://app:dumbbunny@192.168.11.6:5432/power-play"
+        "postgresql://pp_user:pp_password@localhost:5432/elite_powerplay"
     )
 
 from db.session import SessionLocal, engine  # noqa: E402

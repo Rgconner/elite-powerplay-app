@@ -172,7 +172,7 @@ export default function TableView() {
                 <Th col="pp_state" label="PP State" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                 <Th col="pp_power" label="PP Power" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                 <Th col="influence" label="Influence" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} width={100} />
-                <Th col="recommendation" label="Trend" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} width={70} />
+                <Th col="influence" label="Trend" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} width={70} />
                 {showDistance && <Th col="distance_from_center" label="Distance (LY)" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} width={120} />}
                 <Th col="recommendation" label="Action" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} width={100} />
               </tr>

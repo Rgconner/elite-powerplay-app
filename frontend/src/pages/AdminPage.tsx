@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  getAdminToken, setAdminToken, clearAdminToken, getAuthHeader,
+  getAdminToken, setAdminToken, clearAdminToken, getAuthHeader, getAdminStatus,
 } from "../api/admin";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -105,7 +105,7 @@ export default function AdminPage({ onClose }: Props) {
     if (!getAdminToken()) return;
     setLoading(true);
     Promise.all([
-      apiGet<AdminStatus>("/api/admin/status"),
+      getAdminStatus(),
       apiGet<AdminSetting[]>("/api/admin/settings"),
     ])
       .then(([st, sets]) => {
@@ -213,7 +213,7 @@ export default function AdminPage({ onClose }: Props) {
           <button onClick={handleLogout} style={{ padding: "6px 14px", fontSize: 13, border: "1px solid #e5e7eb", borderRadius: 6, cursor: "pointer", background: "#f7f8fa", color: "#57606a" }}>
             Sign Out
           </button>
-          <button onClick={onClose} style={{ padding: "6px 14px", fontSize: 13, border: "none", borderRadius: 6, cursor: "pointer", background: "none", color: "#57606a", fontSize: 20, lineHeight: 1 }}>×</button>
+          <button onClick={onClose} style={{ padding: "6px 14px", fontSize: 13, border: "none", borderRadius: 6, cursor: "pointer", background: "none", lineHeight: 1 }}>×</button>
         </div>
       </div>
 

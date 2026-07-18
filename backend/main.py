@@ -54,6 +54,8 @@ async def lifespan(app: FastAPI):
         coalesce=True,
     )
     scheduler.start()
+    # Store on app.state so the admin /status endpoint can read next-run times.
+    app.state.scheduler = scheduler
     logger.info(
         "Elite Powerplay API starting up. "
         "Spansh ingest scheduled every %d hour(s), "
@@ -63,6 +65,7 @@ async def lifespan(app: FastAPI):
     )
     yield
     scheduler.shutdown(wait=False)
+    app.state.scheduler = None
     logger.info("Elite Powerplay API shutting down.")
 
 

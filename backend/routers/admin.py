@@ -2,9 +2,8 @@
 
 import logging
 from datetime import datetime
-from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -61,14 +60,12 @@ async def admin_health(admin: AdminUserDep) -> dict:
 
 
 @router.get("/status")
-def get_status(admin: AdminUserDep, db: Session = Depends(get_db)) -> dict:
+def get_status(request: Request, admin: AdminUserDep, db: Session = Depends(get_db)) -> dict:
     """Return the 10 most recent ingestion runs and scheduler next-run times."""
-    # Import scheduler reference from main to get next run times (best-effort)
     spansh_next: str | None = None
     edsm_next: str | None = None
     try:
-        from main import app  # noqa: PLC0415
-        scheduler = getattr(app.state, "scheduler", None)
+        scheduler = getattr(request.app.state, "scheduler", None)
         if scheduler:
             spansh_job = scheduler.get_job("spansh_ingest")
             edsm_job = scheduler.get_job("edsm_sync")
@@ -77,7 +74,7 @@ def get_status(admin: AdminUserDep, db: Session = Depends(get_db)) -> dict:
             if edsm_job and edsm_job.next_run_time:
                 edsm_next = edsm_job.next_run_time.isoformat()
     except Exception:
-        pass  # scheduler not accessible — return None times
+        pass  # scheduler unavailable — return None times
 
     runs = (
         db.query(IngestionRun)

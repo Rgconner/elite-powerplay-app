@@ -29,10 +29,11 @@ export async function adminLogin(
   email: string,
   password: string
 ): Promise<TokenResponse> {
+  // Backend uses OAuth2 form convention: username + password as form-urlencoded
   const res = await fetch("/api/auth/login", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ username: email, password }),
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
@@ -56,10 +57,14 @@ export interface AdminSettingRecord {
   value: string;
 }
 
-export async function getIngestionRuns(): Promise<IngestionRunRecord[]> {
-  const res = await fetch("/api/admin/runs", { headers: getAuthHeader() });
-  if (!res.ok) throw new Error(`Failed to load ingestion runs (${res.status})`);
-  return res.json() as Promise<IngestionRunRecord[]>;
+export async function getAdminStatus(): Promise<{
+  recent_runs: IngestionRunRecord[];
+  spansh_next_run: string | null;
+  edsm_next_run: string | null;
+}> {
+  const res = await fetch("/api/admin/status", { headers: getAuthHeader() });
+  if (!res.ok) throw new Error(`Failed to load admin status (${res.status})`);
+  return res.json();
 }
 
 export async function triggerSpanshIngest(): Promise<void> {
@@ -87,10 +92,12 @@ export async function getSettings(): Promise<AdminSettingRecord[]> {
 export async function updateSettings(
   updates: Record<string, string>
 ): Promise<void> {
+  // Backend expects list[{key, value}] not a plain object
+  const payload = Object.entries(updates).map(([key, value]) => ({ key, value }));
   const res = await fetch("/api/admin/settings", {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...getAuthHeader() },
-    body: JSON.stringify(updates),
+    body: JSON.stringify(payload),
   });
   if (!res.ok) throw new Error(`Failed to update settings (${res.status})`);
 }
