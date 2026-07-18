@@ -71,6 +71,7 @@ from __future__ import annotations
 
 import math
 import logging
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from sqlalchemy import text
@@ -134,8 +135,42 @@ BAND_STRONGHOLD  = BAND_FORTIFIED                      # open-ended; use Fortifi
 # Urgency model constants
 # ──────────────────────────────────────────────────────────────────────────────
 
-# PP cycle length in days (weekly reset)
+# PP cycle length in days (weekly reset — every Thursday ~07:00 UTC)
 CYCLE_DAYS = 7.0
+
+# PP cycle reset: Thursday 07:00 UTC
+_RESET_WEEKDAY = 3          # Monday=0 … Thursday=3
+_RESET_HOUR_UTC = 7
+
+
+def days_elapsed_in_cycle(reference_time: Optional[datetime] = None) -> float:
+    """Return how many days have elapsed since the last PP Thursday reset.
+
+    The PP cycle resets every Thursday at ~07:00 UTC.
+    R and U values in a snapshot represent CUMULATIVE merits delivered since
+    that reset — not a single day's activity.  Dividing by days_elapsed gives
+    the true daily rate.
+
+    Returns a float in [1.0, 7.0].  Minimum is 1.0 (reset day itself) to
+    avoid division-by-zero and because at least one day of activity is implied
+    by any non-zero merit values.
+    """
+    now = reference_time or datetime.now(timezone.utc)
+    # Strip timezone for arithmetic if needed
+    if now.tzinfo is not None:
+        now = now.replace(tzinfo=None)
+
+    # Find the most recent Thursday 07:00 UTC
+    days_since = (now.weekday() - _RESET_WEEKDAY) % 7
+    last_reset = now.replace(hour=_RESET_HOUR_UTC, minute=0, second=0, microsecond=0) \
+                 - timedelta(days=days_since)
+
+    # If today IS Thursday but before 07:00, go back one more week
+    if last_reset > now:
+        last_reset -= timedelta(days=7)
+
+    elapsed = (now - last_reset).total_seconds() / 86400.0
+    return max(1.0, min(elapsed, 7.0))
 
 # Score bands — used so the urgency score is human-readable (0–1000 range)
 # rather than a raw 0–1 float.
@@ -290,6 +325,7 @@ def _fortify_urgency(
     control_progress: Optional[float],
     trend: str,
     daily_delta: Optional[float],
+    snapshot_time: Optional[datetime] = None,
 ) -> tuple[float, list[str], Optional[float]]:
     """Compute a fortify urgency score (0–1000+), reasons, and days_to_failure.
 
@@ -342,7 +378,7 @@ def _fortify_urgency(
             return score, reasons, days_to_failure
         elif u > r:
             # Being undermined — compute days using buffer/net formula
-            days_to_failure = _estimate_days(p, power_state, r, u)
+            days_to_failure = _estimate_days(p, power_state, r, u, snapshot_time)
             if days_to_failure is not None and days_to_failure < 7.0:
                 score = SCORE_URGENT
                 reasons.append(f"⚠ Stronghold under active attack — ~{days_to_failure:.1f}d to drop to Fortified")
@@ -383,30 +419,40 @@ def _fortify_urgency(
         reasons.append(f"Need {mf['merits_to_safety']:,} merits to reach safety · {mf['merits_to_upgrade']:,} to upgrade")
         return score, reasons, days_to_failure
 
-    # ── 3. Estimate days to failure: buffer / (U - R) ─────────────────────
+    # ── 3. Estimate days to failure: buffer / daily_rate ──────────────────
     # _estimate_days returns None when R >= U — system is not threatened
-    days_to_failure = _estimate_days(p, power_state, r, u)
+    days_to_failure = _estimate_days(p, power_state, r, u, snapshot_time)
 
     if days_to_failure is not None and days_to_failure < 7.0:
         # U > R AND buffer runs out in < 1 cycle — urgent
+        elapsed = days_elapsed_in_cycle(snapshot_time)
         score = SCORE_URGENT
         reasons.append(
             f"⚠ URGENT: ~{days_to_failure:.1f} day{'s' if days_to_failure >= 1 else ''} "
             f"to state downgrade at current rate"
         )
-        reasons.append(f"Buffer: {mf['buffer_merits']:,} merits · Net: {net:+,}/day · Need {mf['merits_to_safety']:,} to reach safety")
+        reasons.append(
+            f"Buffer: {mf['buffer_merits']:,} merits · Cycle net: {u-r:,} over {elapsed:.1f}d "
+            f"({(u-r)/elapsed:.0f}/day) · Need {mf['merits_to_safety']:,} to safety"
+        )
     elif days_to_failure is not None and days_to_failure < 21.0:
         # U > R AND buffer runs out in < 3 cycles — warning
+        elapsed = days_elapsed_in_cycle(snapshot_time)
         score = SCORE_WARNING
         reasons.append(
             f"⚠ WARNING: ~{days_to_failure:.1f} days to state downgrade at current rate"
         )
-        reasons.append(f"Buffer: {mf['buffer_merits']:,} merits · Net: {net:+,}/day · Need {mf['merits_to_safety']:,} to reach safety")
+        reasons.append(
+            f"Buffer: {mf['buffer_merits']:,} merits · Cycle net: {u-r:,} over {elapsed:.1f}d "
+            f"({(u-r)/elapsed:.0f}/day) · Need {mf['merits_to_safety']:,} to safety"
+        )
     elif days_to_failure is not None:
         # U > R but large buffer — monitor
+        elapsed = days_elapsed_in_cycle(snapshot_time)
         score = SCORE_MONITOR
         reasons.append(
-            f"Under pressure (U={u:,} R={r:,} net={net:+,}/day) — ~{days_to_failure:.0f}d at current rate"
+            f"Under pressure — ~{days_to_failure:.0f}d at current rate "
+            f"(U={u:,} R={r:,} · {elapsed:.1f}d into cycle · {(u-r)/elapsed:.0f}/day net loss)"
         )
         reasons.append(f"Buffer: {mf['buffer_merits']:,} merits · Need {mf['merits_to_safety']:,} to reach safety")
     else:
@@ -447,19 +493,25 @@ def _estimate_days(
     power_state: Optional[str],
     reinforcement: int,
     undermining: int,
+    snapshot_time: Optional[datetime] = None,
 ) -> Optional[float]:
     """Estimate days until the system's merit buffer is exhausted.
 
-    Formula (confirmed against HR 943 live data):
+    The R and U values in a Spansh snapshot are CUMULATIVE since the last
+    Thursday 07:00 UTC PP reset — NOT a single day's activity.  To get the
+    true daily loss rate we divide by the number of days elapsed since reset.
 
+    Formula:
         buffer_merits    = progress × band_width
-        daily_net_loss   = abs(undermining - reinforcement)   [current snapshot as daily proxy]
+        days_elapsed     = days since last Thursday 07:00 UTC  (1.0–7.0)
+        daily_net_loss   = (undermining − reinforcement) / days_elapsed
         days_to_failure  = buffer_merits / daily_net_loss
 
-    Example — HR 943 (R=36, U=525, progress=0.2666, Exploited):
-        buffer  = 0.2666 × 213,000 = 56,786 merits
-        net     = |36 − 525|       = 489 merits/day
-        days    = 56,786 / 489     = 116 days
+    Example — HR 943 on Saturday (2 days since Thursday reset):
+        buffer        = 0.2666 × 213,000 = 56,786 merits
+        cycle net     = 525 − 36         = 489 merits over 2 days
+        daily rate    = 489 / 2          = 244.5 merits/day
+        days_failure  = 56,786 / 244.5   = 232 days
 
     Returns 0.0 if already at or past downgrade threshold (progress ≤ 0).
     Returns None if reinforcement ≥ undermining (not losing ground).
@@ -467,12 +519,16 @@ def _estimate_days(
     if progress <= 0.0:
         return 0.0
 
-    net_loss = undermining - reinforcement   # positive = losing merits
-    if net_loss <= 0:
+    net_loss_cycle = undermining - reinforcement   # total this cycle; positive = losing
+    if net_loss_cycle <= 0:
         return None   # reinforcement winning — no failure imminent
 
+    # Divide cumulative cycle merits by days elapsed to get true daily rate
+    elapsed = days_elapsed_in_cycle(snapshot_time)
+    daily_net_loss = net_loss_cycle / elapsed
+
     buffer = progress * _band_width(power_state)
-    return buffer / net_loss
+    return buffer / daily_net_loss
 
 
 def _next_state(power_state: Optional[str]) -> str:
@@ -501,11 +557,13 @@ def compute_fortify_scores(
         reinforcement     = snap.get("reinforcement")
         undermining       = snap.get("undermining")
         control_progress  = snap.get("control_progress")
+        snapshot_time     = snap.get("snapshot_time")   # datetime of the snapshot
 
         trend, daily_delta = get_progress_trend(system.id, db)
 
         raw_score, reasons, days_to_failure = _fortify_urgency(
-            power_state, reinforcement, undermining, control_progress, trend, daily_delta
+            power_state, reinforcement, undermining, control_progress,
+            trend, daily_delta, snapshot_time,
         )
 
         if raw_score <= 0:
