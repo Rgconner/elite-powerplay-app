@@ -63,6 +63,41 @@ function buildPositions(
   return pos;
 }
 
+// ── Slider sub-component ────────────────────────────────────────────────────
+
+function FilterSlider({
+  label, value, min, max, step, unit, onChange, disabled,
+}: {
+  label: string; value: number; min: number; max: number; step: number;
+  unit: string; onChange: (v: number) => void; disabled?: boolean;
+}) {
+  const pct = ((value - min) / (max - min)) * 100;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 180 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#8b949e" }}>
+        <span>{label}</span>
+        <span style={{ color: disabled ? "#555" : "#e6edf3", fontWeight: 600 }}>
+          {value >= max ? `Any` : `≤ ${value}${unit}`}
+        </span>
+      </div>
+      <input
+        type="range" min={min} max={max} step={step} value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(Number(e.target.value))}
+        style={{
+          width: "100%", accentColor: "#3b82d4", cursor: disabled ? "not-allowed" : "pointer",
+          opacity: disabled ? 0.4 : 1,
+        }}
+      />
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#444" }}>
+        <span>{min}{unit}</span>
+        <span style={{ background: `linear-gradient(to right, #3b82d4 ${pct}%, #21262d ${pct}%)`, borderRadius: 2, padding: "0 3px", fontSize: 10, color: "transparent" }}>.</span>
+        <span>Any</span>
+      </div>
+    </div>
+  );
+}
+
 interface TooltipData { x: number; y: number; system: PPSystemEntry; recoType: "fortify" | "expand" | null; }
 
 export default function Map2DView() {
@@ -73,6 +108,12 @@ export default function Map2DView() {
   const [axis, setAxis] = useState<Axis>("xz");
   const [layoutMode, setLayoutMode] = useState<LayoutMode>("actual");
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
+
+  // ── Two separate filter sliders ────────────────────────────────────────────
+  // Slider 1: Max distance from center (LY). Only active when a center is set.
+  const [maxDistLY, setMaxDistLY] = useState<number>(500);
+  // Slider 2: Min undermine ratio threshold (%). Show systems at or above this threat.
+  const [minThreatPct, setMinThreatPct] = useState<number>(0);
 
   const svgRef = useRef<SVGSVGElement>(null);
   const W = 800, H = 600;
@@ -101,13 +142,30 @@ export default function Map2DView() {
     return i >= 0 ? i : null;
   }, [systems, centerSystem?.id]);
 
+  // Apply filters before building positions
+  const filteredSystems = useMemo(() => {
+    return systems.filter((s) => {
+      // Distance filter (only when center selected)
+      if (centerSystem && maxDistLY < 500) {
+        const dist = s.distance_from_center;
+        if (dist != null && dist > maxDistLY) return false;
+      }
+      // Threat % filter
+      if (minThreatPct > 0) {
+        const ratio = s.undermine_ratio ?? 0;
+        if (ratio * 100 < minThreatPct) return false;
+      }
+      return true;
+    });
+  }, [systems, centerSystem, maxDistLY, minThreatPct]);
+
   const positions = useMemo(
-    () => buildPositions(systems, axis, layoutMode, centerIdx),
-    [systems, axis, layoutMode, centerIdx]
+    () => buildPositions(filteredSystems, axis, layoutMode, centerIdx),
+    [filteredSystems, axis, layoutMode, centerIdx]
   );
 
   useEffect(() => {
-    if (!svgRef.current || systems.length === 0) return;
+    if (!svgRef.current || filteredSystems.length === 0) return;
     const svg = d3.select(svgRef.current);
     const g = svg.select<SVGGElement>("g.zoom-layer");
     const zoom = d3.zoom<SVGSVGElement, unknown>()
@@ -115,7 +173,7 @@ export default function Map2DView() {
       .on("zoom", (event) => g.attr("transform", event.transform));
     svg.call(zoom);
     svg.call(zoom.transform, d3.zoomIdentity);
-  }, [systems, axis, layoutMode]);
+  }, [filteredSystems, axis, layoutMode]);
 
   const [scaleX, scaleY] = useMemo(() => {
     const vals = Array.from(positions.values());
@@ -129,10 +187,12 @@ export default function Map2DView() {
   }, [positions]);
 
   const [labelH, labelV] = axisLabels(axis);
+  const hiddenCount = systems.length - filteredSystems.length;
 
   return (
     <div style={{ padding: "16px 20px", background: "#0d1117", minHeight: "calc(100vh - 44px)", fontFamily: '-apple-system,"Segoe UI",system-ui,sans-serif', color: "#e6edf3" }}>
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
+      {/* Row 1: Controls */}
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
         <PowerSelector value={powerName} onChange={setPower} />
         <CenterSystemSelector value={centerSystem} onChange={setCenter} />
         <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
@@ -147,6 +207,39 @@ export default function Map2DView() {
         {loading && <span style={{ fontSize: 13, color: "#57606a" }}>Loading…</span>}
       </div>
 
+      {/* Row 2: Two separate filter sliders */}
+      <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 10, padding: "10px 14px", background: "#161b22", borderRadius: 8, border: "1px solid #30363d" }}>
+        <FilterSlider
+          label="Max Distance from Center (LY)"
+          value={maxDistLY}
+          min={10} max={500} step={10}
+          unit=" LY"
+          onChange={setMaxDistLY}
+          disabled={!centerSystem}
+        />
+        <FilterSlider
+          label="Min Threat Level (Undermine %)"
+          value={minThreatPct}
+          min={0} max={100} step={5}
+          unit="%"
+          onChange={setMinThreatPct}
+        />
+        {hiddenCount > 0 && (
+          <span style={{ fontSize: 12, color: "#57606a", alignSelf: "center" }}>
+            {hiddenCount} system{hiddenCount !== 1 ? "s" : ""} hidden by filters
+          </span>
+        )}
+        {(maxDistLY < 500 || minThreatPct > 0) && (
+          <button
+            onClick={() => { setMaxDistLY(500); setMinThreatPct(0); }}
+            style={{ padding: "4px 10px", fontSize: 11, borderRadius: 4, border: "1px solid #555", background: "#21262d", color: "#8b949e", cursor: "pointer", alignSelf: "center" }}
+          >
+            Reset Filters
+          </button>
+        )}
+      </div>
+
+      {/* Row 3: Legend */}
       <div style={{ display: "flex", gap: 12, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
         {PP_STATES_ORDERED.map((state) => (
           <span key={state} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#57606a" }}>
@@ -154,13 +247,21 @@ export default function Map2DView() {
             {PP_STATE_LABELS[state] ?? state}
           </span>
         ))}
-        <span style={{ fontSize: 11, color: "#57606a", marginLeft: 4 }}>· ⭐ center · <span style={{ color: "#D94A4A" }}>●</span> Fortify · <span style={{ color: "#4A90D9" }}>●</span> Expand</span>
+        <span style={{ fontSize: 11, color: "#57606a", marginLeft: 4 }}>
+          · ⭐ center · <span style={{ color: "#D94A4A" }}>●</span> Fortify · <span style={{ color: "#4A90D9" }}>●</span> Expand
+        </span>
+        {systems.length > 0 && (
+          <span style={{ fontSize: 11, color: "#57606a", marginLeft: "auto" }}>
+            {filteredSystems.length} / {systems.length} systems shown
+          </span>
+        )}
       </div>
 
+      {/* Map */}
       <div style={{ position: "relative", border: "1px solid #e5e7eb", borderRadius: 8, background: "#0a0a1a", overflow: "hidden" }}>
         <svg ref={svgRef} width={W} height={H} style={{ display: "block" }}>
           <g className="zoom-layer">
-            {scaleX && scaleY && systems.map((sys) => {
+            {scaleX && scaleY && filteredSystems.map((sys) => {
               const p = positions.get(sys.system_id64);
               if (!p) return null;
               const cx2 = scaleX(p[0]);
@@ -199,6 +300,7 @@ export default function Map2DView() {
             {tooltip.system.reinforcement != null && <div>Reinforcement: {tooltip.system.reinforcement.toLocaleString()}</div>}
             {tooltip.system.undermining != null && <div style={{ color: tooltip.system.undermining > 0 ? "#D94A4A" : undefined }}>Undermining: {tooltip.system.undermining.toLocaleString()}</div>}
             {tooltip.system.undermine_ratio != null && <div>Threat: {(tooltip.system.undermine_ratio * 100).toFixed(0)}%</div>}
+            {tooltip.system.distance_from_center != null && <div>Distance: {tooltip.system.distance_from_center.toFixed(1)} LY</div>}
             {tooltip.recoType === "fortify" && <div style={{ color: "#D94A4A", marginTop: 4, fontWeight: 600 }}>⚠ Fortify Priority</div>}
             {tooltip.recoType === "expand"  && <div style={{ color: "#4A90D9", marginTop: 4, fontWeight: 600 }}>➕ Expansion Target</div>}
           </div>

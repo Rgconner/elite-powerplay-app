@@ -27,14 +27,18 @@ STATE TRANSITIONS (direction and what stops them):
   (Stronghold has no upgrade)
 
 URGENCY MODEL used by this engine:
-  days_to_failure = progress / daily_undermine_rate
-      where daily_undermine_rate = net_daily_deficit / progress_scale
-  Because we don't have historical ticks, we estimate daily rate from:
-      estimated_daily_net = (undermining - reinforcement) / 7
-          (assuming current snapshot represents ~1 week of activity)
-  Then: days_to_failure = progress / (daily_deficit / progress_scale)
-      = progress * 7 / max(0, undermining - reinforcement)
-  A system with progress < 0 is ALREADY failing — days_to_failure = 0.
+  Current Merits (the raw reinforcement / undermining values from the latest
+  snapshot) are used as the cycle baseline.  One PP cycle = 7 days, so:
+
+      daily_deficit = (undermining - reinforcement) / 7
+
+  progress is normalised to [0, 1] per cycle (0 = downgrade threshold,
+  1 = upgrade threshold).  Days-to-failure is therefore:
+
+      days_to_failure = progress * 7 / (undermining - reinforcement)
+
+  A system with progress ≤ 0 is ALREADY failing — days_to_failure = 0.
+  A system with net R ≥ U has no imminent failure — days_to_failure = None.
 
 FORTIFY PRIORITY ORDER:
   1. progress ≤ 0   → CRITICAL — downgrade happening NOW (score = 1000 base)
@@ -321,34 +325,42 @@ def _fortify_urgency(
 def _estimate_days(
     progress: float,
     net_rein_minus_und: int,
-    reinforcement: int,
+    reinforcement: int = 0,  # kept for signature compatibility; unused after refactor
 ) -> Optional[float]:
     """Estimate days until progress reaches 0.0 given the current net rate.
 
-    We assume the data represents one full weekly cycle, so the daily rate
-    is net_per_cycle / 7.  progress is normalised to [0,1] per cycle.
+    Uses Current Merits (the raw reinforcement / undermining snapshot values)
+    as the baseline.  The weekly cycle is 7 days, so:
 
-    Returns None if the system is net-positive (not failing).
-    Returns 0.0 if already at or past the threshold.
+        daily_deficit = (undermining - reinforcement) / 7
+
+    The progress field is already normalised to [0, 1] per cycle where 0 = at
+    downgrade threshold and 1 = at upgrade threshold.  Therefore:
+
+        days_to_failure = progress / (daily_deficit / total_range)
+
+    Because progress is already a fraction of the full range we simplify to:
+
+        days_to_failure = progress * 7 / (undermining - reinforcement)
+
+    This directly uses the current snapshot merits as the rate basis.
+
+    Returns None if the system is net-positive (reinforcement winning).
+    Returns 0.0 if already at or past the downgrade threshold.
     """
     if progress <= 0.0:
         return 0.0
     if net_rein_minus_und >= 0:
         return None   # reinforcement is winning — no failure imminent
 
-    deficit_per_cycle = abs(net_rein_minus_und)   # how much U > R this cycle
-    # Normalise: how much progress is lost per day at this rate?
-    # We don't know the absolute threshold, but we can estimate:
-    # if current progress is p and it took (deficit / threshold) to get here,
-    # then days_remaining = p * cycle_days / (deficit / total_capacity)
-    # Without knowing total_capacity, use the approximation:
-    #   total_capacity ≈ max(reinforcement, undermining, 1) * 1.5
-    #   (generous estimate — keeps us from under-estimating urgency)
-    total_capacity = max(reinforcement, deficit_per_cycle, 1) * 1.5
-    daily_progress_loss = (deficit_per_cycle / total_capacity) / CYCLE_DAYS
-    if daily_progress_loss <= 0:
+    # deficit = how much undermining exceeds reinforcement this cycle
+    deficit = abs(net_rein_minus_und)   # > 0 because net is negative
+    if deficit <= 0:
         return None
-    return progress / daily_progress_loss
+
+    # Daily rate: assume the current snapshot represents one full 7-day cycle.
+    # days_to_failure = progress * CYCLE_DAYS / deficit  (simplified from above)
+    return (progress * CYCLE_DAYS) / deficit
 
 
 def _next_state(power_state: Optional[str]) -> str:

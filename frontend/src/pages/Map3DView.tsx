@@ -56,6 +56,42 @@ function normalizeCoords(systems: PPSystemEntry[], mode: LayoutMode, center: PPS
   return out;
 }
 
+// ── Slider sub-component ────────────────────────────────────────────────────
+
+function FilterSlider({
+  label, value, min, max, step, unit, onChange, disabled,
+}: {
+  label: string; value: number; min: number; max: number; step: number;
+  unit: string; onChange: (v: number) => void; disabled?: boolean;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 180 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#8b949e" }}>
+        <span>{label}</span>
+        <span style={{ color: disabled ? "#555" : "#e6edf3", fontWeight: 600 }}>
+          {value >= max ? `Any` : `≤ ${value}${unit}`}
+        </span>
+      </div>
+      <input
+        type="range" min={min} max={max} step={step} value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(Number(e.target.value))}
+        style={{
+          width: "100%", accentColor: "#3b82d4",
+          cursor: disabled ? "not-allowed" : "pointer",
+          opacity: disabled ? 0.4 : 1,
+        }}
+      />
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#555" }}>
+        <span>{min}{unit}</span>
+        <span>Any</span>
+      </div>
+    </div>
+  );
+}
+
+// ── 3D sphere component ────────────────────────────────────────────────────
+
 interface SphereProps {
   system: PPSystemEntry;
   position: THREE.Vector3;
@@ -103,7 +139,10 @@ function SystemSphere({ system, position, isCenter, recoType, onHover }: SphereP
           <div style={{ background: "rgba(10,10,26,0.92)", color: "#fff", padding: "6px 10px", borderRadius: 5, fontSize: 11, border: "1px solid #3b82d4", whiteSpace: "nowrap" }}>
             <strong>{system.name}</strong>
             {system.power_state && <div style={{ color: ppStateColor(system.power_state) }}>{PP_STATE_LABELS[system.power_state] ?? system.power_state}</div>}
+            {system.reinforcement != null && <div>R: {system.reinforcement.toLocaleString()}</div>}
+            {system.undermining != null && <div style={{ color: system.undermining > 0 ? "#D94A4A" : undefined }}>U: {system.undermining.toLocaleString()}</div>}
             {system.undermine_ratio != null && <div>Threat: {(system.undermine_ratio * 100).toFixed(0)}%</div>}
+            {system.distance_from_center != null && <div>Dist: {system.distance_from_center.toFixed(1)} LY</div>}
           </div>
         </Html>
       )}
@@ -145,6 +184,12 @@ export default function Map3DView() {
   const [layoutMode, setLayoutMode] = useState<LayoutMode>("actual");
   const [hoveredSystem, setHoveredSystem] = useState<PPSystemEntry | null>(null);
 
+  // ── Two separate filter sliders ────────────────────────────────────────────
+  // Slider 1: Max distance from center (LY). Only active when a center is set.
+  const [maxDistLY, setMaxDistLY] = useState<number>(500);
+  // Slider 2: Min undermine ratio threshold (%). Show systems at or above this threat level.
+  const [minThreatPct, setMinThreatPct] = useState<number>(0);
+
   useEffect(() => {
     if (!powerName) { setSystems([]); setRecommendations(null); return; }
     setLoading(true);
@@ -158,20 +203,78 @@ export default function Map3DView() {
   }, [powerName, centerSystem?.id]);
 
   const centerObj = useMemo(() => systems.find((s) => s.system_id64 === centerSystem?.id) ?? null, [systems, centerSystem?.id]);
-  const positions = useMemo(() => normalizeCoords(systems, layoutMode, centerObj), [systems, layoutMode, centerObj]);
+
+  // Apply filters before rendering
+  const filteredSystems = useMemo(() => {
+    return systems.filter((s) => {
+      // Distance filter (only when center is set)
+      if (centerSystem && maxDistLY < 500) {
+        const dist = s.distance_from_center;
+        if (dist != null && dist > maxDistLY) return false;
+      }
+      // Threat % filter
+      if (minThreatPct > 0) {
+        const ratio = s.undermine_ratio ?? 0;
+        if (ratio * 100 < minThreatPct) return false;
+      }
+      return true;
+    });
+  }, [systems, centerSystem, maxDistLY, minThreatPct]);
+
+  const positions = useMemo(() => normalizeCoords(filteredSystems, layoutMode, centerObj), [filteredSystems, layoutMode, centerObj]);
   const fortifySet = useMemo(() => new Set((recommendations?.fortify ?? []).map((r) => r.system_name)), [recommendations]);
   const expandSet  = useMemo(() => new Set((recommendations?.expand  ?? []).map((r) => r.system_name)), [recommendations]);
 
+  const hiddenCount = systems.length - filteredSystems.length;
+
   return (
     <div style={{ fontFamily: '-apple-system,"Segoe UI",system-ui,sans-serif', color: "#e6edf3", background: "#0d1117", minHeight: "calc(100vh - 44px)" }}>
+      {/* Row 1: Controls */}
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", padding: "12px 20px", borderBottom: "1px solid #30363d" }}>
         <PowerSelector value={powerName} onChange={setPower} />
         <CenterSystemSelector value={centerSystem} onChange={setCenter} />
         <LayoutModeSelector value={layoutMode} onChange={setLayoutMode} />
         {loading && <span style={{ fontSize: 13, color: "#8b949e" }}>Loading…</span>}
-        {systems.length > 0 && !loading && <span style={{ fontSize: 12, color: "#8b949e" }}>{systems.length} systems</span>}
+        {systems.length > 0 && !loading && (
+          <span style={{ fontSize: 12, color: "#8b949e" }}>
+            {filteredSystems.length}{hiddenCount > 0 ? ` / ${systems.length}` : ""} systems
+          </span>
+        )}
       </div>
 
+      {/* Row 2: Two separate filter sliders */}
+      <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "flex-end", padding: "10px 20px", background: "#161b22", borderBottom: "1px solid #21262d" }}>
+        <FilterSlider
+          label="Max Distance from Center (LY)"
+          value={maxDistLY}
+          min={10} max={500} step={10}
+          unit=" LY"
+          onChange={setMaxDistLY}
+          disabled={!centerSystem}
+        />
+        <FilterSlider
+          label="Min Threat Level (Undermine %)"
+          value={minThreatPct}
+          min={0} max={100} step={5}
+          unit="%"
+          onChange={setMinThreatPct}
+        />
+        {hiddenCount > 0 && (
+          <span style={{ fontSize: 12, color: "#57606a", alignSelf: "center" }}>
+            {hiddenCount} system{hiddenCount !== 1 ? "s" : ""} hidden
+          </span>
+        )}
+        {(maxDistLY < 500 || minThreatPct > 0) && (
+          <button
+            onClick={() => { setMaxDistLY(500); setMinThreatPct(0); }}
+            style={{ padding: "4px 10px", fontSize: 11, borderRadius: 4, border: "1px solid #555", background: "#21262d", color: "#8b949e", cursor: "pointer", alignSelf: "center" }}
+          >
+            Reset Filters
+          </button>
+        )}
+      </div>
+
+      {/* Row 3: Legend */}
       <div style={{ display: "flex", gap: 12, padding: "6px 20px", flexWrap: "wrap", alignItems: "center", borderBottom: "1px solid #30363d", background: "#161b22" }}>
         {PP_STATES_ORDERED.map((state) => (
           <span key={state} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#8b949e" }}>
@@ -184,10 +287,10 @@ export default function Map3DView() {
         </span>
       </div>
 
-      {powerName && systems.length > 0 ? (
-        <div style={{ height: "calc(100vh - 130px)", background: "#030310" }}>
+      {powerName && filteredSystems.length > 0 ? (
+        <div style={{ height: "calc(100vh - 175px)", background: "#030310" }}>
           <Canvas camera={{ position: [0, 30, 80], fov: 60 }}>
-            <Scene systems={systems} positions={positions} fortifySet={fortifySet} expandSet={expandSet}
+            <Scene systems={filteredSystems} positions={positions} fortifySet={fortifySet} expandSet={expandSet}
               centerSystemId={centerSystem?.id} onHover={setHoveredSystem} />
           </Canvas>
         </div>
@@ -196,6 +299,11 @@ export default function Map3DView() {
           {!powerName && <p style={{ color: "#8b949e", fontSize: 14 }}>Select a Power to render the 3D map.</p>}
           {powerName && loading && <p style={{ color: "#8b949e", fontSize: 14 }}>Loading systems…</p>}
           {powerName && !loading && systems.length === 0 && <p style={{ color: "#8b949e", fontSize: 14 }}>No system data found. Run a Spansh ingest first.</p>}
+          {powerName && !loading && systems.length > 0 && filteredSystems.length === 0 && (
+            <p style={{ color: "#8b949e", fontSize: 14 }}>
+              All {systems.length} systems filtered out. Adjust the sliders above.
+            </p>
+          )}
         </div>
       )}
 
@@ -206,6 +314,7 @@ export default function Map3DView() {
           {hoveredSystem.reinforcement != null && <span>R: {hoveredSystem.reinforcement.toLocaleString()}</span>}
           {hoveredSystem.undermining != null && <span style={{ color: hoveredSystem.undermining > 0 ? "#D94A4A" : undefined }}>U: {hoveredSystem.undermining.toLocaleString()}</span>}
           {hoveredSystem.undermine_ratio != null && <span>Threat: {(hoveredSystem.undermine_ratio * 100).toFixed(0)}%</span>}
+          {hoveredSystem.distance_from_center != null && <span>Dist: {hoveredSystem.distance_from_center.toFixed(1)} LY</span>}
         </div>
       )}
     </div>
