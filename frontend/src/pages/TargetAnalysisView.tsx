@@ -7,6 +7,26 @@ import { ppStateColor, PP_STATE_LABELS } from "../constants/ppColors";
 
 type SortDir = "asc" | "desc";
 
+// ── Band constants (same as backend) ─────────────────────────────────────
+// Used to display "≈ N merits" labels next to progress threshold sliders
+const BAND_EXPLOITED  = 213_000;  // 333k − 120k
+const BAND_FORTIFIED  = 334_000;  // 667k − 333k
+const BAND_STRONGHOLD = 334_000;  // proxy
+const MERIT_ACQUIRE   = 120_000;
+const MERIT_FORTIFIED = 333_000;
+const MERIT_STRONGHOLD= 667_000;
+
+/** Absolute merit position given progress in a state */
+function meritPos(state: string | null, progress: number): number {
+  const lower = state === "Stronghold" ? MERIT_STRONGHOLD
+              : state === "Fortified"  ? MERIT_FORTIFIED
+              : MERIT_ACQUIRE;
+  const band  = state === "Stronghold" ? BAND_STRONGHOLD
+              : state === "Fortified"  ? BAND_FORTIFIED
+              : BAND_EXPLOITED;
+  return Math.round(lower + progress * band);
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function cmp(a: unknown, b: unknown, dir: SortDir): number {
@@ -33,6 +53,18 @@ function PPBadge({ state }: { state: string | null }) {
   );
 }
 
+function ContestedBadge() {
+  return (
+    <span style={{
+      background: "#2d1f00", color: "#FF8C00", border: "1px solid #FF8C0066",
+      borderRadius: 4, padding: "2px 8px", fontSize: 11, fontWeight: 700,
+      letterSpacing: "0.04em",
+    }}>
+      ⚔ CONTESTED
+    </span>
+  );
+}
+
 /** Urgency band for a target — inverted from fortify: high score = high threat TO enemy. */
 function ThreatBand({ score }: { score: number }) {
   let label: string, bg: string, fg: string;
@@ -52,14 +84,22 @@ function ThreatBand({ score }: { score: number }) {
   );
 }
 
-function ProgressBar({ value }: { value: number | null }) {
+/** Progress bar — coloured by threshold proximity.
+ *  thresholds: { critical, high, medium } as 0.0–1.0 fractions
+ */
+function ProgressBar({
+  value, thresholds,
+}: {
+  value: number | null;
+  thresholds: { critical: number; high: number; medium: number };
+}) {
   if (value == null) return <span style={{ color: "#555" }}>—</span>;
   const pct = Math.max(0, Math.min(1, value)) * 100;
-  // For targets: low progress = GOOD for attacker (red = easy target)
-  const color = value <= 0   ? "#FF4444"
-              : value < 0.2  ? "#FF8C00"
-              : value < 0.5  ? "#D9A84A"
-              : value < 1.0  ? "#4AD94A"
+  const color = value <= 0              ? "#FF4444"
+              : value <= thresholds.critical ? "#FF4444"
+              : value <= thresholds.high     ? "#FF8C00"
+              : value <= thresholds.medium   ? "#D9A84A"
+              : value < 1.0                  ? "#4AD94A"
               : "#00E5CC";
   return (
     <div style={{ minWidth: 70 }}>
@@ -168,18 +208,101 @@ const smallBtnStyle: CSSProperties = {
   border: "1px solid #30363d", background: "#161b22", color: "#8b949e",
 };
 
+// ── Threshold slider row ───────────────────────────────────────────────────
+
+function ThresholdSlider({
+  label, color, value, onChange, min = 1, max = 100, defaultValue,
+}: {
+  label: string; color: string;
+  value: number; onChange: (n: number) => void;
+  min?: number; max?: number; defaultValue: number;
+}) {
+  const changed = value !== defaultValue;
+  // Show absolute merit equivalents across states for context
+  const exploitedMerit = meritPos("Exploited",  value / 100);
+  const fortifiedMerit = meritPos("Fortified",  value / 100);
+  const strongholdMerit= meritPos("Stronghold", value / 100);
+
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 3 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: color }} />
+          <label style={{ fontSize: 12, color: changed ? "#e6edf3" : "#8b949e", fontWeight: changed ? 600 : 400 }}>
+            {label}
+          </label>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          {changed && (
+            <button
+              onClick={() => onChange(defaultValue)}
+              style={{ ...smallBtnStyle, fontSize: 10 }}
+            >
+              reset ({defaultValue}%)
+            </button>
+          )}
+          <input
+            type="number" min={min} max={max} step={1}
+            value={value}
+            onChange={e => { const n = parseInt(e.target.value, 10); if (!isNaN(n) && n >= min && n <= max) onChange(n); }}
+            style={{
+              width: 52, padding: "3px 6px", fontSize: 13, fontWeight: 600,
+              background: "#0d1117", color: changed ? color : "#8b949e",
+              border: `1px solid ${changed ? color : "#30363d"}`,
+              borderRadius: 4, textAlign: "right", outline: "none",
+            }}
+          />
+          <span style={{ fontSize: 11, color: "#555" }}>%</span>
+        </div>
+      </div>
+      <input
+        type="range" min={min} max={max} step={1}
+        value={value}
+        onChange={e => onChange(Number(e.target.value))}
+        style={{ width: "100%", accentColor: changed ? color : "#444" }}
+      />
+      <div style={{ display: "flex", gap: 8, marginTop: 2 }}>
+        <span style={{ fontSize: 10, color: "#555" }}>
+          ≈ Exploited: {exploitedMerit.toLocaleString()} merits
+        </span>
+        <span style={{ fontSize: 10, color: "#555" }}>
+          · Fortified: {fortifiedMerit.toLocaleString()} merits
+        </span>
+        <span style={{ fontSize: 10, color: "#555" }}>
+          · Stronghold: {strongholdMerit.toLocaleString()} merits
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ── Default local thresholds (match backend DEFAULTS) ─────────────────────
+const DEFAULT_THRESHOLDS = { critical: 10, high: 25, medium: 50 };
+
 // ── Main component ─────────────────────────────────────────────────────────
 
 export default function TargetAnalysisView() {
-  const [allPowers,     setAllPowers]     = useState<string[]>([]);
-  const [attackerPower, setAttackerPower] = useState<string>("");
-  const [targetPowers,  setTargetPowers]  = useState<string[]>([]);
-  const [results,       setResults]       = useState<TargetAnalysisItem[]>([]);
-  const [loading,       setLoading]       = useState(false);
-  const [error,         setError]         = useState<string | null>(null);
-  const [sortKey,       setSortKey]       = useState<string>("score");
-  const [sortDir,       setSortDir]       = useState<SortDir>("desc");
-  const [filterPower,   setFilterPower]   = useState<string>("all");
+  const [allPowers,      setAllPowers]      = useState<string[]>([]);
+  const [attackerPower,  setAttackerPower]  = useState<string>("");
+  const [targetPowers,   setTargetPowers]   = useState<string[]>([]);
+  const [results,        setResults]        = useState<TargetAnalysisItem[]>([]);
+  const [loading,        setLoading]        = useState(false);
+  const [error,          setError]          = useState<string | null>(null);
+  const [sortKey,        setSortKey]        = useState<string>("score");
+  const [sortDir,        setSortDir]        = useState<SortDir>("desc");
+  const [filterPower,    setFilterPower]    = useState<string>("all");
+
+  // ── Local settings ────────────────────────────────────────────────────────
+  // These mirror backend defaults; changing them re-runs the analysis to apply.
+  // They're sent to the backend as part of the analysis, but since the backend
+  // uses admin_settings, we show the *backend-returned* thresholds after a run
+  // and allow local override for quick visual filtering without a DB round-trip.
+  const [maxTargets,     setMaxTargets]     = useState<number>(50);
+  const [thresholds,     setThresholds]     = useState(DEFAULT_THRESHOLDS);
+  // After a successful run, backend returns its active thresholds — use those
+  // as the "live" reference for progress bar colouring
+  const [liveThresholds, setLiveThresholds] = useState(DEFAULT_THRESHOLDS);
+  const [showThresholds, setShowThresholds] = useState(false);
 
   // Load power list on mount
   useEffect(() => {
@@ -194,15 +317,37 @@ export default function TargetAnalysisView() {
     setError(null);
     setResults([]);
     getTargetAnalysis(attackerPower, targetPowers)
-      .then(r => setResults(r.targets))
+      .then(r => {
+        // Slice client-side by maxTargets (backend uses its own DB setting;
+        // this gives immediate feedback without a re-query)
+        setResults(r.targets.slice(0, maxTargets));
+        // Adopt backend thresholds as live reference
+        if (r.progress_thresholds) {
+          const t = r.progress_thresholds;
+          const live = {
+            critical: Math.round(t.critical * 100),
+            high:     Math.round(t.high     * 100),
+            medium:   Math.round(t.medium   * 100),
+          };
+          setLiveThresholds(live);
+          setThresholds(live);
+        }
+      })
       .catch(e => setError(String(e)))
       .finally(() => setLoading(false));
-  }, [attackerPower, targetPowers]);
+  }, [attackerPower, targetPowers, maxTargets]);
 
   function handleSort(col: string) {
     if (col === sortKey) setSortDir(d => d === "asc" ? "desc" : "asc");
     else { setSortKey(col); setSortDir(col === "score" ? "desc" : "asc"); }
   }
+
+  // Build active thresholds as 0–1 fractions for ProgressBar
+  const activeThr = useMemo(() => ({
+    critical: thresholds.critical / 100,
+    high:     thresholds.high     / 100,
+    medium:   thresholds.medium   / 100,
+  }), [thresholds]);
 
   // Filter by target power
   const filtered = useMemo(() =>
@@ -210,8 +355,22 @@ export default function TargetAnalysisView() {
     [results, filterPower]
   );
 
+  // Additional client-side progress filter using local threshold sliders
+  // (allows user to quickly narrow results without re-querying)
+  const [progressFilter, setProgressFilter] = useState<"all"|"critical"|"high"|"medium">("all");
+  const filteredByProgress = useMemo(() => {
+    if (progressFilter === "all") return filtered;
+    return filtered.filter(item => {
+      const p = item.control_progress ?? 1;
+      if (progressFilter === "critical") return p <= activeThr.critical;
+      if (progressFilter === "high")     return p <= activeThr.high;
+      if (progressFilter === "medium")   return p <= activeThr.medium;
+      return true;
+    });
+  }, [filtered, progressFilter, activeThr]);
+
   // Sort
-  const sorted = useMemo(() => [...filtered].sort((a, b) => {
+  const sorted = useMemo(() => [...filteredByProgress].sort((a, b) => {
     if (sortKey === "net") {
       const na = (a.reinforcement ?? 0) - (a.undermining ?? 0);
       const nb = (b.reinforcement ?? 0) - (b.undermining ?? 0);
@@ -222,7 +381,7 @@ export default function TargetAnalysisView() {
       (b as unknown as Record<string, unknown>)[sortKey],
       sortDir,
     );
-  }), [filtered, sortKey, sortDir]);
+  }), [filteredByProgress, sortKey, sortDir]);
 
   // Counts per power for filter tabs
   const countsByPower = useMemo(() => {
@@ -231,13 +390,143 @@ export default function TargetAnalysisView() {
     return m;
   }, [results]);
 
-  const primeCount = results.filter(r => r.score >= 1200).length;
+  const primeCount     = results.filter(r => r.score >= 1200).length;
+  const contestedCount = results.filter(r => r.contested).length;
 
   return (
     <div style={{
       padding: "16px 20px", background: "#0d1117", minHeight: "calc(100vh - 44px)",
       fontFamily: '-apple-system,"Segoe UI",system-ui,sans-serif', color: "#e6edf3",
     }}>
+
+      {/* ── Top settings bar: Max Targets + Threshold toggle ─────────────── */}
+      <div style={{
+        background: "#161b22", border: "1px solid #30363d", borderRadius: 8,
+        padding: "10px 14px", marginBottom: 10,
+        display: "flex", alignItems: "center", flexWrap: "wrap", gap: 16,
+      }}>
+        {/* Max targets */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 12, color: "#8b949e", fontWeight: 600, whiteSpace: "nowrap" }}>
+            Max targets shown:
+          </span>
+          <input
+            type="range" min={5} max={200} step={5}
+            value={maxTargets}
+            onChange={e => setMaxTargets(Number(e.target.value))}
+            style={{ width: 120, accentColor: "#58a6ff" }}
+          />
+          <input
+            type="number" min={1} max={500} step={1}
+            value={maxTargets}
+            onChange={e => {
+              const n = parseInt(e.target.value, 10);
+              if (!isNaN(n) && n >= 1) setMaxTargets(n);
+            }}
+            style={{
+              width: 56, padding: "3px 6px", fontSize: 13, fontWeight: 600,
+              background: "#0d1117", color: "#58a6ff", border: "1px solid #30363d",
+              borderRadius: 4, textAlign: "right", outline: "none",
+            }}
+          />
+          <span style={{ fontSize: 11, color: "#555" }}>systems</span>
+        </div>
+
+        {/* Threshold toggle */}
+        <button
+          onClick={() => setShowThresholds(v => !v)}
+          style={{
+            padding: "4px 12px", fontSize: 12, borderRadius: 4, cursor: "pointer",
+            border: `1px solid ${showThresholds ? "#FF8C00" : "#30363d"}`,
+            background: showThresholds ? "#3d1a00" : "#0d1117",
+            color: showThresholds ? "#FF8C00" : "#8b949e",
+            fontWeight: 600,
+          }}
+        >
+          {showThresholds ? "▲ Hide" : "▼ Show"} Vulnerability Thresholds
+        </button>
+
+        {/* Progress filter quick-buttons */}
+        {results.length > 0 && (
+          <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+            <span style={{ fontSize: 11, color: "#555" }}>Show:</span>
+            {([
+              { key: "all",      label: "All",              color: "#8b949e" },
+              { key: "critical", label: `≤${thresholds.critical}% (Critical)`, color: "#FF4444" },
+              { key: "high",     label: `≤${thresholds.high}% (High)`,         color: "#FF8C00" },
+              { key: "medium",   label: `≤${thresholds.medium}% (Medium)`,     color: "#D9A84A" },
+            ] as const).map(({ key, label, color }) => (
+              <button
+                key={key}
+                onClick={() => setProgressFilter(key)}
+                style={{
+                  padding: "2px 8px", fontSize: 11, borderRadius: 3, cursor: "pointer",
+                  border: `1px solid ${progressFilter === key ? color : "#30363d"}`,
+                  background: progressFilter === key ? "#1a0e00" : "#0d1117",
+                  color: progressFilter === key ? color : "#555",
+                  fontWeight: progressFilter === key ? 700 : 400,
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Threshold sliders panel ───────────────────────────────────────── */}
+      {showThresholds && (
+        <div style={{
+          background: "#161b22", border: "1px solid #30363d", borderRadius: 8,
+          padding: "14px 16px", marginBottom: 10,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            <h4 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#e6edf3" }}>
+              Enemy System Vulnerability Thresholds
+            </h4>
+            <span style={{ fontSize: 11, color: "#555" }}>
+              Backend defaults: Critical≤{liveThresholds.critical}% · High≤{liveThresholds.high}% · Medium≤{liveThresholds.medium}%
+            </span>
+          </div>
+          <p style={{ fontSize: 12, color: "#8b949e", margin: "0 0 14px" }}>
+            Set the enemy control-progress cutoffs that define each vulnerability band.
+            The progress bar colour in the table and the "Show" filter buttons update immediately.
+            Absolute merit equivalents are shown below each slider for context (varies by state).
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0 32px" }}>
+            <ThresholdSlider
+              label="🔴 Critical — near collapse"
+              color="#FF4444"
+              value={thresholds.critical}
+              onChange={v => setThresholds(t => ({ ...t, critical: v }))}
+              max={thresholds.high - 1}
+              defaultValue={liveThresholds.critical}
+            />
+            <ThresholdSlider
+              label="🟠 High vulnerability"
+              color="#FF8C00"
+              value={thresholds.high}
+              onChange={v => setThresholds(t => ({ ...t, high: v }))}
+              min={thresholds.critical + 1}
+              max={thresholds.medium - 1}
+              defaultValue={liveThresholds.high}
+            />
+            <ThresholdSlider
+              label="🟡 Medium vulnerability"
+              color="#D9A84A"
+              value={thresholds.medium}
+              onChange={v => setThresholds(t => ({ ...t, medium: v }))}
+              min={thresholds.high + 1}
+              defaultValue={liveThresholds.medium}
+            />
+          </div>
+          <p style={{ fontSize: 11, color: "#555", margin: "8px 0 0" }}>
+            ℹ These are display-only overrides. To persist them to the database, update the
+            <strong style={{ color: "#8b949e" }}> Target Analysis Weights</strong> section in
+            the <strong style={{ color: "#8b949e" }}>Admin panel</strong> and re-run the analysis.
+          </p>
+        </div>
+      )}
 
       {/* ── Controls ─────────────────────────────────────────────────────── */}
       <div style={{
@@ -300,10 +589,15 @@ export default function TargetAnalysisView() {
           {attackerPower && targetPowers.length === 0 && <span style={{ fontSize: 12, color: "#8b949e" }}>Select at least one target power</span>}
           {results.length > 0 && !loading && (
             <span style={{ fontSize: 12, color: "#8b949e" }}>
-              {results.length} target systems
+              {sorted.length} / {results.length} target systems
               {primeCount > 0 && (
                 <span style={{ marginLeft: 8, color: "#FF4444", fontWeight: 700 }}>
                   · {primeCount} PRIME
+                </span>
+              )}
+              {contestedCount > 0 && (
+                <span style={{ marginLeft: 8, color: "#FF8C00", fontWeight: 700 }}>
+                  · {contestedCount} ⚔ CONTESTED
                 </span>
               )}
             </span>
@@ -364,9 +658,9 @@ export default function TargetAnalysisView() {
                     title="Vulnerability score — higher = better undermine target" />
                 <Th col="system_name"          label="System"       sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                 <Th col="controlling_power"    label="Owner"        sortKey={sortKey} sortDir={sortDir} onSort={handleSort} width={160} />
-                <Th col="power_state"          label="State"        sortKey={sortKey} sortDir={sortDir} onSort={handleSort} width={110} />
-                <Th col="control_progress"     label="Progress"     sortKey={sortKey} sortDir={sortDir} onSort={handleSort} width={100}
-                    title="Enemy control progress. Low = vulnerable to downgrade." />
+                <Th col="power_state"          label="State"        sortKey={sortKey} sortDir={sortDir} onSort={handleSort} width={140} />
+                <Th col="control_progress"     label="Progress"     sortKey={sortKey} sortDir={sortDir} onSort={handleSort} width={110}
+                    title={`Enemy control progress. Red=CRITICAL (≤${thresholds.critical}%), Orange=HIGH (≤${thresholds.high}%), Yellow=MEDIUM (≤${thresholds.medium}%)`} />
                 <Th col="days_to_downgrade"    label="Days"         sortKey={sortKey} sortDir={sortDir} onSort={handleSort} width={65}
                     title="Estimated days until state drops at current undermine rate." />
                 <Th col="reinforcement"        label="Reinf."       sortKey={sortKey} sortDir={sortDir} onSort={handleSort} width={85} />
@@ -385,8 +679,9 @@ export default function TargetAnalysisView() {
                 const u   = item.undermining   ?? 0;
                 const net = r - u;
 
-                // Row tinting: highest threat = red glow
-                const rowBg = item.score >= 1200 ? "#1a0000"
+                // Row tinting: contested = orange glow, highest threat = red glow
+                const rowBg = item.contested    ? "#1a1000"
+                            : item.score >= 1200 ? "#1a0000"
                             : item.score >= 900  ? "#150c00"
                             : i % 2 === 0 ? "#0d1117" : "#161b22";
 
@@ -423,14 +718,17 @@ export default function TargetAnalysisView() {
                       {item.controlling_power}
                     </td>
 
-                    {/* State badge */}
+                    {/* State badge + contested badge */}
                     <td style={{ padding: "8px 10px" }}>
-                      <PPBadge state={item.power_state} />
+                      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                        <PPBadge state={item.power_state} />
+                        {item.contested && <ContestedBadge />}
+                      </div>
                     </td>
 
-                    {/* Progress bar */}
+                    {/* Progress bar (threshold-aware) */}
                     <td style={{ padding: "8px 10px" }}>
-                      <ProgressBar value={item.control_progress} />
+                      <ProgressBar value={item.control_progress} thresholds={activeThr} />
                     </td>
 
                     {/* Days to downgrade */}

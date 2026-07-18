@@ -19,7 +19,7 @@ from models.schemas import (
     TargetAnalysisRequest,
     TargetAnalysisResponse,
 )
-from services.scoring import compute_recommendations
+from services.scoring import compute_recommendations, load_weights, DEFAULTS as SCORING_DEFAULTS
 
 router = APIRouter(prefix="/powers", tags=["powers"])
 
@@ -177,16 +177,6 @@ def get_power_recommendations(
 # POST /api/powers/target-analysis
 # ---------------------------------------------------------------------------
 
-# Score constants (mirroring scoring.py bands so the UI colours align)
-_TA_SCORE_STRONGHOLD   = 1000.0   # Stronghold — best undermine target
-_TA_SCORE_FORTIFIED    =  600.0   # Fortified
-_TA_SCORE_EXPLOITED    =  200.0   # Exploited — low value but still counts
-_TA_DIST_MAX_LY        =   30.0   # beyond this distance proximity bonus = 0
-_TA_PROGRESS_BONUS_MAX =  300.0   # extra points when progress is near 0
-_TA_PROX_BONUS_MAX     =  150.0   # extra points when attacker is ≤5 LY away
-
-CYCLE_DAYS = 7.0
-
 
 def _dist3(ax: float, ay: float, az: float,
            bx: float, by: float, bz: float) -> float:
@@ -198,18 +188,29 @@ def _estimate_days_to_downgrade(
     reinforcement: int,
     undermining: int,
 ) -> Optional[float]:
-    """Estimate days until progress hits 0.0 (state downgrade) at current rate."""
+    """Estimate days until progress hits 0.0 (state downgrade) at current rate.
+
+    Uses the same cumulative-cycle-divided-by-days approach as the fortify scorer.
+    """
+    from services.scoring import days_elapsed_in_cycle
     if progress <= 0.0:
         return 0.0
-    net = reinforcement - undermining          # negative = losing ground
-    if net >= 0:
-        return None                            # winning — no downgrade imminent
-    deficit = abs(net)
-    total_cap = max(reinforcement, deficit, 1) * 1.5
-    daily_loss = (deficit / total_cap) / CYCLE_DAYS
-    if daily_loss <= 0:
+    net_loss_cycle = undermining - reinforcement   # positive = losing ground
+    if net_loss_cycle <= 0:
+        return None                                 # enemy winning — no downgrade
+    elapsed = days_elapsed_in_cycle()
+    daily_net_loss = net_loss_cycle / elapsed
+    # Approximate buffer: progress × 1.0 treated as a fraction of a 1-unit band
+    # For relative ranking purposes this is sufficient; the scoring.py version
+    # uses absolute merit bands, but here we keep it dimensionless for simplicity.
+    # We do scale by band width so the days figure is comparable across states.
+    from services.scoring import _band_width
+    band = _band_width(None)   # default = exploited band (213k) for normalisation
+    buffer = progress * band
+    daily_scaled = daily_net_loss   # R/U are in raw merits; buffer is in merits too
+    if daily_scaled <= 0:
         return None
-    return progress / daily_loss
+    return buffer / daily_scaled
 
 
 @router.post("/target-analysis", response_model=TargetAnalysisResponse)
@@ -220,13 +221,38 @@ def target_analysis(
     """
     Score enemy systems for undermining priority.
 
-    Scoring model:
-      Base score by state:  Stronghold=1000  Fortified=600  Exploited=200
-      Progress bonus:       +300 × (1 - progress)  — closer to 0 = more bonus
-      Proximity bonus:      +150 × max(0, 1 - dist/30)  — closer to attacker = more
-      State-value bonus:    Stronghold that is also close to downgrade is HIGHEST pri
-    Only Stronghold / Fortified / Exploited systems are included (not Unoccupied).
+    Scoring model (all weights configurable via Admin panel → admin_settings):
+      Base score by state:
+        Stronghold = target_score_stronghold  (default 1000)
+        Fortified  = target_score_fortified   (default 600)
+        Exploited  = target_score_exploited   (default 200)
+        Contested  = target_score_contested   (default 800)
+      Progress bonus: target_progress_bonus_max × (1 − progress)
+        — closer enemy progress to 0 = higher bonus
+      Proximity bonus: target_prox_bonus_max × max(0, 1 − dist/target_dist_max_ly)
+        — closer to attacker = higher bonus
+      Max results: target_max_results (default 50)
+
+    Includes Contested systems (power_state = "Contested") where our power
+    already has a foothold but hasn't flipped the system yet.
     """
+    # ── 0. Load configurable weights from DB ─────────────────────────────────
+    w = load_weights(db)
+
+    score_stronghold  = float(w.get("target_score_stronghold",  SCORING_DEFAULTS["target_score_stronghold"]))
+    score_fortified   = float(w.get("target_score_fortified",   SCORING_DEFAULTS["target_score_fortified"]))
+    score_exploited   = float(w.get("target_score_exploited",   SCORING_DEFAULTS["target_score_exploited"]))
+    score_contested   = float(w.get("target_score_contested",   SCORING_DEFAULTS["target_score_contested"]))
+    prog_bonus_max    = float(w.get("target_progress_bonus_max",SCORING_DEFAULTS["target_progress_bonus_max"]))
+    prox_bonus_max    = float(w.get("target_prox_bonus_max",    SCORING_DEFAULTS["target_prox_bonus_max"]))
+    dist_max_ly       = float(w.get("target_dist_max_ly",       SCORING_DEFAULTS["target_dist_max_ly"]))
+    max_results       = int(float(w.get("target_max_results",   SCORING_DEFAULTS["target_max_results"])))
+
+    # Thresholds returned to the UI for calibrated colour labels
+    prog_critical = float(w.get("target_progress_critical", SCORING_DEFAULTS["target_progress_critical"]))
+    prog_high     = float(w.get("target_progress_high",     SCORING_DEFAULTS["target_progress_high"]))
+    prog_medium   = float(w.get("target_progress_medium",   SCORING_DEFAULTS["target_progress_medium"]))
+
     attacker = body.attacker_power
     targets  = body.target_powers
 
@@ -250,7 +276,8 @@ def target_analysis(
     # ── 2. Get latest snapshots for all target powers ─────────────────────────
     if not targets:
         return TargetAnalysisResponse(
-            targets=[], attacker_power=attacker, target_powers=targets
+            targets=[], attacker_power=attacker, target_powers=targets,
+            progress_thresholds={"critical": prog_critical, "high": prog_high, "medium": prog_medium},
         )
 
     target_snap_rows = db.execute(text("""
@@ -262,9 +289,28 @@ def target_analysis(
         ORDER BY system_id, snapshot_time DESC
     """), {"powers": targets}).mappings().all()
 
+    # ── 2b. Also fetch Contested systems where attacker has a foothold ────────
+    # Contested = any system in the DB where latest snapshot power ≠ attacker
+    # but has a snapshot row with power = attacker (attacker was there recently)
+    # Simpler approach: query pp_system_snapshots for systems where ANY snapshot
+    # belongs to one of the target powers AND there is also a snapshot for the
+    # attacker — these are contested.
+    contested_sys_ids: set[int] = set()
+    if attacker_snap_rows:
+        contested_rows = db.execute(text("""
+            SELECT DISTINCT s.system_id
+            FROM pp_system_snapshots s
+            WHERE s.power = ANY(:targets)
+              AND s.system_id IN (
+                  SELECT system_id FROM pp_system_snapshots WHERE power = :attacker
+              )
+        """), {"targets": targets, "attacker": attacker}).all()
+        contested_sys_ids = {r[0] for r in contested_rows}
+
     if not target_snap_rows:
         return TargetAnalysisResponse(
-            targets=[], attacker_power=attacker, target_powers=targets
+            targets=[], attacker_power=attacker, target_powers=targets,
+            progress_thresholds={"critical": prog_critical, "high": prog_high, "medium": prog_medium},
         )
 
     target_sys_ids = [r["system_id"] for r in target_snap_rows]
@@ -318,7 +364,9 @@ def target_analysis(
             continue
 
         power_state = snap["power_state"]
-        if power_state not in ("Stronghold", "Fortified", "Exploited"):
+        is_contested = sid in contested_sys_ids
+
+        if power_state not in ("Stronghold", "Fortified", "Exploited", "Contested"):
             continue   # skip Unoccupied — nothing to undermine
 
         progress   = snap["control_progress"] or 0.5
@@ -326,17 +374,20 @@ def target_analysis(
         under      = snap["undermining"]   or 0
         sx, sy, sz = system.x or 0.0, system.y or 0.0, system.z or 0.0
 
-        # Base score by state tier
-        base = (
-            _TA_SCORE_STRONGHOLD if power_state == "Stronghold"
-            else _TA_SCORE_FORTIFIED  if power_state == "Fortified"
-            else _TA_SCORE_EXPLOITED
-        )
+        # Base score by state tier (or Contested override)
+        if is_contested:
+            base = score_contested
+        elif power_state == "Stronghold":
+            base = score_stronghold
+        elif power_state == "Fortified":
+            base = score_fortified
+        else:
+            base = score_exploited
 
         # Progress bonus: the closer to 0 the more vulnerable
         # progress ≤0 → full bonus; progress ≥1 → no bonus
         prog_clamped = max(0.0, min(1.0, progress))
-        progress_bonus = _TA_PROGRESS_BONUS_MAX * (1.0 - prog_clamped)
+        progress_bonus = prog_bonus_max * (1.0 - prog_clamped)
 
         # Proximity bonus
         dist_from_attacker: Optional[float] = None
@@ -346,9 +397,9 @@ def target_analysis(
                 _dist3(sx, sy, sz, ax, ay, az)
                 for ax, ay, az in attacker_coords
             )
-            if dist_from_attacker <= _TA_DIST_MAX_LY:
-                prox_bonus = _TA_PROX_BONUS_MAX * max(
-                    0.0, 1.0 - dist_from_attacker / _TA_DIST_MAX_LY
+            if dist_from_attacker <= dist_max_ly:
+                prox_bonus = prox_bonus_max * max(
+                    0.0, 1.0 - dist_from_attacker / dist_max_ly
                 )
 
         score = round(base + progress_bonus + prox_bonus, 1)
@@ -358,17 +409,23 @@ def target_analysis(
 
         # Build reason list
         reasons: list[str] = []
-        if power_state == "Stronghold":
-            reasons.append(f"Stronghold — high-value undermine target")
+        if is_contested:
+            reasons.append("⚔ Contested — your power already has a foothold here")
+        elif power_state == "Stronghold":
+            reasons.append("Stronghold — high-value undermine target")
         elif power_state == "Fortified":
-            reasons.append(f"Fortified — mid-value undermine target")
+            reasons.append("Fortified — mid-value undermine target")
         else:
-            reasons.append(f"Exploited — low-value undermine target")
+            reasons.append("Exploited — low-value undermine target")
 
         if progress <= 0.0:
             reasons.append("🚨 Already at downgrade threshold — one more push drops it")
-        elif progress < 0.2:
-            reasons.append(f"Near downgrade threshold ({progress:.1%} progress)")
+        elif progress < prog_critical:
+            reasons.append(f"CRITICAL vulnerability ({progress:.1%} progress — near collapse)")
+        elif progress < prog_high:
+            reasons.append(f"HIGH vulnerability ({progress:.1%} progress)")
+        elif progress < prog_medium:
+            reasons.append(f"Moderate vulnerability ({progress:.1%} progress)")
         elif progress >= 1.0:
             reasons.append(f"Progress at {progress:.1%} — recently reinforced, harder to drop")
 
@@ -376,8 +433,8 @@ def target_analysis(
             reasons.append("Downgrade happening NOW this cycle")
         elif days is not None and days < 2.0:
             reasons.append(f"~{days:.1f}d to downgrade at current rate")
-        elif days is not None and days < 5.0:
-            reasons.append(f"~{days:.1f}d to downgrade — moderate pressure")
+        elif days is not None and days < 7.0:
+            reasons.append(f"~{days:.1f}d to downgrade — apply pressure now")
 
         if dist_from_attacker is not None:
             if dist_from_attacker <= 5.0:
@@ -399,14 +456,20 @@ def target_analysis(
             distance_from_attacker=dist_from_attacker,
             days_to_downgrade=days,
             trend=trend,
+            contested=is_contested,
         ))
 
     items.sort(key=lambda x: x.score, reverse=True)
 
     return TargetAnalysisResponse(
-        targets=items[:50],
+        targets=items[:max_results],
         attacker_power=attacker,
         target_powers=targets,
+        progress_thresholds={
+            "critical": prog_critical,
+            "high":     prog_high,
+            "medium":   prog_medium,
+        },
     )
 
 

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { getPowerSystems, PPSystemEntry } from "../api/powers";
 import { getRecommendations, RecommendationsResponse, RecommendationItem } from "../api/recommendations";
+import { getTargetAnalysis, TargetAnalysisItem } from "../api/targeting";
 import { useSelectionState } from "../hooks/useSelectionState";
 import { ppStateColor, PP_STATE_LABELS } from "../constants/ppColors";
 import PowerSelector from "../components/PowerSelector";
@@ -66,6 +67,17 @@ function ExpandBadge() {
       borderRadius: 3, padding: "1px 6px", fontSize: 10, fontWeight: 700,
     }}>
       EXPAND
+    </span>
+  );
+}
+
+function ContestedBadge() {
+  return (
+    <span style={{
+      background: "#2d1f00", color: "#FF8C00", border: "1px solid #FF8C0066",
+      borderRadius: 3, padding: "1px 6px", fontSize: 10, fontWeight: 700,
+    }}>
+      ⚔ CONTESTED
     </span>
   );
 }
@@ -137,13 +149,15 @@ function Th({ col, label, sortKey, sortDir, onSort, width, title }: {
 export default function TableView() {
   const { powerName, refSystem, systemList, setPower, setRef, setSystemList } = useSelectionState();
 
-  const [systems,         setSystems]         = useState<PPSystemEntry[]>([]);
-  const [recommendations, setRecommendations] = useState<RecommendationsResponse | null>(null);
-  const [loadingSystems,  setLoadingSystems]  = useState(false);
-  const [loadingRecos,    setLoadingRecos]    = useState(false);
-  const [error,           setError]           = useState<string | null>(null);
-  const [sortKey,         setSortKey]         = useState<string>("control_progress");
-  const [sortDir,         setSortDir]         = useState<SortDir>("asc");
+  const [systems,           setSystems]           = useState<PPSystemEntry[]>([]);
+  const [recommendations,   setRecommendations]   = useState<RecommendationsResponse | null>(null);
+  const [contestedSystems,  setContestedSystems]  = useState<TargetAnalysisItem[]>([]);
+  const [loadingSystems,    setLoadingSystems]    = useState(false);
+  const [loadingRecos,      setLoadingRecos]      = useState(false);
+  const [loadingContested,  setLoadingContested]  = useState(false);
+  const [error,             setError]             = useState<string | null>(null);
+  const [sortKey,           setSortKey]           = useState<string>("control_progress");
+  const [sortDir,           setSortDir]           = useState<SortDir>("asc");
 
   // Build lookup maps from recommendations for O(1) row enrichment
   const fortifyMap = useMemo(() => {
@@ -180,6 +194,26 @@ export default function TableView() {
       .catch(() => setRecommendations(null))
       .finally(() => setLoadingRecos(false));
   }, [powerName, refSystem?.id]);
+
+  // Fetch contested systems: systems controlled by OTHER powers where our power
+  // also has a historical snapshot (we've been undermining there).
+  // We do this by running a target-analysis with our power as attacker against
+  // all OTHER powers in the dataset, then filtering for contested=true.
+  useEffect(() => {
+    if (!powerName) { setContestedSystems([]); return; }
+    setLoadingContested(true);
+    // We need the list of other powers — fetch all systems to get unique powers
+    import("../api/powers").then(({ listPowers }) =>
+      listPowers().then(allPowers => {
+        const others = allPowers.filter(p => p !== powerName);
+        if (others.length === 0) { setContestedSystems([]); setLoadingContested(false); return; }
+        getTargetAnalysis(powerName, others)
+          .then(r => setContestedSystems(r.targets.filter(t => t.contested)))
+          .catch(() => setContestedSystems([]))
+          .finally(() => setLoadingContested(false));
+      })
+    ).catch(() => setLoadingContested(false));
+  }, [powerName]);
 
   // Default sort: by control_progress ascending (most at-risk first) when no ref;
   // by distance ascending when a reference system is selected.
@@ -240,6 +274,11 @@ export default function TableView() {
               : `${systems.length} system${systems.length !== 1 ? "s" : ""}`}
             {powerName && ` · ${powerName}`}
             {refSystem && ` · ref: ${refSystem.name}`}
+            {contestedSystems.length > 0 && (
+              <span style={{ marginLeft: 8, color: "#FF8C00", fontWeight: 700 }}>
+                · {contestedSystems.length} ⚔ contested
+              </span>
+            )}
           </span>
         )}
       </div>
@@ -375,6 +414,122 @@ export default function TableView() {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* ── Contested Systems section ──────────────────────────────────────── */}
+      {powerName && (contestedSystems.length > 0 || loadingContested) && (
+        <div style={{ marginTop: 20 }}>
+          <div style={{
+            display: "flex", alignItems: "center", gap: 10, marginBottom: 8,
+            borderBottom: "2px solid #FF8C0033", paddingBottom: 6,
+          }}>
+            <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#FF8C00" }}>
+              ⚔ Contested Systems
+            </h3>
+            <span style={{ fontSize: 12, color: "#8b949e" }}>
+              Systems controlled by other powers where {powerName} has an active foothold
+            </span>
+            {loadingContested && <span style={{ fontSize: 12, color: "#555" }}>Loading…</span>}
+          </div>
+
+          {contestedSystems.length > 0 && (
+            <div style={{ overflowX: "auto", borderRadius: 8, border: "1px solid #FF8C0033" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr>
+                    {["System", "Owner", "State", "Progress", "Days ↓", "Reinf.", "Underm.", "Net R–U", "Score", "Dist LY"].map(h => (
+                      <th key={h} style={{
+                        padding: "8px 10px", textAlign: "left", fontSize: 11, fontWeight: 700,
+                        color: "#FF8C00", textTransform: "uppercase", letterSpacing: "0.05em",
+                        background: "#1a1000", borderBottom: "2px solid #FF8C0033",
+                        whiteSpace: "nowrap",
+                      }}>
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {contestedSystems.slice(0, 30).map((item, i) => {
+                    const r   = item.reinforcement ?? 0;
+                    const u   = item.undermining   ?? 0;
+                    const net = r - u;
+                    const rowBg = i % 2 === 0 ? "#120d00" : "#1a1200";
+                    return (
+                      <tr key={item.system_id64} style={{ background: rowBg }}>
+                        {/* System name */}
+                        <td style={{ padding: "7px 10px", whiteSpace: "nowrap" }}>
+                          <a
+                            href={`https://www.edsm.net/en/system/id/-/name/${encodeURIComponent(item.system_name)}`}
+                            target="_blank" rel="noreferrer"
+                            style={{ color: "#FF8C00", textDecoration: "none", fontWeight: 500 }}
+                          >
+                            {item.system_name}
+                          </a>
+                          {" "}
+                          <ContestedBadge />
+                        </td>
+                        {/* Owner */}
+                        <td style={{ padding: "7px 10px", color: "#8b949e", fontSize: 12, whiteSpace: "nowrap" }}>
+                          {item.controlling_power}
+                        </td>
+                        {/* State */}
+                        <td style={{ padding: "7px 10px" }}>
+                          {item.power_state
+                            ? <span style={{ background: ppStateColor(item.power_state), color: "#fff", borderRadius: 4, padding: "2px 6px", fontSize: 11, fontWeight: 600 }}>
+                                {PP_STATE_LABELS[item.power_state] ?? item.power_state}
+                              </span>
+                            : <span style={{ color: "#555" }}>—</span>}
+                        </td>
+                        {/* Progress */}
+                        <td style={{ padding: "7px 10px" }}>
+                          {item.control_progress != null ? (
+                            <div style={{ minWidth: 60 }}>
+                              <div style={{ fontSize: 11, color: item.control_progress <= 0.2 ? "#FF4444" : item.control_progress <= 0.5 ? "#FF8C00" : "#D9A84A", fontWeight: 600, textAlign: "right" }}>
+                                {(item.control_progress * 100).toFixed(1)}%
+                              </div>
+                              <div style={{ height: 3, borderRadius: 2, background: "#2a2a3a" }}>
+                                <div style={{ height: "100%", width: `${Math.min(100, item.control_progress * 100)}%`, background: "#FF8C00", borderRadius: 2 }} />
+                              </div>
+                            </div>
+                          ) : <span style={{ color: "#555" }}>—</span>}
+                        </td>
+                        {/* Days to downgrade */}
+                        <td style={{ padding: "7px 10px", textAlign: "center" }}>
+                          {item.days_to_downgrade == null
+                            ? <span style={{ color: "#555" }}>—</span>
+                            : item.days_to_downgrade === 0
+                            ? <span style={{ color: "#4AD94A", fontWeight: 800 }}>NOW ✓</span>
+                            : <span style={{ color: item.days_to_downgrade < 3 ? "#4AD94A" : "#D9A84A", fontWeight: 600 }}>{item.days_to_downgrade.toFixed(1)}d</span>}
+                        </td>
+                        {/* Reinforcement */}
+                        <td style={{ padding: "7px 10px", textAlign: "right", color: "#4AD94A", fontVariantNumeric: "tabular-nums" }}>
+                          {r > 0 ? r.toLocaleString() : <span style={{ color: "#555" }}>—</span>}
+                        </td>
+                        {/* Undermining */}
+                        <td style={{ padding: "7px 10px", textAlign: "right", color: u > r ? "#D94A4A" : u > 0 ? "#D9A84A" : "#555", fontVariantNumeric: "tabular-nums" }}>
+                          {u > 0 ? u.toLocaleString() : <span style={{ color: "#555" }}>—</span>}
+                        </td>
+                        {/* Net R–U (enemy perspective: negative = we're winning) */}
+                        <td style={{ padding: "7px 10px", textAlign: "right", color: net < 0 ? "#4AD94A" : net > 0 ? "#D94A4A" : "#555", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+                          {(r > 0 || u > 0) ? `${net >= 0 ? "+" : ""}${net.toLocaleString()}` : <span style={{ color: "#555" }}>—</span>}
+                        </td>
+                        {/* Score */}
+                        <td style={{ padding: "7px 10px", textAlign: "right", color: "#FF8C00", fontWeight: 700 }}>
+                          {item.score.toFixed(0)}
+                        </td>
+                        {/* Distance */}
+                        <td style={{ padding: "7px 10px", textAlign: "right", color: item.distance_from_attacker != null && item.distance_from_attacker <= 10 ? "#FF8C00" : "#8b949e" }}>
+                          {item.distance_from_attacker != null ? `${item.distance_from_attacker.toFixed(1)}` : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
     </div>

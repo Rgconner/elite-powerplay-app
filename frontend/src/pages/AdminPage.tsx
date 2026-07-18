@@ -71,6 +71,43 @@ const WEIGHT_LABELS: Record<string, string> = {
   expand_allegiance_match: "Expand — Bonus: allegiance matches power",
 };
 
+// ── Target Analysis weights ───────────────────────────────────────────────────
+// Keys must match backend services/scoring.py DEFAULTS exactly.
+const DEFAULT_TARGET_WEIGHTS: Record<string, number> = {
+  target_score_stronghold:   1000,
+  target_score_fortified:     600,
+  target_score_exploited:     200,
+  target_score_contested:     800,
+  target_progress_bonus_max:  300,
+  target_prox_bonus_max:      150,
+  target_dist_max_ly:          30,
+  target_max_results:          50,
+};
+
+const TARGET_WEIGHT_LABELS: Record<string, string> = {
+  target_score_stronghold:   "Target — Base score: Stronghold systems",
+  target_score_fortified:    "Target — Base score: Fortified systems",
+  target_score_exploited:    "Target — Base score: Exploited systems",
+  target_score_contested:    "Target — Base score: Contested systems",
+  target_progress_bonus_max: "Target — Max progress bonus (enemy at 0%)",
+  target_prox_bonus_max:     "Target — Max proximity bonus (adjacent)",
+  target_dist_max_ly:        "Target — Proximity falloff distance (LY)",
+  target_max_results:        "Target — Max results returned per query",
+};
+
+// ── Target Analysis vulnerability thresholds (progress %) ───────────────────
+const DEFAULT_TARGET_THRESHOLDS: Record<string, number> = {
+  target_progress_critical: 10,   // ≤ this % → CRITICAL
+  target_progress_high:     25,   // ≤ this % → HIGH
+  target_progress_medium:   50,   // ≤ this % → MEDIUM
+};
+
+const TARGET_THRESHOLD_LABELS: Record<string, string> = {
+  target_progress_critical: "🔴 Critical threshold — enemy nearly at collapse (%)",
+  target_progress_high:     "🟠 High vulnerability threshold (%)",
+  target_progress_medium:   "🟡 Medium vulnerability threshold (%)",
+};
+
 // ── Fortification alert thresholds (days-to-failure) ─────────────────────────
 // Keys must match backend DEFAULTS exactly.  Values are in DAYS.
 const DEFAULT_THRESHOLDS: Record<string, number> = {
@@ -131,8 +168,10 @@ export default function AdminPage({ onClose }: Props) {
   const [isLoggedIn, setIsLoggedIn] = useState(!!getAdminToken());
 
   const [status, setStatus] = useState<AdminStatus | null>(null);
-  const [settings, setSettings]     = useState<Record<string, number>>({});
-  const [thresholds, setThresholds] = useState<Record<string, number>>({ ...DEFAULT_THRESHOLDS });
+  const [settings,          setSettings]          = useState<Record<string, number>>({});
+  const [thresholds,        setThresholds]        = useState<Record<string, number>>({ ...DEFAULT_THRESHOLDS });
+  const [targetWeights,     setTargetWeights]     = useState<Record<string, number>>({ ...DEFAULT_TARGET_WEIGHTS });
+  const [targetThresholds,  setTargetThresholds]  = useState<Record<string, number>>({ ...DEFAULT_TARGET_THRESHOLDS });
   const [settingsSaved, setSettingsSaved] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -146,14 +185,20 @@ export default function AdminPage({ onClose }: Props) {
     ])
       .then(([st, sets]) => {
         setStatus(st);
-        const w: Record<string, number> = { ...DEFAULT_WEIGHTS };
-        const t: Record<string, number> = { ...DEFAULT_THRESHOLDS };
+        const w:  Record<string, number> = { ...DEFAULT_WEIGHTS };
+        const t:  Record<string, number> = { ...DEFAULT_THRESHOLDS };
+        const tw: Record<string, number> = { ...DEFAULT_TARGET_WEIGHTS };
+        const tt: Record<string, number> = { ...DEFAULT_TARGET_THRESHOLDS };
         sets.forEach((s) => {
-          if (s.key in w) w[s.key] = parseFloat(s.value);
-          if (s.key in t) t[s.key] = parseFloat(s.value);
+          if (s.key in w)  w[s.key]  = parseFloat(s.value);
+          if (s.key in t)  t[s.key]  = parseFloat(s.value);
+          if (s.key in tw) tw[s.key] = parseFloat(s.value);
+          if (s.key in tt) tt[s.key] = parseFloat(s.value);
         });
         setSettings(w);
         setThresholds(t);
+        setTargetWeights(tw);
+        setTargetThresholds(tt);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -203,6 +248,8 @@ export default function AdminPage({ onClose }: Props) {
       const payload = [
         ...Object.entries(settings),
         ...Object.entries(thresholds),
+        ...Object.entries(targetWeights),
+        ...Object.entries(targetThresholds),
       ].map(([key, value]) => ({ key, value: String(value) }));
       await apiPatch("/api/admin/settings", payload);
       setSettingsSaved(true);
@@ -471,6 +518,127 @@ export default function AdminPage({ onClose }: Props) {
             </div>
           );
         })}
+      </div>
+
+      {/* Target Analysis Weights */}
+      <div style={cardStyle}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Target Analysis Weights</h3>
+          <span style={{ fontSize: 11, color: "#57606a" }}>Saved with "Save All Settings" above</span>
+        </div>
+        <p style={{ fontSize: 12, color: "#57606a", margin: "0 0 14px" }}>
+          Base scores for each enemy state tier, progress bonus, proximity bonus, and max results per query.
+          Higher base scores push that tier higher in the ranking. Changes take effect on the next analysis run.
+        </p>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 40px", marginBottom: 20 }}>
+          {Object.keys(DEFAULT_TARGET_WEIGHTS).map((key) => {
+            const val = targetWeights[key] ?? DEFAULT_TARGET_WEIGHTS[key];
+            const def = DEFAULT_TARGET_WEIGHTS[key];
+            const changed = val !== def;
+            return (
+              <div key={key}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                  <label style={{ fontSize: 12, color: changed ? "#1f2328" : "#57606a", fontWeight: changed ? 600 : 400 }}>
+                    {TARGET_WEIGHT_LABELS[key] ?? key}
+                  </label>
+                  {changed && (
+                    <button
+                      onClick={() => setTargetWeights((prev) => ({ ...prev, [key]: def }))}
+                      title={`Reset to default (${def})`}
+                      style={{ fontSize: 10, color: "#57606a", background: "none", border: "1px solid #e5e7eb", borderRadius: 3, padding: "1px 5px", cursor: "pointer" }}
+                    >
+                      reset
+                    </button>
+                  )}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <input
+                    type="range" min={0} max={2000} step={10}
+                    value={val}
+                    onChange={(e) => setTargetWeights((prev) => ({ ...prev, [key]: Number(e.target.value) }))}
+                    style={{ flex: 1, accentColor: changed ? "#D94A4A" : "#ccc" }}
+                  />
+                  <input
+                    type="number" min={0} max={9999} step={1}
+                    value={val}
+                    onChange={(e) => {
+                      const n = parseFloat(e.target.value);
+                      if (!isNaN(n) && n >= 0) setTargetWeights((prev) => ({ ...prev, [key]: n }));
+                    }}
+                    style={{
+                      width: 70, padding: "4px 6px", fontSize: 13, fontWeight: 600,
+                      border: `1px solid ${changed ? "#D94A4A" : "#e5e7eb"}`,
+                      borderRadius: 5, textAlign: "right",
+                      color: changed ? "#D94A4A" : "#57606a",
+                      outline: "none",
+                    }}
+                  />
+                </div>
+                <div style={{ fontSize: 10, color: "#bbb", marginTop: 1 }}>default: {def}</div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Vulnerability progress thresholds */}
+        <h4 style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 700, color: "#57606a", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+          Vulnerability Progress Thresholds
+        </h4>
+        <p style={{ fontSize: 12, color: "#57606a", margin: "0 0 12px" }}>
+          Enemy control-progress % cutoffs for vulnerability bands (Critical / High / Medium).
+          These gate the progress bar colours and reason-text in the Target Analysis view.
+        </p>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px 30px" }}>
+          {Object.keys(DEFAULT_TARGET_THRESHOLDS).map((key) => {
+            const val = targetThresholds[key] ?? DEFAULT_TARGET_THRESHOLDS[key];
+            const def = DEFAULT_TARGET_THRESHOLDS[key];
+            const changed = val !== def;
+            const accent = key.includes("critical") ? "#D94A4A" : key.includes("high") ? "#FF8C00" : "#D9A84A";
+            return (
+              <div key={key}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                  <label style={{ fontSize: 12, color: changed ? "#1f2328" : "#57606a", fontWeight: changed ? 600 : 400 }}>
+                    {TARGET_THRESHOLD_LABELS[key] ?? key}
+                  </label>
+                  {changed && (
+                    <button
+                      onClick={() => setTargetThresholds((prev) => ({ ...prev, [key]: def }))}
+                      title={`Reset to default (${def}%)`}
+                      style={{ fontSize: 10, color: "#57606a", background: "none", border: "1px solid #e5e7eb", borderRadius: 3, padding: "1px 5px", cursor: "pointer" }}
+                    >
+                      reset
+                    </button>
+                  )}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <input
+                    type="range" min={1} max={99} step={1}
+                    value={val}
+                    onChange={(e) => setTargetThresholds((prev) => ({ ...prev, [key]: Number(e.target.value) }))}
+                    style={{ flex: 1, accentColor: changed ? accent : "#ccc" }}
+                  />
+                  <input
+                    type="number" min={1} max={99} step={1}
+                    value={val}
+                    onChange={(e) => {
+                      const n = parseInt(e.target.value, 10);
+                      if (!isNaN(n) && n >= 1 && n <= 99) setTargetThresholds((prev) => ({ ...prev, [key]: n }));
+                    }}
+                    style={{
+                      width: 56, padding: "4px 6px", fontSize: 13, fontWeight: 600,
+                      border: `1px solid ${changed ? accent : "#e5e7eb"}`,
+                      borderRadius: 5, textAlign: "right",
+                      color: changed ? accent : "#57606a",
+                      outline: "none",
+                    }}
+                  />
+                  <span style={{ fontSize: 11, color: "#bbb" }}>%</span>
+                </div>
+                <div style={{ fontSize: 10, color: "#bbb", marginTop: 1 }}>default: {def}%</div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

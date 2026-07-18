@@ -112,6 +112,26 @@ DEFAULTS: dict[str, float] = {
     "expand_high_progress":       30.0,   # bonus if progress > 0.5 (primed)
     "expand_proximity":           25.0,   # within 20 LY of a controlled system
     "expand_allegiance_match":    15.0,   # allegiance matches power
+
+    # ── Target Analysis ───────────────────────────────────────────────────────
+    # Base vulnerability scores per enemy state tier
+    "target_score_stronghold":   1000.0,  # Stronghold — highest value undermine target
+    "target_score_fortified":     600.0,  # Fortified
+    "target_score_exploited":     200.0,  # Exploited — lowest tier
+    "target_score_contested":     800.0,  # Contested — our power making progress here
+    # Progress bonus: adds up to this many points when enemy progress near 0
+    "target_progress_bonus_max":  300.0,
+    # Proximity bonus: adds up to this many points when ≤ target_dist_max_ly away
+    "target_prox_bonus_max":      150.0,
+    "target_dist_max_ly":          30.0,  # LY beyond which proximity bonus = 0
+    # Max results returned by target-analysis endpoint
+    "target_max_results":          50.0,  # stored as float; cast to int at use site
+    # Progress thresholds for classifying enemy systems as vulnerable
+    # (used by Target Analysis page to colour-code the progress bar)
+    "target_progress_critical":    0.10,  # ≤ this % → CRITICAL (almost failing now)
+    "target_progress_high":        0.25,  # ≤ this % → HIGH vulnerability
+    "target_progress_medium":      0.50,  # ≤ this % → MEDIUM vulnerability
+    # (above target_progress_medium → LOW)
 }
 
 # ──────────────────────────────────────────────────────────────────────────────

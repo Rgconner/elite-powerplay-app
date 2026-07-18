@@ -169,7 +169,7 @@ class TargetAnalysisItem(BaseModel):
     reinforcement: Optional[int] = None
     undermining: Optional[int] = None
 
-    # Vulnerability score (0–1000). Higher = better undermining target.
+    # Vulnerability score (0–1000+). Higher = better undermining target.
     # Accounts for: current progress (close to 0 = losing state soon),
     # state value (Stronghold > Fortified > Exploited), proximity to attacker.
     score: float
@@ -184,6 +184,10 @@ class TargetAnalysisItem(BaseModel):
     # Trend across snapshots
     trend: str = "unknown"          # worsening | improving | stable | unknown
 
+    # True when this is a Contested system (our power has merits here but hasn't
+    # fully flipped it yet — or enemy is contesting one of ours)
+    contested: bool = False
+
 
 class TargetAnalysisRequest(BaseModel):
     attacker_power: str             # e.g. "Aisling Duval"
@@ -194,3 +198,6 @@ class TargetAnalysisResponse(BaseModel):
     targets: list[TargetAnalysisItem]
     attacker_power: str
     target_powers: list[str]
+    # Active scoring thresholds sent back so the UI can render calibrated labels
+    # without needing a separate /admin/settings round-trip
+    progress_thresholds: dict[str, float] = {}

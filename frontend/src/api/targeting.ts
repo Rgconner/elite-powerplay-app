@@ -13,12 +13,20 @@ export interface TargetAnalysisItem {
   distance_from_attacker: number | null;
   days_to_downgrade: number | null;
   trend: "worsening" | "improving" | "stable" | "unknown";
+  /** True when our power already has a foothold in this system */
+  contested: boolean;
 }
 
 export interface TargetAnalysisResponse {
   targets: TargetAnalysisItem[];
   attacker_power: string;
   target_powers: string[];
+  /** Calibrated progress thresholds returned from backend (0.0–1.0 fractions) */
+  progress_thresholds: {
+    critical: number;
+    high: number;
+    medium: number;
+  };
 }
 
 export async function getTargetAnalysis(
