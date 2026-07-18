@@ -1,15 +1,13 @@
 import { useState } from "react";
 import TableView from "./pages/TableView";
-import Map2DView from "./pages/Map2DView";
-import Map3DView from "./pages/Map3DView";
+import TargetAnalysisView from "./pages/TargetAnalysisView";
 import AdminPage from "./pages/AdminPage";
 
-type Tab = "table" | "map2d" | "map3d";
+type Tab = "table" | "targets";
 
 const TAB_LABELS: Record<Tab, string> = {
-  table: "📋 Table",
-  map2d: "🗺 2D Map",
-  map3d: "🌐 3D Map",
+  table:   "📋 Table",
+  targets: "⚔ Target Analysis",
 };
 
 export default function App() {
@@ -39,7 +37,7 @@ export default function App() {
         </span>
 
         {/* Tab buttons */}
-        {(["table", "map2d", "map3d"] as Tab[]).map((t) => {
+        {(["table", "targets"] as Tab[]).map((t) => {
           const active = tab === t;
           return (
             <button
@@ -73,8 +71,14 @@ export default function App() {
             border: "1px solid #30363d", borderRadius: 5,
             cursor: "pointer", transition: "color 0.15s, border-color 0.15s",
           }}
-          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = "#e6edf3"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#58a6ff"; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = "#8b949e"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#30363d"; }}
+          onMouseEnter={e => {
+            (e.currentTarget as HTMLButtonElement).style.color = "#e6edf3";
+            (e.currentTarget as HTMLButtonElement).style.borderColor = "#58a6ff";
+          }}
+          onMouseLeave={e => {
+            (e.currentTarget as HTMLButtonElement).style.color = "#8b949e";
+            (e.currentTarget as HTMLButtonElement).style.borderColor = "#30363d";
+          }}
         >
           ⚙ Admin
         </button>
@@ -82,9 +86,8 @@ export default function App() {
 
       {/* Page content — offset by tab bar height */}
       <div style={{ paddingTop: 44 }}>
-        {tab === "table" && <TableView />}
-        {tab === "map2d" && <Map2DView />}
-        {tab === "map3d" && <Map3DView />}
+        {tab === "table"   && <TableView />}
+        {tab === "targets" && <TargetAnalysisView />}
       </div>
     </div>
   );

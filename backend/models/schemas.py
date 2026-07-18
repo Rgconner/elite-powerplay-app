@@ -139,3 +139,48 @@ class RecommendationsResponse(BaseModel):
     fortify: list[RecommendationItem]
     expand: list[RecommendationItem]
     llm_summary: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Target Analysis
+# ---------------------------------------------------------------------------
+
+
+class TargetAnalysisItem(BaseModel):
+    """One enemy system scored for undermining priority."""
+
+    system_id64: int
+    system_name: str
+    controlling_power: str          # which target power controls this
+
+    # PP state
+    power_state: Optional[str] = None
+    control_progress: Optional[float] = None
+    reinforcement: Optional[int] = None
+    undermining: Optional[int] = None
+
+    # Vulnerability score (0–1000). Higher = better undermining target.
+    # Accounts for: current progress (close to 0 = losing state soon),
+    # state value (Stronghold > Fortified > Exploited), proximity to attacker.
+    score: float
+    reasons: list[str]
+
+    # Distance from the attacker's nearest controlled system (LY)
+    distance_from_attacker: Optional[float] = None
+
+    # Estimated days until the system drops one state at current undermine rate
+    days_to_downgrade: Optional[float] = None
+
+    # Trend across snapshots
+    trend: str = "unknown"          # worsening | improving | stable | unknown
+
+
+class TargetAnalysisRequest(BaseModel):
+    attacker_power: str             # e.g. "Aisling Duval"
+    target_powers: list[str]        # one or more powers to analyse
+
+
+class TargetAnalysisResponse(BaseModel):
+    targets: list[TargetAnalysisItem]
+    attacker_power: str
+    target_powers: list[str]
