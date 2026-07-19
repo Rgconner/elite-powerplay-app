@@ -13,14 +13,24 @@ from models.schemas import AdminSettingSchema, IngestionRunSchema
 from routers.auth import hash_password, verify_password
 from routers.deps import AdminUserDep, get_db
 from services.ingestion import run_spansh_ingest
+from version import BACKEND_VERSION, BACKEND_RELEASE_DATE
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 # ---------------------------------------------------------------------------
-# Public endpoint — no auth required
+# Public endpoints — no auth required
 # ---------------------------------------------------------------------------
+
+
+@router.get("/version", include_in_schema=True)
+def get_version() -> dict:
+    """Return backend version and release date — public, no JWT needed."""
+    return {
+        "backend_version": BACKEND_VERSION,
+        "backend_release_date": BACKEND_RELEASE_DATE,
+    }
 
 
 @router.get("/ingest-status", include_in_schema=True)

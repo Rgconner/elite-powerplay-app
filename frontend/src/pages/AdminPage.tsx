@@ -3,6 +3,7 @@ import {
   getAdminToken, setAdminToken, clearAdminToken, getAuthHeader, getAdminStatus,
   changePassword,
 } from "../api/admin";
+import { FRONTEND_VERSION, FRONTEND_RELEASE_DATE } from "../version";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface IngestionRun {
@@ -23,6 +24,11 @@ interface AdminStatus {
 interface AdminSetting {
   key: string;
   value: string;
+}
+
+interface AppVersion {
+  backend_version: string;
+  backend_release_date: string;
 }
 
 // ── API helpers ───────────────────────────────────────────────────────────────
@@ -166,6 +172,7 @@ export default function AdminPage({ onClose }: Props) {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(!!getAdminToken());
 
+  const [appVersion, setAppVersion] = useState<AppVersion | null>(null);
   const [status, setStatus] = useState<AdminStatus | null>(null);
   const [settings,          setSettings]          = useState<Record<string, number>>({});
   const [thresholds,        setThresholds]        = useState<Record<string, number>>({ ...DEFAULT_THRESHOLDS });
@@ -182,6 +189,14 @@ export default function AdminPage({ onClose }: Props) {
   const [pwSaving,   setPwSaving]   = useState(false);
   const [pwError,    setPwError]    = useState<string | null>(null);
   const [pwSuccess,  setPwSuccess]  = useState(false);
+
+  // Fetch version on mount — public endpoint, no auth needed
+  useEffect(() => {
+    fetch("/api/admin/version")
+      .then(r => r.ok ? r.json() as Promise<AppVersion> : Promise.reject())
+      .then(setAppVersion)
+      .catch(() => {});
+  }, []);
 
   const loadData = useCallback(() => {
     if (!getAdminToken()) return;
@@ -312,6 +327,104 @@ export default function AdminPage({ onClose }: Props) {
             Sign Out
           </button>
           <button onClick={onClose} style={{ padding: "6px 14px", fontSize: 13, border: "none", borderRadius: 6, cursor: "pointer", background: "none", lineHeight: 1 }}>×</button>
+        </div>
+      </div>
+
+      {/* ── Version Card ─────────────────────────────────────────────────────── */}
+      <div style={{
+        display: "flex", gap: 0, marginBottom: 20, borderRadius: 8,
+        border: "1px solid #e5e7eb", overflow: "hidden", fontSize: 13,
+      }}>
+        {/* Frontend */}
+        <div style={{
+          flex: 1, padding: "12px 18px", background: "#f0f4ff",
+          borderRight: "1px solid #e5e7eb",
+        }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "#57606a", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>
+            Frontend
+          </div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+            <span style={{
+              fontSize: 22, fontWeight: 800, color: "#1a3a7a",
+              fontVariantNumeric: "tabular-nums", letterSpacing: "-0.01em",
+            }}>
+              v{FRONTEND_VERSION}
+            </span>
+            <span style={{
+              background: "#1a3a7a22", color: "#1a3a7a", border: "1px solid #1a3a7a33",
+              borderRadius: 4, padding: "1px 7px", fontSize: 10, fontWeight: 700,
+            }}>
+              UI
+            </span>
+          </div>
+          <div style={{ fontSize: 11, color: "#57606a", marginTop: 4 }}>
+            Released:{" "}
+            <strong style={{ color: "#1f2328" }}>
+              {new Date(FRONTEND_RELEASE_DATE).toLocaleString(undefined, {
+                year: "numeric", month: "short", day: "numeric",
+                hour: "2-digit", minute: "2-digit", timeZoneName: "short",
+              })}
+            </strong>
+          </div>
+        </div>
+
+        {/* Backend */}
+        <div style={{
+          flex: 1, padding: "12px 18px", background: "#f0fff4",
+          borderRight: "1px solid #e5e7eb",
+        }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "#57606a", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>
+            Backend API
+          </div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+            <span style={{
+              fontSize: 22, fontWeight: 800, color: "#1a6b2a",
+              fontVariantNumeric: "tabular-nums", letterSpacing: "-0.01em",
+            }}>
+              v{appVersion?.backend_version ?? "…"}
+            </span>
+            <span style={{
+              background: "#1a6b2a22", color: "#1a6b2a", border: "1px solid #1a6b2a33",
+              borderRadius: 4, padding: "1px 7px", fontSize: 10, fontWeight: 700,
+            }}>
+              API
+            </span>
+          </div>
+          <div style={{ fontSize: 11, color: "#57606a", marginTop: 4 }}>
+            Released:{" "}
+            <strong style={{ color: "#1f2328" }}>
+              {appVersion?.backend_release_date
+                ? new Date(appVersion.backend_release_date).toLocaleString(undefined, {
+                    year: "numeric", month: "short", day: "numeric",
+                    hour: "2-digit", minute: "2-digit", timeZoneName: "short",
+                  })
+                : "—"}
+            </strong>
+          </div>
+        </div>
+
+        {/* Combined / in-sync indicator */}
+        <div style={{
+          padding: "12px 18px", background: "#fafafa",
+          display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", minWidth: 120,
+        }}>
+          {appVersion && appVersion.backend_version === FRONTEND_VERSION ? (
+            <>
+              <span style={{ fontSize: 22 }}>✓</span>
+              <span style={{ fontSize: 11, color: "#1a6b2a", fontWeight: 700, marginTop: 2 }}>In sync</span>
+            </>
+          ) : appVersion ? (
+            <>
+              <span style={{ fontSize: 22 }}>⚠</span>
+              <span style={{ fontSize: 11, color: "#b45309", fontWeight: 700, marginTop: 2 }}>Version mismatch</span>
+              <span style={{ fontSize: 10, color: "#57606a", marginTop: 1 }}>FE: v{FRONTEND_VERSION} / BE: v{appVersion.backend_version}</span>
+            </>
+          ) : (
+            <>
+              <span style={{ fontSize: 18, color: "#bbb" }}>…</span>
+              <span style={{ fontSize: 11, color: "#bbb", marginTop: 2 }}>Loading</span>
+            </>
+          )}
         </div>
       </div>
 

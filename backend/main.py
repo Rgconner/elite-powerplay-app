@@ -9,6 +9,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
+from version import BACKEND_VERSION
+
 load_dotenv()
 
 from db.session import Base, engine  # noqa: E402
@@ -52,7 +54,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Elite Dangerous Power Play Analyzer API",
     description="Backend for the Elite Dangerous Power Play Analyzer",
-    version="1.0.0",
+    version=BACKEND_VERSION,
     lifespan=lifespan,
 )
 
