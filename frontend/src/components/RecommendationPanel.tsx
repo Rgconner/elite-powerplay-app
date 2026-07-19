@@ -288,8 +288,7 @@ const CONTEST_COLORS = ["#4A90D9", "#D94A4A", "#4AD94A", "#D9A84A", "#9A4AD9", "
 
 function ContestedRow({ item }: { item: ContestedSystemInfo }) {
   const conflictEntries = parseConflictProgress(item);
-  // Acquisition threshold is 120,000 merits; progress > 1.0 means already acquired
-  const ACQUIRE_THRESHOLD = 120_000;
+  // progress is normalised 0–1+ where 1.0 = acquisition threshold (120,000 merits)
 
   return (
     <div style={{
