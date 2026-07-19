@@ -1,0 +1,42 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# kustomization.yaml  —  Kustomize entry point
+#
+# Apply everything in one command:
+#   kubectl apply -k k8s/
+#
+# Or with Kustomize directly:
+#   kustomize build k8s/ | kubectl apply -f -
+#
+# NOTE: Apply secrets.local.yaml separately (it is not listed here so you
+#       never accidentally commit real credentials):
+#   kubectl apply -f k8s/secrets.local.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: elite-powerplay
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - postgres.yaml
+  - backend.yaml
+  - frontend.yaml
+  # Uncomment to deploy the Ingress (requires an ingress controller):
+  # - ingress.yaml
+
+# ── Image tags ────────────────────────────────────────────────────────────────
+# Override the :latest tag here to pin to a specific build SHA.
+# Get the SHA from: ghcr.io/rgconner/elite-powerplay-backend and
+#                   ghcr.io/rgconner/elite-powerplay-frontend
+# Example:
+#   images:
+#     - name: ghcr.io/rgconner/elite-powerplay-backend
+#       newTag: sha-5483e57
+#     - name: ghcr.io/rgconner/elite-powerplay-frontend
+#       newTag: sha-5483e57
+images:
+  - name: ghcr.io/rgconner/elite-powerplay-backend
+    newTag: latest
+  - name: ghcr.io/rgconner/elite-powerplay-frontend
+    newTag: latest

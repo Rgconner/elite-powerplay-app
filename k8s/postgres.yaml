@@ -1,0 +1,138 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# postgres.yaml  —  PostgreSQL StatefulSet + Service
+#
+# Uses a PersistentVolumeClaim for durable data storage.
+# The postgres-password is injected from the Secret; the database name and
+# user are pulled from the ConfigMap.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Persistent storage ────────────────────────────────────────────────────────
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data
+  namespace: elite-powerplay
+  labels:
+    app.kubernetes.io/name: elite-powerplay
+    app.kubernetes.io/component: database
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  # storageClassName: standard   # uncomment and set for your cluster's class
+
+---
+
+# ── StatefulSet ───────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: elite-powerplay
+  labels:
+    app.kubernetes.io/name: elite-powerplay
+    app.kubernetes.io/component: database
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+        app.kubernetes.io/name: elite-powerplay
+        app.kubernetes.io/component: database
+    spec:
+      terminationGracePeriodSeconds: 60
+
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: postgres
+              containerPort: 5432
+              protocol: TCP
+
+          env:
+            # Database name and user come from the ConfigMap
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: elite-powerplay-config
+                  key: POSTGRES_DB
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: elite-powerplay-config
+                  key: POSTGRES_USER
+            # Password comes from the Secret
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: elite-powerplay-secrets
+                  key: postgres-password
+
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+
+          resources:
+            requests:
+              cpu:    "100m"
+              memory: "256Mi"
+            limits:
+              cpu:    "500m"
+              memory: "512Mi"
+
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - pg_isready -U $(POSTGRES_USER) -d $(POSTGRES_DB)
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - pg_isready -U $(POSTGRES_USER) -d $(POSTGRES_DB)
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+      volumes:
+        - name: postgres-data
+          persistentVolumeClaim:
+            claimName: postgres-data
+
+---
+
+# ── Headless Service (stable DNS for StatefulSet) ─────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: elite-powerplay
+  labels:
+    app.kubernetes.io/name: elite-powerplay
+    app.kubernetes.io/component: database
+spec:
+  selector:
+    app: postgres
+  clusterIP: None          # headless — StatefulSet resolves as postgres.elite-powerplay.svc
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+      protocol: TCP

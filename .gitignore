@@ -1,4 +1,4 @@
-﻿# Python
+# Python
 __pycache__/
 *.pyc
 *.pyo
@@ -20,6 +20,9 @@ dist/
 .env
 *.env.local
 
+# Kubernetes secrets with real values (use k8s/secrets.yaml as the template)
+k8s/secrets.local.yaml
+
 # Editor
 .vscode/
 .idea/
@@ -31,3 +34,4 @@ dist/
 
 # Logs
 *.log
+

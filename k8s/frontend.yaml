@@ -1,0 +1,97 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# frontend.yaml  —  Nginx / Vite Deployment + Service
+#
+# Image: ghcr.io/rgconner/elite-powerplay-frontend:latest
+#
+# The Nginx container serves the pre-built React SPA and proxies /api/* to
+# the backend ClusterIP service on port 8000.  The proxy target is baked into
+# the image's nginx.conf (http://backend:8000/api/).  Because both pods live in
+# the same namespace, the DNS name "backend" resolves automatically.
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: elite-powerplay
+  labels:
+    app.kubernetes.io/name: elite-powerplay
+    app.kubernetes.io/component: frontend
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+        app.kubernetes.io/name: elite-powerplay
+        app.kubernetes.io/component: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: ghcr.io/rgconner/elite-powerplay-frontend:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+
+          resources:
+            requests:
+              cpu:    "50m"
+              memory: "64Mi"
+            limits:
+              cpu:    "200m"
+              memory: "128Mi"
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+---
+
+# ── Service ───────────────────────────────────────────────────────────────────
+# Type: LoadBalancer for bare-metal / cloud clusters with an external LB.
+# Change to ClusterIP and use the Ingress (ingress.yaml) if you have an
+# ingress controller (nginx-ingress, Traefik, etc.)
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: elite-powerplay
+  labels:
+    app.kubernetes.io/name: elite-powerplay
+    app.kubernetes.io/component: frontend
+spec:
+  selector:
+    app: frontend
+  type: LoadBalancer
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+    - name: https
+      port: 443
+      targetPort: http      # TLS termination is handled by the LB or Ingress
+      protocol: TCP

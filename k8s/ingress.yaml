@@ -1,0 +1,55 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# ingress.yaml  —  optional Ingress for clusters with an ingress controller
+#
+# Requires an ingress controller to be installed, e.g.:
+#   kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.10.1/deploy/static/provider/cloud/deploy.yaml
+#
+# Usage:
+#   1. Set the hostname below (replace elite.yourdomain.com).
+#   2. If you are using cert-manager for TLS:
+#        kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
+#      then uncomment the tls and cert-manager annotations sections.
+#   3. Apply:
+#        kubectl apply -f k8s/ingress.yaml
+#
+# If you're using a cloud LoadBalancer (frontend.yaml type: LoadBalancer)
+# instead of an Ingress controller you can skip this file entirely.
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: elite-powerplay
+  namespace: elite-powerplay
+  labels:
+    app.kubernetes.io/name: elite-powerplay
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout:    "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout:    "300"
+    # Increase body size for the large Spansh bulk ingest response
+    nginx.ingress.kubernetes.io/proxy-body-size:       "512m"
+
+    # ── cert-manager TLS (uncomment to enable) ────────────────────────────────
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+
+spec:
+  ingressClassName: nginx        # change if using Traefik or another controller
+
+  # ── TLS (uncomment and set secretName after cert-manager is running) ────────
+  # tls:
+  #   - hosts:
+  #       - elite.yourdomain.com
+  #     secretName: elite-powerplay-tls
+
+  rules:
+    - host: elite.yourdomain.com   # ← replace with your real hostname
+      http:
+        paths:
+          # All traffic (SPA + API proxy) goes to the frontend Nginx service.
+          # Nginx handles the /api → backend routing internally.
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  name: http

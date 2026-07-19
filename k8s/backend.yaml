@@ -1,0 +1,150 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# backend.yaml  —  FastAPI / uvicorn Deployment + Service
+#
+# Image: ghcr.io/rgconner/elite-powerplay-backend:latest
+# All sensitive values come from the Secret; non-secret config from ConfigMap.
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: elite-powerplay
+  labels:
+    app.kubernetes.io/name: elite-powerplay
+    app.kubernetes.io/component: backend
+spec:
+  replicas: 1
+  # Recreate is safer for a single-replica app that writes to Postgres on start
+  # (avoids two pods running migrations simultaneously).
+  # Switch to RollingUpdate once the app supports concurrent instances.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+        app.kubernetes.io/name: elite-powerplay
+        app.kubernetes.io/component: backend
+    spec:
+      # Wait for Postgres to be ready before starting the backend
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:16-alpine
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -h postgres -U $(POSTGRES_USER) -d $(POSTGRES_DB); do
+                echo "Waiting for postgres…"; sleep 2;
+              done
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: elite-powerplay-config
+                  key: POSTGRES_USER
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: elite-powerplay-config
+                  key: POSTGRES_DB
+
+      containers:
+        - name: backend
+          # Pin to a specific sha tag in production; use :latest for dev.
+          image: ghcr.io/rgconner/elite-powerplay-backend:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+
+          env:
+            # ── From Secret ────────────────────────────────────────────────────
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: elite-powerplay-secrets
+                  key: database-url
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: elite-powerplay-secrets
+                  key: secret-key
+            - name: AI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: elite-powerplay-secrets
+                  key: ai-api-key
+
+            # ── From ConfigMap ─────────────────────────────────────────────────
+            - name: LLM_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: elite-powerplay-config
+                  key: LLM_ENABLED
+            - name: AI_PROVIDER
+              valueFrom:
+                configMapKeyRef:
+                  name: elite-powerplay-config
+                  key: AI_PROVIDER
+            - name: SPANSH_INGEST_INTERVAL_HOURS
+              valueFrom:
+                configMapKeyRef:
+                  name: elite-powerplay-config
+                  key: SPANSH_INGEST_INTERVAL_HOURS
+            - name: EDSM_SYNC_INTERVAL_HOURS
+              valueFrom:
+                configMapKeyRef:
+                  name: elite-powerplay-config
+                  key: EDSM_SYNC_INTERVAL_HOURS
+
+          resources:
+            requests:
+              cpu:    "100m"
+              memory: "256Mi"
+            limits:
+              cpu:    "1000m"
+              memory: "768Mi"
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 4
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+---
+
+# ── ClusterIP Service ─────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: elite-powerplay
+  labels:
+    app.kubernetes.io/name: elite-powerplay
+    app.kubernetes.io/component: backend
+spec:
+  selector:
+    app: backend
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+      protocol: TCP
