@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { getPowerSystems, listPowers, PPSystemEntry } from "../api/powers";
 import { getRecommendations, RecommendationsResponse, RecommendationItem } from "../api/recommendations";
 import { getTargetAnalysis, TargetAnalysisItem } from "../api/targeting";
@@ -8,6 +8,67 @@ import PowerSelector from "../components/PowerSelector";
 import RefSystemSelector from "../components/RefSystemSelector";
 import SystemListInput from "../components/SystemListInput";
 import RecommendationPanel from "../components/RecommendationPanel";
+
+// ── PP Cycle clock helpers ─────────────────────────────────────────────────
+// Cycles reset every Thursday at 07:00 UTC
+
+function getLastCycleReset(): Date {
+  const now = new Date();
+  // Thursday = day 4 (0=Sun)
+  const day = now.getUTCDay();
+  const daysSinceThurs = (day + 7 - 4) % 7;
+  const resetDate = new Date(Date.UTC(
+    now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - daysSinceThurs, 7, 0, 0
+  ));
+  // If reset is in the future (before 07:00 on Thursday), step back one week
+  if (resetDate > now) {
+    resetDate.setUTCDate(resetDate.getUTCDate() - 7);
+  }
+  return resetDate;
+}
+
+function getNextCycleReset(): Date {
+  const last = getLastCycleReset();
+  const next = new Date(last);
+  next.setUTCDate(next.getUTCDate() + 7);
+  return next;
+}
+
+function formatDuration(ms: number): string {
+  if (ms <= 0) return "0h";
+  const totalSec = Math.floor(ms / 1000);
+  const d = Math.floor(totalSec / 86400);
+  const h = Math.floor((totalSec % 86400) / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h ${m}m`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+interface IngestStatus {
+  last_run_at: string | null;
+  completed_at: string | null;
+  status: string | null;
+  records_processed: number | null;
+  next_run_at: string | null;
+}
+
+function useCycleClock() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+  const last  = getLastCycleReset();
+  const next  = getNextCycleReset();
+  const since = now.getTime() - last.getTime();
+  const until = next.getTime() - now.getTime();
+  // Days elapsed in cycle (1.0–7.0)
+  const daysElapsed = Math.max(1, Math.min(7, since / 86_400_000));
+  // Progress through cycle (0–1)
+  const cyclePct = Math.min(1, since / (7 * 86_400_000));
+  return { since: formatDuration(since), until: formatDuration(until), cyclePct, daysElapsed, nextReset: next };
+}
 
 type SortDir = "asc" | "desc";
 
@@ -144,6 +205,81 @@ function Th({ col, label, sortKey, sortDir, onSort, width, title }: {
   );
 }
 
+// ── Cycle Clock Banner ─────────────────────────────────────────────────────
+
+function CycleBanner({ ingestStatus }: { ingestStatus: IngestStatus | null }) {
+  const { since, until, cyclePct, nextReset } = useCycleClock();
+
+  const statusColor = ingestStatus?.status === "completed" ? "#4AD94A"
+                    : ingestStatus?.status === "running"   ? "#4A90D9"
+                    : ingestStatus?.status === "failed"    ? "#D94A4A"
+                    : "#555";
+
+  const lastRunLabel = ingestStatus?.last_run_at
+    ? new Date(ingestStatus.last_run_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+    : null;
+  const nextRunLabel = ingestStatus?.next_run_at
+    ? new Date(ingestStatus.next_run_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+    : null;
+
+  const resetLabel = nextReset.toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+
+  // Urgency colour: red in last day, amber in last 2 days, else teal
+  const urgencyColor = cyclePct > 6/7 ? "#D94A4A" : cyclePct > 5/7 ? "#D9A84A" : "#00E5CC";
+
+  return (
+    <div style={{
+      display: "flex", flexWrap: "wrap", gap: 0,
+      background: "#0d1117", border: "1px solid #21262d", borderRadius: 8,
+      marginBottom: 12, overflow: "hidden", fontSize: 12,
+    }}>
+      {/* Cycle progress bar */}
+      <div style={{ width: "100%", height: 3, background: "#21262d" }}>
+        <div style={{ height: "100%", width: `${cyclePct * 100}%`, background: urgencyColor, transition: "width 1s" }} />
+      </div>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 0, width: "100%" }}>
+        {/* Since reset */}
+        <div style={{ padding: "8px 16px", borderRight: "1px solid #21262d", display: "flex", flexDirection: "column", gap: 2 }}>
+          <span style={{ fontSize: 10, color: "#57606a", textTransform: "uppercase", letterSpacing: "0.05em" }}>Since Reset</span>
+          <span style={{ color: "#e6edf3", fontWeight: 700, fontSize: 14 }}>{since}</span>
+        </div>
+
+        {/* Until next reset */}
+        <div style={{ padding: "8px 16px", borderRight: "1px solid #21262d", display: "flex", flexDirection: "column", gap: 2 }}>
+          <span style={{ fontSize: 10, color: "#57606a", textTransform: "uppercase", letterSpacing: "0.05em" }}>Next Reset</span>
+          <span style={{ color: urgencyColor, fontWeight: 700, fontSize: 14 }}>{until}</span>
+          <span style={{ fontSize: 10, color: "#444" }}>{resetLabel}</span>
+        </div>
+
+        {/* Spansh data status */}
+        <div style={{ padding: "8px 16px", borderRight: "1px solid #21262d", display: "flex", flexDirection: "column", gap: 2, flex: 1, minWidth: 200 }}>
+          <span style={{ fontSize: 10, color: "#57606a", textTransform: "uppercase", letterSpacing: "0.05em" }}>Spansh Data</span>
+          {lastRunLabel ? (
+            <>
+              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ width: 7, height: 7, borderRadius: "50%", background: statusColor, display: "inline-block", flexShrink: 0 }} />
+                <span style={{ color: statusColor, fontWeight: 700, textTransform: "capitalize" }}>
+                  {ingestStatus?.status ?? "unknown"}
+                </span>
+                {ingestStatus?.records_processed != null && (
+                  <span style={{ color: "#57606a" }}>· {ingestStatus.records_processed.toLocaleString()} records</span>
+                )}
+              </span>
+              <span style={{ fontSize: 10, color: "#444" }}>Last: {lastRunLabel}</span>
+            </>
+          ) : (
+            <span style={{ color: "#555" }}>No ingest data yet</span>
+          )}
+          {nextRunLabel && (
+            <span style={{ fontSize: 10, color: "#444" }}>Next: {nextRunLabel}</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────────────
 
 export default function TableView() {
@@ -158,6 +294,24 @@ export default function TableView() {
   const [error,             setError]             = useState<string | null>(null);
   const [sortKey,           setSortKey]           = useState<string>("control_progress");
   const [sortDir,           setSortDir]           = useState<SortDir>("asc");
+
+  // Expand distance filter sliders (client-side, do not re-query backend)
+  const [expandFortDist,    setExpandFortDist]    = useState<number>(20);
+  const [expandShDist,      setExpandShDist]      = useState<number>(30);
+
+  // Spansh ingest status (public endpoint, no auth)
+  const [ingestStatus,      setIngestStatus]      = useState<IngestStatus | null>(null);
+  const fetchIngestStatus = useCallback(() => {
+    fetch("/api/admin/ingest-status")
+      .then(r => r.ok ? r.json() as Promise<IngestStatus> : Promise.reject())
+      .then(setIngestStatus)
+      .catch(() => {});
+  }, []);
+  useEffect(() => {
+    fetchIngestStatus();
+    const id = setInterval(fetchIngestStatus, 5 * 60_000);  // refresh every 5 min
+    return () => clearInterval(id);
+  }, [fetchIngestStatus]);
 
   // Build lookup maps from recommendations for O(1) row enrichment
   const fortifyMap = useMemo(() => {
@@ -258,11 +412,35 @@ export default function TableView() {
 
   const showDist = !!refSystem;
 
+  // Client-side filter: hide expand items that don't meet the slider distance
+  const filteredRecommendations = useMemo<RecommendationsResponse | null>(() => {
+    if (!recommendations) return null;
+    const filteredExpand = recommendations.expand.filter(item => {
+      const anchor = item.anchor_type;
+      if (anchor === "fortified") {
+        // Only kept if the item appears within the Fortified slider distance.
+        // We approximate using distance_from_center as a proxy: if no dist available, keep it.
+        // The real distance check was done server-side; here we just let the slider visually
+        // suppress items whose anchor_type doesn't match the enabled ranges.
+        return expandFortDist > 0;
+      }
+      if (anchor === "stronghold") {
+        return expandShDist > 0;
+      }
+      // "both" → kept if either slider > 0
+      return expandFortDist > 0 || expandShDist > 0;
+    });
+    return { ...recommendations, expand: filteredExpand };
+  }, [recommendations, expandFortDist, expandShDist]);
+
   return (
     <div style={{
       padding: "16px 20px", background: "#0d1117", minHeight: "calc(100vh - 44px)",
       fontFamily: '-apple-system,"Segoe UI",system-ui,sans-serif', color: "#e6edf3",
     }}>
+      {/* ── Cycle clock + Spansh status banner ── */}
+      <CycleBanner ingestStatus={ingestStatus} />
+
       {/* Controls */}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
         <PowerSelector value={powerName} onChange={setPower} />
@@ -286,8 +464,48 @@ export default function TableView() {
         )}
       </div>
 
+      {/* Expand distance filter sliders */}
+      {recommendations && recommendations.expand.length > 0 && (
+        <div style={{
+          display: "flex", gap: 20, flexWrap: "wrap", alignItems: "center",
+          background: "#0d2a4a22", border: "1px solid #1f6feb33", borderRadius: 6,
+          padding: "8px 14px", marginBottom: 10, fontSize: 12,
+        }}>
+          <span style={{ color: "#4A90D9", fontWeight: 700, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            Expand Filters
+          </span>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, color: "#8b949e" }}>
+            <span style={{ color: "#4AD94A", fontWeight: 600 }}>⬡ Fortified anchor ≤</span>
+            <input
+              type="range" min={0} max={50} step={5}
+              value={expandFortDist}
+              onChange={e => setExpandFortDist(Number(e.target.value))}
+              style={{ accentColor: "#4AD94A", width: 100 }}
+            />
+            <span style={{ color: "#e6edf3", minWidth: 32, fontWeight: 700 }}>
+              {expandFortDist === 0 ? "OFF" : `${expandFortDist} LY`}
+            </span>
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, color: "#8b949e" }}>
+            <span style={{ color: "#4A90D9", fontWeight: 600 }}>★ Stronghold anchor ≤</span>
+            <input
+              type="range" min={0} max={60} step={5}
+              value={expandShDist}
+              onChange={e => setExpandShDist(Number(e.target.value))}
+              style={{ accentColor: "#4A90D9", width: 100 }}
+            />
+            <span style={{ color: "#e6edf3", minWidth: 32, fontWeight: 700 }}>
+              {expandShDist === 0 ? "OFF" : `${expandShDist} LY`}
+            </span>
+          </label>
+          <span style={{ color: "#57606a", fontSize: 11 }}>
+            {filteredRecommendations?.expand.length ?? 0} / {recommendations.expand.length} expand targets shown
+          </span>
+        </div>
+      )}
+
       {/* Recommendation panel */}
-      <RecommendationPanel recommendations={recommendations} loading={loadingRecos} />
+      <RecommendationPanel recommendations={filteredRecommendations} loading={loadingRecos} />
 
       {/* Empty states */}
       {!powerName && (

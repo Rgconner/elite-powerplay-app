@@ -25,6 +25,8 @@ export interface RecommendationItem {
   merits_to_safety: number | null;
   /** Additional merits needed to reach 100% (next state upgrade) */
   merits_to_upgrade: number | null;
+  /** For expand items: "fortified" | "stronghold" | "both" — which anchor qualifies it */
+  anchor_type: string | null;
 }
 
 export interface RecommendationsResponse {

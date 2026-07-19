@@ -22,7 +22,10 @@ resources:
   - postgres.yaml
   - backend.yaml
   - frontend.yaml
-  # Uncomment to deploy the Ingress (requires an ingress controller):
+  # ── Choose ONE ingress method ─────────────────────────────────────────────
+  # Option A: Cloudflare Tunnel (recommended — no LoadBalancer / open ports)
+  - cloudflare-tunnel.yaml
+  # Option B: nginx-ingress controller
   # - ingress.yaml
 
 # ── Image tags ────────────────────────────────────────────────────────────────

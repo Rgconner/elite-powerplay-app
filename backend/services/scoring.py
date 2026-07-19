@@ -108,10 +108,11 @@ DEFAULTS: dict[str, float] = {
     "stronghold_threshold_warning":  21.0,
 
     # ── Expand ───────────────────────────────────────────────────────────────
-    "expand_unoccupied":          60.0,   # base score for Unoccupied system
-    "expand_high_progress":       30.0,   # bonus if progress > 0.5 (primed)
-    "expand_proximity":           25.0,   # within 20 LY of a controlled system
-    "expand_allegiance_match":    15.0,   # allegiance matches power
+    "expand_allegiance_match":    15.0,   # allegiance matches power bonus
+    # Proximity thresholds: Unoccupied must be within these distances of an
+    # anchor system of the specified state to qualify as an expansion target.
+    "expand_fortified_dist_ly":   20.0,   # max LY from a Fortified anchor
+    "expand_stronghold_dist_ly":  30.0,   # max LY from a Stronghold anchor
 
     # ── Target Analysis ───────────────────────────────────────────────────────
     # Base vulnerability scores per enemy state tier
@@ -668,22 +669,54 @@ def compute_expand_scores(
     db: Session,
     weights: dict[str, float],
 ) -> list[RecommendationItem]:
-    """Score Unoccupied systems near this power's territory for expansion."""
+    """Score Unoccupied systems near Fortified/Stronghold anchors for expansion.
+
+    Eligibility rules (game mechanics):
+      • Within expand_fortified_dist_ly  (default 20 LY) of a Fortified system, OR
+      • Within expand_stronghold_dist_ly (default 30 LY) of a Stronghold system.
+    Exploited systems do NOT qualify as anchors.
+
+    Primary ranking: closeness to the 120,000-merit acquisition threshold.
+      merit_position   = control_progress × MERIT_ACQUIRE
+      merits_remaining = MERIT_ACQUIRE - merit_position
+      score (0–100)    = merit_position / MERIT_ACQUIRE × 100
+      → a system 95% of the way to acquisition scores 95.
+
+    Secondary tiebreak: allegiance match adds a small bonus.
+    """
     if not power_systems:
         return []
 
-    power_coords      = [(s.x or 0.0, s.y or 0.0, s.z or 0.0) for s in power_systems]
-    power_system_ids  = {s.id for s in power_systems}
-    power_allegiance  = POWER_ALLEGIANCE.get(power_name)
+    # ── Split anchor coords by state ────────────────────────────────────────
+    fortified_coords:  list[tuple[float, float, float]] = []
+    stronghold_coords: list[tuple[float, float, float]] = []
+    for s in power_systems:
+        state = snapshots.get(s.id, {}).get("power_state")
+        coord = (s.x or 0.0, s.y or 0.0, s.z or 0.0)
+        if state == "Fortified":
+            fortified_coords.append(coord)
+        elif state == "Stronghold":
+            stronghold_coords.append(coord)
+    # All controlled coords for the bounding-box query
+    power_coords     = [(s.x or 0.0, s.y or 0.0, s.z or 0.0) for s in power_systems]
+    power_system_ids = {s.id for s in power_systems}
+    power_allegiance = POWER_ALLEGIANCE.get(power_name)
 
-    # Bounding box pre-filter: 30 LY around any controlled system
+    # ── Configurable distance thresholds ────────────────────────────────────
+    fort_max = float(weights.get("expand_fortified_dist_ly",
+                                  DEFAULTS["expand_fortified_dist_ly"]))
+    sh_max   = float(weights.get("expand_stronghold_dist_ly",
+                                  DEFAULTS["expand_stronghold_dist_ly"]))
+    bbox_pad = max(fort_max, sh_max)   # dynamic bounding box padding
+
+    # ── DB candidate query (indexed bounding box) ────────────────────────────
     all_x = [c[0] for c in power_coords]
     all_y = [c[1] for c in power_coords]
     all_z = [c[2] for c in power_coords]
     candidates: list[PPSystem] = db.query(PPSystem).filter(
-        PPSystem.x.between(min(all_x) - 30.0, max(all_x) + 30.0),
-        PPSystem.y.between(min(all_y) - 30.0, max(all_y) + 30.0),
-        PPSystem.z.between(min(all_z) - 30.0, max(all_z) + 30.0),
+        PPSystem.x.between(min(all_x) - bbox_pad, max(all_x) + bbox_pad),
+        PPSystem.y.between(min(all_y) - bbox_pad, max(all_y) + bbox_pad),
+        PPSystem.z.between(min(all_z) - bbox_pad, max(all_z) + bbox_pad),
         PPSystem.id.notin_(power_system_ids),
     ).all()
 
@@ -691,40 +724,76 @@ def compute_expand_scores(
 
     for system in candidates:
         sx, sy, sz = system.x or 0.0, system.y or 0.0, system.z or 0.0
-        min_dist = min(_dist(sx, sy, sz, cx, cy, cz) for cx, cy, cz in power_coords)
-        if min_dist > 30.0:
-            continue
 
         snap             = snapshots.get(system.id, {})
         power_state      = snap.get("power_state")
         current_power    = snap.get("power")
-        control_progress = snap.get("control_progress") or 0.0
 
+        # Only Unoccupied systems (no current controlling power) qualify
         if power_state != "Unoccupied" and current_power:
-            continue   # skip systems controlled by another power
-
-        score: float = 0.0
-        reasons: list[str] = []
-
-        if power_state == "Unoccupied":
-            score += weights["expand_unoccupied"]
-            reasons.append("System is Unoccupied — no controlling power")
-
-        if control_progress > 0.5:
-            score += weights["expand_high_progress"]
-            reasons.append(f"High PP activity in this system (progress {control_progress:.1%})")
-
-        if min_dist < 20.0:
-            score += weights["expand_proximity"]
-            reasons.append(f"Close to controlled system ({min_dist:.1f} LY)")
-
-        if power_allegiance and system.allegiance == power_allegiance:
-            score += weights["expand_allegiance_match"]
-            reasons.append(f"{system.allegiance} allegiance matches power")
-
-        if score <= 0:
             continue
 
+        # ── Distance to nearest qualifying anchor ────────────────────────────
+        dist_fort = min(
+            (_dist(sx, sy, sz, cx, cy, cz) for cx, cy, cz in fortified_coords),
+            default=9_999.0,
+        )
+        dist_sh = min(
+            (_dist(sx, sy, sz, cx, cy, cz) for cx, cy, cz in stronghold_coords),
+            default=9_999.0,
+        )
+
+        in_fort_range = dist_fort <= fort_max
+        in_sh_range   = dist_sh   <= sh_max
+
+        if not (in_fort_range or in_sh_range):
+            continue   # not reachable from any qualifying anchor
+
+        # ── Merit-proximity score (0–100 scale) ─────────────────────────────
+        progress    = float(snap.get("control_progress") or 0.0)
+        merit_pos   = round(progress * MERIT_ACQUIRE)
+        merits_left = max(0, MERIT_ACQUIRE - merit_pos)
+
+        # Score = how far along to acquisition (higher = less work remaining)
+        score = round((merit_pos / MERIT_ACQUIRE) * 100.0, 2)
+
+        # ── Allegiance tiebreak ──────────────────────────────────────────────
+        if power_allegiance and system.allegiance == power_allegiance:
+            score += float(weights.get("expand_allegiance_match",
+                                       DEFAULTS["expand_allegiance_match"]))
+
+        # ── Build reason list ────────────────────────────────────────────────
+        reasons: list[str] = []
+        if merit_pos == 0:
+            reasons.append("No PP activity yet — needs 120,000 merits to acquire")
+        elif merits_left == 0:
+            reasons.append(f"🚀 Acquisition threshold reached ({merit_pos:,} merits) — claim now!")
+        else:
+            reasons.append(
+                f"Acquisition progress: {progress:.1%} "
+                f"({merit_pos:,} / {MERIT_ACQUIRE:,} merits)"
+            )
+            reasons.append(f"Merits still needed: {merits_left:,}")
+
+        anchor_parts: list[str] = []
+        if in_fort_range:
+            anchor_parts.append(f"Fortified system {dist_fort:.1f} LY away")
+        if in_sh_range:
+            anchor_parts.append(f"Stronghold system {dist_sh:.1f} LY away")
+        reasons.append("Anchor: " + " · ".join(anchor_parts))
+
+        # Determine anchor_type label for UI badge
+        if in_fort_range and in_sh_range:
+            anchor_type = "both"
+        elif in_fort_range:
+            anchor_type = "fortified"
+        else:
+            anchor_type = "stronghold"
+
+        if power_allegiance and system.allegiance == power_allegiance:
+            reasons.append(f"{system.allegiance} allegiance matches power (+{weights.get('expand_allegiance_match', DEFAULTS['expand_allegiance_match']):.0f} pts)")
+
+        # ── Distance from reference system ───────────────────────────────────
         distance_from_center: Optional[float] = None
         if center_coords is not None:
             cx2, cy2, cz2 = center_coords
@@ -737,11 +806,18 @@ def compute_expand_scores(
             type="expand",
             reasons=reasons,
             power_state=power_state,
-            control_progress=control_progress,
+            control_progress=progress,
             distance_from_center=distance_from_center,
             threat_trend="unknown",
+            # Populate merit fields so the MeritBar can render for expand items
+            merit_position=merit_pos,
+            buffer_merits=merit_pos,             # for Unoccupied: buffer = position
+            merits_to_safety=None,               # not applicable for Unoccupied
+            merits_to_upgrade=merits_left,       # merits remaining to acquire
+            anchor_type=anchor_type,
         ))
 
+    # Sort: score descending (highest acquisition progress first)
     items.sort(key=lambda x: x.score, reverse=True)
     return items[:20]
 

@@ -1,0 +1,216 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# cloudflare-tunnel.yaml  —  Cloudflare Tunnel (cloudflared) sidecar-less
+#                            Deployment
+#
+# HOW IT WORKS
+# ─────────────────────────────────────────────────────────────────────────────
+# cloudflared runs as its own Deployment inside the cluster.  It connects
+# outbound to the Cloudflare edge (no inbound firewall rules / LoadBalancer /
+# NodePort needed) and proxies public HTTPS traffic to the frontend ClusterIP
+# service on port 80.  The frontend Nginx then proxies /api/* to the backend
+# as usual — so only ONE tunnel target is needed.
+#
+# PREREQUISITES
+# ─────────────────────────────────────────────────────────────────────────────
+# 1. Create the tunnel in the Cloudflare dashboard (or via CLI):
+#      cloudflared tunnel create elite-powerplay
+#
+#    This outputs a Tunnel ID (UUID) and creates a credentials JSON file at:
+#      ~/.cloudflared/<TUNNEL-ID>.json
+#
+# 2. Create a CNAME in your Cloudflare DNS zone:
+#      elite.yourdomain.com  →  <TUNNEL-ID>.cfargotunnel.com
+#    (tick "Proxy" / orange cloud ON)
+#
+# 3. Base64-encode the credentials file for the Secret:
+#      base64 -w0 ~/.cloudflared/<TUNNEL-ID>.json
+#    Paste the result into cloudflare-tunnel-secrets.local.yaml as
+#    the value of "tunnel-credentials".
+#
+# 4. Apply the secret then the tunnel:
+#      kubectl apply -f k8s/cloudflare-tunnel-secrets.local.yaml
+#      kubectl apply -f k8s/cloudflare-tunnel.yaml
+#
+# CONFIGURATION
+# ─────────────────────────────────────────────────────────────────────────────
+# All user-editable fields are in cloudflare-tunnel-config.yaml (ConfigMap).
+# The credentials file (contains the tunnel token / private key) lives in
+# cloudflare-tunnel-secrets.local.yaml (git-ignored).
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── ConfigMap — tunnel config.yaml ────────────────────────────────────────────
+# cloudflared reads this as its config file mounted at /etc/cloudflared/config.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cloudflare-tunnel-config
+  namespace: elite-powerplay
+  labels:
+    app.kubernetes.io/name: elite-powerplay
+    app.kubernetes.io/component: cloudflare-tunnel
+data:
+  config.yaml: |
+    # ── Tunnel identity ──────────────────────────────────────────────────────
+    # Replace with your real Tunnel UUID (from: cloudflared tunnel list)
+    tunnel: <YOUR-TUNNEL-UUID>
+
+    # Path inside the container where the credentials Secret is mounted
+    credentials-file: /etc/cloudflared/creds/tunnel-credentials
+
+    # ── Ingress rules ────────────────────────────────────────────────────────
+    # All public traffic hits the frontend Nginx, which handles /api proxying.
+    ingress:
+      - hostname: elite.yourdomain.com     # ← your public hostname
+        service: http://frontend:80
+        originRequest:
+          connectTimeout: 10s
+          noTLSVerify: false
+
+      # Catch-all — required by cloudflared; returns 404 for unknown hosts
+      - service: http_status:404
+
+    # ── Tunnel behaviour ─────────────────────────────────────────────────────
+    # Number of connections to the Cloudflare edge per cloudflared replica.
+    # 4 is the default and handles normal traffic well.
+    # Increase if you see connection saturation in cloudflared logs.
+    warp-routing:
+      enabled: false
+
+---
+
+# ── Deployment ────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflare-tunnel
+  namespace: elite-powerplay
+  labels:
+    app.kubernetes.io/name: elite-powerplay
+    app.kubernetes.io/component: cloudflare-tunnel
+spec:
+  # Run 2 replicas for HA — each opens independent connections to the edge.
+  # Cloudflare load-balances across all healthy replicas automatically.
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0          # zero-downtime rolling updates
+  selector:
+    matchLabels:
+      app: cloudflare-tunnel
+  template:
+    metadata:
+      labels:
+        app: cloudflare-tunnel
+        app.kubernetes.io/name: elite-powerplay
+        app.kubernetes.io/component: cloudflare-tunnel
+      annotations:
+        # Force pod restart when the ConfigMap changes
+        # (kubectl rollout restart deployment/cloudflare-tunnel to apply)
+        checksum/config: "update-this-on-config-change"
+    spec:
+      # cloudflared does not need root; run as a non-root user
+      securityContext:
+        runAsNonRoot: true
+        runAsUser:  65532          # nobody
+        runAsGroup: 65532
+
+      # Don't wait forever if the edge is unreachable on shutdown
+      terminationGracePeriodSeconds: 30
+
+      containers:
+        - name: cloudflared
+          # Always use a pinned version in production to avoid surprise updates.
+          # Check latest: https://github.com/cloudflare/cloudflared/releases
+          image: cloudflare/cloudflared:2025.5.0
+          imagePullPolicy: IfNotPresent
+
+          args:
+            - tunnel
+            - --config
+            - /etc/cloudflared/config/config.yaml
+            - --metrics
+            - 0.0.0.0:2000      # Prometheus metrics endpoint
+            - run
+
+          ports:
+            - name: metrics
+              containerPort: 2000
+              protocol: TCP
+
+          volumeMounts:
+            # tunnel config.yaml from ConfigMap
+            - name: config
+              mountPath: /etc/cloudflared/config
+              readOnly: true
+            # credentials JSON from Secret
+            - name: creds
+              mountPath: /etc/cloudflared/creds
+              readOnly: true
+
+          resources:
+            requests:
+              cpu:    "10m"
+              memory: "64Mi"
+            limits:
+              cpu:    "200m"
+              memory: "128Mi"
+
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: metrics
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: metrics
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+      volumes:
+        # ConfigMap: tunnel config.yaml
+        - name: config
+          configMap:
+            name: cloudflare-tunnel-config
+            items:
+              - key: config.yaml
+                path: config.yaml
+
+        # Secret: tunnel credentials JSON file
+        - name: creds
+          secret:
+            secretName: cloudflare-tunnel-secrets
+            items:
+              - key: tunnel-credentials
+                path: tunnel-credentials
+
+---
+
+# ── (Optional) Prometheus ServiceMonitor ─────────────────────────────────────
+# Uncomment if you have the Prometheus Operator installed and want to scrape
+# cloudflared's metrics endpoint.
+#
+# apiVersion: monitoring.coreos.com/v1
+# kind: ServiceMonitor
+# metadata:
+#   name: cloudflare-tunnel
+#   namespace: elite-powerplay
+#   labels:
+#     app.kubernetes.io/name: elite-powerplay
+#     app.kubernetes.io/component: cloudflare-tunnel
+# spec:
+#   selector:
+#     matchLabels:
+#       app: cloudflare-tunnel
+#   endpoints:
+#     - port: metrics
+#       interval: 30s
+#       path: /metrics

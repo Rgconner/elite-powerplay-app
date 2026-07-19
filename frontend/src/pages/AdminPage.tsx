@@ -52,24 +52,22 @@ async function apiPatch(path: string, body: unknown) {
 // Urgency scoring is automatic (progress/days-to-failure) — these weights tune bonuses
 const DEFAULT_WEIGHTS: Record<string, number> = {
   // Fortify
-  fortify_weight:          1,    // Global fortify score multiplier (1 = no change)
-  fortify_near_center:    15,    // Bonus for systems near center (<15 LY)
-  // Expand
-  expand_unoccupied:      60,    // Base score for Unoccupied system
-  expand_high_progress:   30,    // Bonus if PP activity > 50%
-  expand_proximity:       25,    // Bonus for systems close to controlled space (<20 LY)
-  expand_allegiance_match:15,    // Bonus if allegiance matches power
+  fortify_weight:              1,    // Global fortify score multiplier (1 = no change)
+  fortify_near_center:        15,    // Bonus for systems near center (<15 LY)
+  // Expand — distance thresholds (must match scoring.py DEFAULTS)
+  expand_fortified_dist_ly:   20,    // Max LY from a Fortified anchor to qualify
+  expand_stronghold_dist_ly:  30,    // Max LY from a Stronghold anchor to qualify
+  expand_allegiance_match:    15,    // Bonus if allegiance matches power
 };
 
 const WEIGHT_LABELS: Record<string, string> = {
   // Fortify
-  fortify_weight:          "Fortify — Global urgency score multiplier",
-  fortify_near_center:     "Fortify — Bonus: near center system (<15 LY)",
+  fortify_weight:              "Fortify — Global urgency score multiplier",
+  fortify_near_center:         "Fortify — Bonus: near center system (<15 LY)",
   // Expand
-  expand_unoccupied:       "Expand — Base score for Unoccupied system",
-  expand_high_progress:    "Expand — Bonus: high PP activity in system (>50%)",
-  expand_proximity:        "Expand — Bonus: close to controlled system (<20 LY)",
-  expand_allegiance_match: "Expand — Bonus: allegiance matches power",
+  expand_fortified_dist_ly:    "Expand — Max distance from Fortified anchor (LY)",
+  expand_stronghold_dist_ly:   "Expand — Max distance from Stronghold anchor (LY)",
+  expand_allegiance_match:     "Expand — Bonus: allegiance matches power",
 };
 
 // ── Target Analysis weights ───────────────────────────────────────────────────

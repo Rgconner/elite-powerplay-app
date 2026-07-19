@@ -1,7 +1,7 @@
 """Admin router — ingest triggers, status, settings, and account management (JWT-gated)."""
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from pydantic import BaseModel, field_validator
@@ -17,6 +17,46 @@ from services.ingestion import run_spansh_ingest
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+# ---------------------------------------------------------------------------
+# Public endpoint — no auth required
+# ---------------------------------------------------------------------------
+
+
+@router.get("/ingest-status", include_in_schema=True)
+def get_ingest_status(request: Request, db: Session = Depends(get_db)) -> dict:
+    """Return last ingest run info and next scheduled run time — public, no JWT needed."""
+    last_run = (
+        db.query(IngestionRun)
+        .order_by(IngestionRun.started_at.desc())
+        .first()
+    )
+
+    spansh_next: str | None = None
+    try:
+        scheduler = getattr(request.app.state, "scheduler", None)
+        if scheduler:
+            job = scheduler.get_job("spansh_ingest")
+            if job and job.next_run_time:
+                spansh_next = job.next_run_time.isoformat()
+    except Exception:
+        pass
+
+    if last_run is None:
+        return {
+            "last_run_at": None,
+            "status": None,
+            "records_processed": None,
+            "next_run_at": spansh_next,
+        }
+
+    return {
+        "last_run_at": last_run.started_at.isoformat() if last_run.started_at else None,
+        "completed_at": last_run.completed_at.isoformat() if last_run.completed_at else None,
+        "status": last_run.status,
+        "records_processed": last_run.records_processed,
+        "next_run_at": spansh_next,
+    }
 
 
 def run_spansh_ingest_task() -> None:

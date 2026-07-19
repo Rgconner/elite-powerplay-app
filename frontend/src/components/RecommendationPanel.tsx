@@ -65,11 +65,51 @@ function fmt(n: number): string {
 function MeritBar({ item }: { item: RecommendationItem }) {
   if (item.merit_position == null || item.control_progress == null) return null;
 
-  // Determine which band we're in and the full-scale position
+  const isExpand = item.type === "expand";
+
+  if (isExpand) {
+    // Expand items: show 0 → 120k acquisition scale
+    const pos  = item.merit_position;
+    const pct  = Math.min(100, Math.max(0, (pos / MERIT_ACQUIRE) * 100));
+    const p    = item.control_progress;
+    const barColor = pct >= 100 ? "#00E5CC"
+                   : pct >= 75  ? "#4AD94A"
+                   : pct >= 40  ? "#D9A84A"
+                   : pct > 0   ? "#4A90D9"
+                   : "#555";
+
+    return (
+      <div style={{ marginTop: 6 }}>
+        {/* Scale bar: 0 → 120k */}
+        <div style={{ position: "relative", height: 8, borderRadius: 4, background: "#21262d", overflow: "hidden", marginBottom: 2 }}>
+          <div style={{ height: "100%", width: `${pct}%`, background: barColor, borderRadius: 4, transition: "width 0.3s" }} />
+        </div>
+        {/* Labels */}
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "#555", marginBottom: 4 }}>
+          <span>0</span>
+          <span style={{ color: "#4A90D9", fontWeight: 700 }}>120k — Acquisition</span>
+        </div>
+        {/* Merit figures */}
+        <div style={{ display: "flex", gap: 12, fontSize: 11, flexWrap: "wrap" }}>
+          <span style={{ color: "#8b949e" }}>
+            Acquired: <strong style={{ color: barColor }}>{fmt(pos)}</strong>
+          </span>
+          {item.merits_to_upgrade != null && item.merits_to_upgrade > 0 && (
+            <span style={{ color: "#8b949e" }}>
+              Still needed: <strong style={{ color: "#4A90D9" }}>{fmt(item.merits_to_upgrade)}</strong>
+            </span>
+          )}
+          {p >= 1.0 && (
+            <span style={{ color: "#00E5CC", fontWeight: 700 }}>🚀 Acquisition threshold met — claim now!</span>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Fortify items: full 0 → 667k scale
   const pos = item.merit_position;
   const pct = Math.min(100, Math.max(0, (pos / MERIT_STRONGHOLD) * 100));
-
-  // Color the fill based on progress
   const p = item.control_progress;
   const barColor = p <= 0   ? "#D94A4A"
                  : p < 0.25 ? "#FF4444"
@@ -156,17 +196,15 @@ function ItemRow({ item }: { item: RecommendationItem }) {
         </span>
       </div>
 
-      {/* Progress bar + days to failure */}
+      {/* Progress bar + days to failure (fortify only) */}
       {item.type === "fortify" && (
         <DaysBar progress={item.control_progress} daysToFailure={item.days_to_failure} />
       )}
 
-      {/* Absolute merit position bar */}
-      {item.type === "fortify" && (
-        <MeritBar item={item} />
-      )}
+      {/* Merit bar — shown for both fortify and expand */}
+      <MeritBar item={item} />
 
-      {/* Stats row */}
+      {/* Stats row — fortify */}
       {item.type === "fortify" && (r > 0 || u > 0) && (
         <div style={{ display: "flex", gap: 16, fontSize: 11, color: "#8b949e", marginTop: 5, flexWrap: "wrap" }}>
           <span>R: <strong style={{ color: "#4AD94A" }}>{r.toLocaleString()}</strong></span>
@@ -185,10 +223,24 @@ function ItemRow({ item }: { item: RecommendationItem }) {
         </div>
       )}
 
+      {/* Stats row — expand */}
       {item.type === "expand" && (
         <div style={{ display: "flex", gap: 16, fontSize: 11, color: "#8b949e", marginTop: 5, flexWrap: "wrap" }}>
-          {item.control_progress != null && item.control_progress > 0 && (
-            <span>PP Activity: <strong style={{ color: "#4A90D9" }}>{(item.control_progress * 100).toFixed(0)}%</strong></span>
+          {/* Anchor type badge */}
+          {item.anchor_type === "fortified" && (
+            <span style={{ background: "#1a3a1a", color: "#4AD94A", border: "1px solid #4AD94A44", borderRadius: 3, padding: "1px 6px", fontSize: 10, fontWeight: 700 }}>
+              ⬡ Fortified anchor
+            </span>
+          )}
+          {item.anchor_type === "stronghold" && (
+            <span style={{ background: "#1a2a3a", color: "#4A90D9", border: "1px solid #4A90D944", borderRadius: 3, padding: "1px 6px", fontSize: 10, fontWeight: 700 }}>
+              ★ Stronghold anchor
+            </span>
+          )}
+          {item.anchor_type === "both" && (
+            <span style={{ background: "#1a2e1a", color: "#00E5CC", border: "1px solid #00E5CC44", borderRadius: 3, padding: "1px 6px", fontSize: 10, fontWeight: 700 }}>
+              ★⬡ Stronghold + Fortified
+            </span>
           )}
           {item.distance_from_center != null && (
             <span>Dist: {item.distance_from_center.toFixed(1)} LY</span>

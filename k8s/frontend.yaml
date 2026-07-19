@@ -71,9 +71,12 @@ spec:
 ---
 
 # ── Service ───────────────────────────────────────────────────────────────────
-# Type: LoadBalancer for bare-metal / cloud clusters with an external LB.
-# Change to ClusterIP and use the Ingress (ingress.yaml) if you have an
-# ingress controller (nginx-ingress, Traefik, etc.)
+# Default: ClusterIP — sufficient when using a Cloudflare Tunnel or an
+# nginx-ingress Ingress controller.  The tunnel reaches the service by its
+# cluster-internal DNS name (http://frontend:80).
+#
+# If you need direct external access without a tunnel / ingress controller,
+# change type to LoadBalancer and remove the Cloudflare tunnel deployment.
 apiVersion: v1
 kind: Service
 metadata:
@@ -85,13 +88,9 @@ metadata:
 spec:
   selector:
     app: frontend
-  type: LoadBalancer
+  type: ClusterIP          # ← change to LoadBalancer if not using CF tunnel
   ports:
     - name: http
       port: 80
       targetPort: http
-      protocol: TCP
-    - name: https
-      port: 443
-      targetPort: http      # TLS termination is handled by the LB or Ingress
       protocol: TCP
