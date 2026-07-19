@@ -18,7 +18,12 @@
  *   1.2.0  2025-07-11  Fix CI: removed cache-dependency-path crashing on absent
  *                      lockfile. Backend ingestion fix: Contested systems now
  *                      fetched via separate power_state filter pass.
+ *   1.3.0  2025-07-12  True contested detection: Spansh has no Contested state.
+ *                      Multi-power Unoccupied systems are now correctly identified.
+ *                      ContestedSystemInfo extended with powers_list & conflict_progress.
+ *                      ContestedRow shows per-power coloured progress bars.
+ *                      Removed unused pct variable / void pct lint issue.
  */
 
-export const FRONTEND_VERSION      = "1.2.1";
-export const FRONTEND_RELEASE_DATE = "2025-07-11T20:00:00Z";
+export const FRONTEND_VERSION      = "1.3.0";
+export const FRONTEND_RELEASE_DATE = "2025-07-12T00:00:00Z";

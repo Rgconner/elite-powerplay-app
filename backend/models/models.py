@@ -90,13 +90,19 @@ class PPSystemSnapshot(Base):
     snapshot_time = Column(DateTime, default=func.now(), nullable=False, index=True)
 
     # Power Play fields from Spansh dump
-    power = Column(String(128), nullable=True, index=True)   # e.g. "Arissa Lavigny-Duval"
-    power_state = Column(String(64), nullable=True)           # Fortified|Undermined|Turmoil|Expansion|Contested|HomeSystem|InPrepareRadius
+    power = Column(String(128), nullable=True, index=True)   # controlling power (single)
+    power_state = Column(String(64), nullable=True)           # Exploited|Fortified|Stronghold|Unoccupied
     # Reinforcement and undermining progress (raw commodity counts from Spansh)
     reinforcement = Column(Integer, nullable=True)
     undermining = Column(Integer, nullable=True)
     # 0.0–1.0 control progress toward next state
     control_progress = Column(Float, nullable=True)
+    # For Unoccupied/contested systems: comma-separated list of all powers present
+    # e.g. "A. Lavigny-Duval,Aisling Duval,Denton Patreus"
+    powers_list = Column(String(512), nullable=True)
+    # JSON array of {power, progress} dicts from power_conflict_progress field
+    # e.g. '[{"power":"A. Lavigny-Duval","progress":1.46},...]'
+    conflict_progress = Column(String(2048), nullable=True)
 
     system = relationship("PPSystem", back_populates="snapshots")
     ingestion_run = relationship("IngestionRun", back_populates="snapshots")

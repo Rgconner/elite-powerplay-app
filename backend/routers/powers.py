@@ -196,15 +196,19 @@ def get_contested_systems(
     powers are fighting over a system.  We surface ALL such systems near the
     selected power's territory, sorted by distance.
     """
-    # Get the latest snapshot for every Contested system across all powers
+    # Get the latest snapshot for every Contested system where the selected
+    # power appears in powers_list (meaning it is one of the contesting powers).
+    # power_state='Contested' is our internal label set during the Unoccupied pass.
     contested_rows = db.execute(text("""
         SELECT DISTINCT ON (system_id)
                system_id, power, power_state,
-               control_progress, reinforcement, undermining
+               control_progress, reinforcement, undermining,
+               powers_list, conflict_progress
         FROM pp_system_snapshots
         WHERE power_state = 'Contested'
+          AND powers_list ILIKE :power_pattern
         ORDER BY system_id, snapshot_time DESC
-    """)).mappings().all()
+    """), {"power_pattern": f"%{name}%"}).mappings().all()
 
     if not contested_rows:
         return []
@@ -249,16 +253,23 @@ def get_contested_systems(
                 for cx, cy, cz in power_coords
             )
 
+        # Build a friendly controlling_power label from powers_list
+        pl = snap["powers_list"] or ""
+        powers = [p.strip() for p in pl.split(",") if p.strip()]
+        label = "Multiple" if len(powers) > 1 else (powers[0] if powers else "Unknown")
+
         results.append(ContestedSystemInfo(
             system_id64=system.system_id64,
             system_name=system.name,
-            controlling_power=snap["power"] or "Unknown",
+            controlling_power=label,
             power_state="Contested",
             control_progress=snap["control_progress"],
             reinforcement=snap["reinforcement"] if (snap["reinforcement"] or 0) > 0 else None,
             undermining=snap["undermining"] if (snap["undermining"] or 0) > 0 else None,
             distance_from_power=dist,
             x=sx, y=sy, z=sz,
+            powers_list=snap["powers_list"],
+            conflict_progress=snap["conflict_progress"],
         ))
 
     # Sort by distance to the selected power's territory

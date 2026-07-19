@@ -40,6 +40,7 @@ We ingest ALL powers in a single run so the full galaxy picture is available.
 For each power we page through the search API 500 systems at a time.
 """
 
+import json
 import logging
 import time
 from datetime import datetime
@@ -50,6 +51,37 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from models.models import IngestionRun
+
+
+def _extract_powers_fields(system_obj: dict) -> tuple[Optional[str], Optional[str]]:
+    """Extract powers_list and conflict_progress strings from a Spansh system record.
+
+    Spansh returns:
+      "power": ["A. Lavigny-Duval", "Aisling Duval", ...]  -- list of powers in-sphere
+      "power_conflict_progress": [{"power": "A. Lavigny-Duval", "progress": 1.46}, ...]
+
+    We store:
+      powers_list       = "A. Lavigny-Duval,Aisling Duval,..."  (queryable with LIKE/ILIKE)
+      conflict_progress = JSON string of the power_conflict_progress array
+    """
+    raw_power = system_obj.get("power")
+    if isinstance(raw_power, list) and raw_power:
+        powers_list: Optional[str] = ",".join(str(p) for p in raw_power)
+    elif isinstance(raw_power, str) and raw_power:
+        powers_list = raw_power
+    else:
+        powers_list = None
+
+    raw_cp = system_obj.get("power_conflict_progress")
+    if raw_cp:
+        try:
+            conflict_progress: Optional[str] = json.dumps(raw_cp)
+        except Exception:
+            conflict_progress = None
+    else:
+        conflict_progress = None
+
+    return powers_list, conflict_progress
 
 logger = logging.getLogger(__name__)
 
@@ -110,15 +142,17 @@ def _fetch_page_by_power(power: str, page: int) -> dict:
     return resp.json()
 
 
-def _fetch_page_by_state(power_state: str, page: int) -> dict:
-    """Fetch one page of systems filtered by power_state (e.g. 'Contested').
+def _fetch_page_unoccupied(page: int) -> dict:
+    """Fetch one page of Unoccupied systems that have multiple powers present.
 
-    This catches systems that have no single controlling_power and therefore
-    never appear in the per-power queries.
+    These are the 'contested' systems in PP2.0: power_state=Unoccupied but
+    power[] contains 2+ entries, indicating multiple powers vying for control.
+    Spansh does NOT have a 'Contested' state — the multi-power Unoccupied
+    state IS the contested representation.
     """
     payload = {
         "filters": {
-            "power_state": {"value": [power_state], "comparison": "="}
+            "power_state": {"value": ["Unoccupied"], "comparison": "="}
         },
         "size": PAGE_SIZE,
         "page": page,
@@ -156,29 +190,37 @@ def _iter_power_systems(power: str):
         time.sleep(REQUEST_DELAY)
 
 
-def _iter_contested_systems():
-    """Yield all systems currently in Contested state from the Spansh API.
+def _iter_unoccupied_systems():
+    """Yield all Unoccupied systems from the Spansh API.
 
-    Contested systems are NOT returned by the controlling_power filter because
-    they may have no single controller.  This generator fetches them directly
-    using a power_state filter so they always appear in the DB with fresh data.
+    PP2.0 contested systems appear as Unoccupied with a 'power' list containing
+    2+ power names and a 'power_conflict_progress' array.  We ingest all Unoccupied
+    systems so we can detect multi-power entries in post-processing.
+
+    Note: there are ~35,000 Unoccupied systems — this pass takes a few minutes.
     """
     page = 0
     total_reported = None
 
     while True:
-        logger.debug("Fetching Contested systems page %d", page)
-        data = _fetch_page_by_state("Contested", page)
+        logger.debug("Fetching Unoccupied systems page %d", page)
+        data = _fetch_page_unoccupied(page)
 
         if total_reported is None:
             total_reported = data.get("count", 0)
-            logger.info("  Contested systems: %d reported by API", total_reported)
+            logger.info("  Unoccupied systems: %d reported by API", total_reported)
 
         results = data.get("results", [])
         if not results:
             break
 
-        yield from results
+        # Only yield systems with 2+ powers (the genuinely contested ones)
+        # to avoid ingesting tens of thousands of irrelevant Unoccupied rows.
+        for r in results:
+            raw_p = r.get("power")
+            if isinstance(raw_p, list) and len(raw_p) >= 2:
+                yield r
+
         page += 1
 
         if total_reported is not None and (page * PAGE_SIZE) >= total_reported:
@@ -242,6 +284,7 @@ def run_spansh_ingest(db: Session) -> IngestionRun:
                 control_progress: Optional[float] = system_obj.get("power_state_control_progress")
                 reinforcement: Optional[int] = system_obj.get("power_state_reinforcement")
                 undermining: Optional[int]   = system_obj.get("power_state_undermining")
+                powers_list, conflict_progress = _extract_powers_fields(system_obj)
 
                 # Upsert the system record
                 sys_result = db.execute(
@@ -271,21 +314,25 @@ def run_spansh_ingest(db: Session) -> IngestionRun:
                         INSERT INTO pp_system_snapshots
                             (system_id, ingestion_run_id, snapshot_time,
                              power, power_state, control_progress,
-                             reinforcement, undermining)
+                             reinforcement, undermining,
+                             powers_list, conflict_progress)
                         VALUES
                             (:system_id, :run_id, :now,
                              :power, :power_state, :control_progress,
-                             :reinforcement, :undermining)
+                             :reinforcement, :undermining,
+                             :powers_list, :conflict_progress)
                     """),
                     {
-                        "system_id": system_db_id,
-                        "run_id": run_id,
-                        "now": datetime.utcnow(),
-                        "power": power,
-                        "power_state": power_state,
+                        "system_id":        system_db_id,
+                        "run_id":           run_id,
+                        "now":              datetime.utcnow(),
+                        "power":            power,
+                        "power_state":      power_state,
                         "control_progress": control_progress,
-                        "reinforcement": reinforcement,
-                        "undermining": undermining,
+                        "reinforcement":    reinforcement,
+                        "undermining":      undermining,
+                        "powers_list":      powers_list,
+                        "conflict_progress": conflict_progress,
                     },
                 )
 
@@ -298,12 +345,18 @@ def run_spansh_ingest(db: Session) -> IngestionRun:
             db.commit()
             logger.info("  Finished '%s': %d systems stored", power, power_count)
 
-        # ── Second pass: Contested systems ────────────────────────────────────
-        # Fetch ALL systems currently in Contested state across the entire galaxy.
-        # These are NOT returned by the controlling_power filter queries above.
-        logger.info("Starting Contested systems pass...")
+        # ── Second pass: Multi-power Unoccupied (Contested) systems ──────────
+        # In PP2.0, a system being fought over by multiple powers appears as:
+        #   power_state = "Unoccupied"
+        #   power       = ["A. Lavigny-Duval", "Aisling Duval", ...]  (2+ entries)
+        #   power_conflict_progress = [{power:..., progress:...}, ...]
+        #
+        # We store these with power_state='Contested' (our internal label) so
+        # the /contested endpoint can find them with a simple WHERE clause.
+        # powers_list and conflict_progress capture the full multi-power data.
+        logger.info("Starting multi-power Unoccupied (Contested) pass...")
         contested_count = 0
-        for system_obj in _iter_contested_systems():
+        for system_obj in _iter_unoccupied_systems():
             system_id64_c: Optional[int] = system_obj.get("id64")
             if system_id64_c is None:
                 continue
@@ -318,23 +371,13 @@ def run_spansh_ingest(db: Session) -> IngestionRun:
 
             allegiance_c       = system_obj.get("allegiance")
             population_c       = system_obj.get("population")
-            power_state_c      = system_obj.get("power_state")            # "Contested"
             control_progress_c = system_obj.get("power_state_control_progress")
             reinforcement_c    = system_obj.get("power_state_reinforcement")
             undermining_c      = system_obj.get("power_state_undermining")
+            powers_list_c, conflict_progress_c = _extract_powers_fields(system_obj)
 
-            # controlling_power may be a list or a string in Spansh data
-            raw_cp = system_obj.get("controlling_power")
-            if isinstance(raw_cp, list):
-                power_c = raw_cp[0] if raw_cp else None
-            elif isinstance(raw_cp, str):
-                power_c = raw_cp or None
-            else:
-                # Fall back to "power" field
-                raw_p = system_obj.get("power")
-                power_c = (raw_p[0] if isinstance(raw_p, list) and raw_p
-                           else raw_p if isinstance(raw_p, str) else None)
-
+            # Use None for controlling power — no single owner in contested state
+            # power_state stored as 'Contested' (our internal label)
             sys_result_c = db.execute(
                 text("""
                     INSERT INTO pp_systems (system_id64, name, x, y, z, allegiance, population)
@@ -361,21 +404,25 @@ def run_spansh_ingest(db: Session) -> IngestionRun:
                     INSERT INTO pp_system_snapshots
                         (system_id, ingestion_run_id, snapshot_time,
                          power, power_state, control_progress,
-                         reinforcement, undermining)
+                         reinforcement, undermining,
+                         powers_list, conflict_progress)
                     VALUES
                         (:system_id, :run_id, :now,
                          :power, :power_state, :control_progress,
-                         :reinforcement, :undermining)
+                         :reinforcement, :undermining,
+                         :powers_list, :conflict_progress)
                 """),
                 {
                     "system_id":        system_db_id_c,
                     "run_id":           run_id,
                     "now":              datetime.utcnow(),
-                    "power":            power_c,
-                    "power_state":      power_state_c,
+                    "power":            None,           # no single controller
+                    "power_state":      "Contested",    # our internal label
                     "control_progress": control_progress_c,
                     "reinforcement":    reinforcement_c,
                     "undermining":      undermining_c,
+                    "powers_list":      powers_list_c,
+                    "conflict_progress": conflict_progress_c,
                 },
             )
 

@@ -211,12 +211,12 @@ class TargetAnalysisResponse(BaseModel):
 
 
 class ContestedSystemInfo(BaseModel):
-    """A system currently in Contested state where the selected power is one
-    of the contesters.  No scoring — listed purely for awareness."""
+    """A system currently in Contested state (Unoccupied with 2+ powers fighting).
+    No scoring — listed purely for awareness."""
 
     system_id64: int
     system_name: str
-    controlling_power: str          # the power whose snapshot has power_state='Contested'
+    controlling_power: str          # "Multiple" or first power listed
     power_state: str = "Contested"
     control_progress: Optional[float] = None
     reinforcement: Optional[int] = None
@@ -225,3 +225,7 @@ class ContestedSystemInfo(BaseModel):
     x: Optional[float] = None
     y: Optional[float] = None
     z: Optional[float] = None
+    # Comma-separated list of all contesting powers e.g. "A. Lavigny-Duval,Aisling Duval"
+    powers_list: Optional[str] = None
+    # JSON string: [{power: str, progress: float}, ...]
+    conflict_progress: Optional[str] = None

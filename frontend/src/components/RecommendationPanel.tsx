@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { RecommendationsResponse, RecommendationItem } from "../api/recommendations";
-import { ContestedSystemInfo } from "../api/contested";
+import { ContestedSystemInfo, parseConflictProgress } from "../api/contested";
 import { ppStateColor, PP_STATE_LABELS } from "../constants/ppColors";
 
 interface Props {
@@ -283,18 +283,21 @@ function Section({ title, items, color }: { title: string; items: Recommendation
 
 // ── Contested Systems section ──────────────────────────────────────────────
 
+// Power colours for contest progress bars
+const CONTEST_COLORS = ["#4A90D9", "#D94A4A", "#4AD94A", "#D9A84A", "#9A4AD9", "#4AD9D9"];
+
 function ContestedRow({ item }: { item: ContestedSystemInfo }) {
-  const pct = item.control_progress != null
-    ? Math.max(0, Math.min(1, item.control_progress)) * 100
-    : null;
+  const conflictEntries = parseConflictProgress(item);
+  // Acquisition threshold is 120,000 merits; progress > 1.0 means already acquired
+  const ACQUIRE_THRESHOLD = 120_000;
 
   return (
     <div style={{
       padding: "10px 12px", marginBottom: 6, borderRadius: 6,
       background: "#1a1000", border: "1px solid #FF8C0055",
     }}>
-      {/* Header row — no score, just name + state badge */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
+      {/* Header row */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
         <span style={{
           background: "#FF8C0022", color: "#FF8C00", borderRadius: 3,
           padding: "1px 7px", fontSize: 10, fontWeight: 800, letterSpacing: "0.06em",
@@ -302,7 +305,7 @@ function ContestedRow({ item }: { item: ContestedSystemInfo }) {
         }}>
           ⚔ CONTESTED
         </span>
-        <span style={{ fontWeight: 700, fontSize: 13, color: "#e6edf3", flex: 1 }}>
+        <span style={{ fontWeight: 700, fontSize: 13, flex: 1 }}>
           <a
             href={`https://www.edsm.net/en/system/id/-/name/${encodeURIComponent(item.system_name)}`}
             target="_blank" rel="noreferrer"
@@ -311,50 +314,55 @@ function ContestedRow({ item }: { item: ContestedSystemInfo }) {
             {item.system_name}
           </a>
         </span>
-        <span style={{
-          background: ppStateColor("Contested"), color: "#fff",
-          borderRadius: 4, padding: "2px 7px", fontSize: 10, fontWeight: 600, flexShrink: 0,
-        }}>
-          Contested
-        </span>
-      </div>
-
-      {/* Detail row — owner, distance, R/U */}
-      <div style={{ display: "flex", gap: 16, fontSize: 11, color: "#8b949e", flexWrap: "wrap", marginBottom: pct != null ? 6 : 0 }}>
-        <span>
-          Controlled by: <strong style={{ color: "#e6edf3" }}>{item.controlling_power}</strong>
-        </span>
         {item.distance_from_power != null && (
-          <span>
-            Dist: <strong style={{ color: item.distance_from_power <= 15 ? "#FF8C00" : "#8b949e" }}>
-              {item.distance_from_power.toFixed(1)} LY
-            </strong>
+          <span style={{ fontSize: 11, color: item.distance_from_power <= 15 ? "#FF8C00" : "#8b949e" }}>
+            {item.distance_from_power.toFixed(1)} LY
           </span>
         )}
-        {item.reinforcement != null && (
-          <span>R: <strong style={{ color: "#4AD94A" }}>{item.reinforcement.toLocaleString()}</strong></span>
-        )}
-        {item.undermining != null && (
-          <span>U: <strong style={{
-            color: (item.undermining ?? 0) > (item.reinforcement ?? 0) ? "#D94A4A" : "#8b949e"
-          }}>{item.undermining.toLocaleString()}</strong></span>
-        )}
       </div>
 
-      {/* Progress bar — control_progress for this contested system */}
-      {pct != null && (
-        <div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#8b949e", marginBottom: 2 }}>
-            <span>Control progress: {pct.toFixed(1)}%</span>
-          </div>
-          <div style={{ height: 4, borderRadius: 2, background: "#21262d", overflow: "hidden" }}>
-            <div style={{
-              height: "100%", width: `${pct}%`,
-              background: "#FF8C00",
-              borderRadius: 2, transition: "width 0.3s",
-            }} />
-          </div>
+      {/* Per-power conflict progress bars */}
+      {conflictEntries.length > 0 ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+          {conflictEntries
+            .slice()
+            .sort((a, b) => b.progress - a.progress)
+            .map((entry, idx) => {
+              // progress is already normalised 0–1+ where 1.0 = 120k merits acquired
+              const normPct = Math.min(100, Math.max(0, entry.progress * 100));
+              const color = CONTEST_COLORS[idx % CONTEST_COLORS.length];
+              const acquired = entry.progress >= 1.0;
+              return (
+                <div key={entry.power}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#8b949e", marginBottom: 2 }}>
+                    <span style={{ color, fontWeight: 600 }}>{entry.power}</span>
+                    <span style={{ color: acquired ? "#00E5CC" : color }}>
+                      {acquired ? "🚀 Acquired!" : `${normPct.toFixed(1)}%`}
+                    </span>
+                  </div>
+                  <div style={{ height: 5, borderRadius: 3, background: "#21262d", overflow: "hidden" }}>
+                    <div style={{
+                      height: "100%", width: `${normPct}%`,
+                      background: acquired ? "#00E5CC" : color,
+                      borderRadius: 3, transition: "width 0.3s",
+                    }} />
+                  </div>
+                </div>
+              );
+            })}
         </div>
+      ) : (
+        /* Fallback: simple single bar when no conflict data */
+        item.control_progress != null && (
+          <div>
+            <div style={{ fontSize: 10, color: "#8b949e", marginBottom: 2 }}>
+              Progress: {(item.control_progress * 100).toFixed(1)}%
+            </div>
+            <div style={{ height: 4, borderRadius: 2, background: "#21262d", overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${Math.min(100, item.control_progress * 100)}%`, background: "#FF8C00", borderRadius: 2 }} />
+            </div>
+          </div>
+        )
       )}
     </div>
   );

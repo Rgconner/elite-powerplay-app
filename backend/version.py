@@ -19,10 +19,19 @@ Version history:
                      broken subquery that incorrectly used pp_system_snapshots.power
                      (controller field) to detect attacker presence.
   1.2.0  2025-07-11  Fix Contested ingestion gap: Spansh controlling_power filter
-                     never returns Contested systems. Added second ingest pass using
-                     power_state='Contested' filter to capture them. Fix CI: removed
-                     cache-dependency-path that crashed when package-lock.json absent.
+                    never returns Contested systems. Added second ingest pass using
+                    power_state='Contested' filter to capture them. Fix CI: removed
+                    cache-dependency-path that crashed when package-lock.json absent.
+  1.3.0  2025-07-12  True contested detection rewrite: Spansh has no 'Contested'
+                    power_state — contested systems are Unoccupied systems whose
+                    power[] array contains 2+ entries. Added powers_list and
+                    conflict_progress columns to pp_system_snapshots with ALTER TABLE
+                    IF NOT EXISTS migration. Ingestion second pass now queries
+                    power_state=Unoccupied and stores multi-power systems as internal
+                    'Contested' label with full power list and conflict progress JSON.
+                    /contested endpoint filters by powers_list ILIKE. Frontend
+                    ContestedRow displays per-power progress bars with colour coding.
 """
 
-BACKEND_VERSION      = "1.2.1"
-BACKEND_RELEASE_DATE = "2025-07-11T20:00:00Z"
+BACKEND_VERSION      = "1.3.0"
+BACKEND_RELEASE_DATE = "2025-07-12T00:00:00Z"

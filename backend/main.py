@@ -15,8 +15,24 @@ load_dotenv()
 
 from db.session import Base, engine  # noqa: E402
 import models.models  # noqa: F401
+from sqlalchemy import text as _text  # noqa: E402
 
 Base.metadata.create_all(bind=engine)
+
+# ── Incremental schema migrations ────────────────────────────────────────────
+# SQLAlchemy's create_all() only creates missing tables, not missing columns.
+# We run explicit ADD COLUMN IF NOT EXISTS here so existing deployments pick up
+# new fields without a full DB wipe.
+with engine.connect() as _conn:
+    _conn.execute(_text(
+        "ALTER TABLE pp_system_snapshots "
+        "ADD COLUMN IF NOT EXISTS powers_list VARCHAR(512)"
+    ))
+    _conn.execute(_text(
+        "ALTER TABLE pp_system_snapshots "
+        "ADD COLUMN IF NOT EXISTS conflict_progress VARCHAR(2048)"
+    ))
+    _conn.commit()
 
 from routers import auth, admin  # noqa: E402
 from routers.powers import router as powers_router, systems_router  # noqa: E402

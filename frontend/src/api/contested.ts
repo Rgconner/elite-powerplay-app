@@ -1,9 +1,14 @@
 /** Contested Systems API client. */
 
+export interface ConflictPowerProgress {
+  power: string;
+  progress: number;
+}
+
 export interface ContestedSystemInfo {
   system_id64: number;
   system_name: string;
-  /** The power whose snapshot record carries power_state='Contested' */
+  /** "Multiple" or first power name */
   controlling_power: string;
   power_state: string;
   control_progress: number | null;
@@ -14,6 +19,20 @@ export interface ContestedSystemInfo {
   x: number | null;
   y: number | null;
   z: number | null;
+  /** Comma-separated contesting powers e.g. "A. Lavigny-Duval,Aisling Duval" */
+  powers_list: string | null;
+  /** JSON string: [{power, progress}, ...] from power_conflict_progress */
+  conflict_progress: string | null;
+}
+
+/** Parse the conflict_progress JSON string safely */
+export function parseConflictProgress(item: ContestedSystemInfo): ConflictPowerProgress[] {
+  if (!item.conflict_progress) return [];
+  try {
+    return JSON.parse(item.conflict_progress) as ConflictPowerProgress[];
+  } catch {
+    return [];
+  }
 }
 
 export async function getContestedSystems(
