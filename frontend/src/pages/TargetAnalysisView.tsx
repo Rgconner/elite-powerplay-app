@@ -288,8 +288,8 @@ export default function TargetAnalysisView() {
   const [results,        setResults]        = useState<TargetAnalysisItem[]>([]);
   const [loading,        setLoading]        = useState(false);
   const [error,          setError]          = useState<string | null>(null);
-  const [sortKey,        setSortKey]        = useState<string>("score");
-  const [sortDir,        setSortDir]        = useState<SortDir>("desc");
+  const [sortKey,        setSortKey]        = useState<string>("control_progress");
+  const [sortDir,        setSortDir]        = useState<SortDir>("asc");
   const [filterPower,    setFilterPower]    = useState<string>("all");
 
   // ── Local settings ────────────────────────────────────────────────────────

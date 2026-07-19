@@ -459,7 +459,11 @@ def target_analysis(
             contested=is_contested,
         ))
 
-    items.sort(key=lambda x: x.score, reverse=True)
+    # Sort by control_progress ascending (lowest = most vulnerable) before
+    # truncating to max_results.  This ensures the cap keeps the most
+    # actionable targets rather than simply the highest-scored ones.
+    # The frontend re-sorts by any column the user clicks afterwards.
+    items.sort(key=lambda x: (x.control_progress if x.control_progress is not None else 1.0))
 
     return TargetAnalysisResponse(
         targets=items[:max_results],
