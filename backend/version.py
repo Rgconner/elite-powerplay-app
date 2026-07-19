@@ -18,7 +18,11 @@ Version history:
                      data. New ContestedSystemInfo schema (no scoring). Removed
                      broken subquery that incorrectly used pp_system_snapshots.power
                      (controller field) to detect attacker presence.
+  1.2.0  2025-07-11  Fix Contested ingestion gap: Spansh controlling_power filter
+                     never returns Contested systems. Added second ingest pass using
+                     power_state='Contested' filter to capture them. Fix CI: removed
+                     cache-dependency-path that crashed when package-lock.json absent.
 """
 
-BACKEND_VERSION      = "1.1.0"
-BACKEND_RELEASE_DATE = "2025-07-11T12:00:00Z"
+BACKEND_VERSION      = "1.2.0"
+BACKEND_RELEASE_DATE = "2025-07-11T18:00:00Z"

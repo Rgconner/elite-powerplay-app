@@ -15,7 +15,10 @@
  *   1.1.0  2025-07-11  Contested systems rewrite: dedicated /contested endpoint,
  *                      ContestedSystemInfo type (no score), direct power_state='Contested'
  *                      query. RecommendationPanel and TableView updated to use new API.
+ *   1.2.0  2025-07-11  Fix CI: removed cache-dependency-path crashing on absent
+ *                      lockfile. Backend ingestion fix: Contested systems now
+ *                      fetched via separate power_state filter pass.
  */
 
-export const FRONTEND_VERSION      = "1.1.0";
-export const FRONTEND_RELEASE_DATE = "2025-07-11T12:00:00Z";
+export const FRONTEND_VERSION      = "1.2.0";
+export const FRONTEND_RELEASE_DATE = "2025-07-11T18:00:00Z";

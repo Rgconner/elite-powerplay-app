@@ -75,15 +75,50 @@ ALL_POWERS = [
 ]
 
 # ---------------------------------------------------------------------------
+# Why Contested systems need a separate pass
+# ---------------------------------------------------------------------------
+# The main ingest loop queries Spansh with filter: controlling_power = <power>.
+# Contested systems may have NO single controlling_power (or the controller is
+# ambiguous / rotating), so they are NOT returned by that filter and never enter
+# the DB via the main loop.
+#
+# Spansh DOES support filtering by power_state directly.  We run a second pass
+# after the main loop to fetch all systems currently in Contested state,
+# regardless of which power controls them.  This ensures:
+#   - Contested systems appear in pp_system_snapshots with power_state='Contested'
+#   - The /api/powers/{name}/contested endpoint returns current live data
+#   - Systems that leave Contested state will be overwritten on next ingest
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
 # Spansh API helpers
 # ---------------------------------------------------------------------------
 
 
-def _fetch_page(power: str, page: int) -> dict:
-    """Fetch one page of systems for a power from the Spansh search API."""
+def _fetch_page_by_power(power: str, page: int) -> dict:
+    """Fetch one page of systems for a power (controlling_power filter)."""
     payload = {
         "filters": {
             "controlling_power": {"value": [power], "comparison": "="}
+        },
+        "size": PAGE_SIZE,
+        "page": page,
+        "sort": [{"id64": {"direction": "asc"}}],
+    }
+    resp = requests.post(SPANSH_SEARCH_URL, json=payload, timeout=60)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def _fetch_page_by_state(power_state: str, page: int) -> dict:
+    """Fetch one page of systems filtered by power_state (e.g. 'Contested').
+
+    This catches systems that have no single controlling_power and therefore
+    never appear in the per-power queries.
+    """
+    payload = {
+        "filters": {
+            "power_state": {"value": [power_state], "comparison": "="}
         },
         "size": PAGE_SIZE,
         "page": page,
@@ -101,7 +136,7 @@ def _iter_power_systems(power: str):
 
     while True:
         logger.debug("Fetching page %d for power '%s'", page, power)
-        data = _fetch_page(power, page)
+        data = _fetch_page_by_power(power, page)
 
         if total_reported is None:
             total_reported = data.get("count", 0)
@@ -115,6 +150,37 @@ def _iter_power_systems(power: str):
         page += 1
 
         # Stop if we've seen all systems (avoid infinite loop on API quirks)
+        if total_reported is not None and (page * PAGE_SIZE) >= total_reported:
+            break
+
+        time.sleep(REQUEST_DELAY)
+
+
+def _iter_contested_systems():
+    """Yield all systems currently in Contested state from the Spansh API.
+
+    Contested systems are NOT returned by the controlling_power filter because
+    they may have no single controller.  This generator fetches them directly
+    using a power_state filter so they always appear in the DB with fresh data.
+    """
+    page = 0
+    total_reported = None
+
+    while True:
+        logger.debug("Fetching Contested systems page %d", page)
+        data = _fetch_page_by_state("Contested", page)
+
+        if total_reported is None:
+            total_reported = data.get("count", 0)
+            logger.info("  Contested systems: %d reported by API", total_reported)
+
+        results = data.get("results", [])
+        if not results:
+            break
+
+        yield from results
+        page += 1
+
         if total_reported is not None and (page * PAGE_SIZE) >= total_reported:
             break
 
@@ -232,6 +298,95 @@ def run_spansh_ingest(db: Session) -> IngestionRun:
             db.commit()
             logger.info("  Finished '%s': %d systems stored", power, power_count)
 
+        # ── Second pass: Contested systems ────────────────────────────────────
+        # Fetch ALL systems currently in Contested state across the entire galaxy.
+        # These are NOT returned by the controlling_power filter queries above.
+        logger.info("Starting Contested systems pass...")
+        contested_count = 0
+        for system_obj in _iter_contested_systems():
+            system_id64_c: Optional[int] = system_obj.get("id64")
+            if system_id64_c is None:
+                continue
+
+            name_c    = system_obj.get("name", "")
+            xc        = system_obj.get("x")
+            yc        = system_obj.get("y")
+            zc        = system_obj.get("z")
+            if xc is None:
+                coords_c = system_obj.get("coords") or {}
+                xc = coords_c.get("x"); yc = coords_c.get("y"); zc = coords_c.get("z")
+
+            allegiance_c       = system_obj.get("allegiance")
+            population_c       = system_obj.get("population")
+            power_state_c      = system_obj.get("power_state")            # "Contested"
+            control_progress_c = system_obj.get("power_state_control_progress")
+            reinforcement_c    = system_obj.get("power_state_reinforcement")
+            undermining_c      = system_obj.get("power_state_undermining")
+
+            # controlling_power may be a list or a string in Spansh data
+            raw_cp = system_obj.get("controlling_power")
+            if isinstance(raw_cp, list):
+                power_c = raw_cp[0] if raw_cp else None
+            elif isinstance(raw_cp, str):
+                power_c = raw_cp or None
+            else:
+                # Fall back to "power" field
+                raw_p = system_obj.get("power")
+                power_c = (raw_p[0] if isinstance(raw_p, list) and raw_p
+                           else raw_p if isinstance(raw_p, str) else None)
+
+            sys_result_c = db.execute(
+                text("""
+                    INSERT INTO pp_systems (system_id64, name, x, y, z, allegiance, population)
+                    VALUES (:id64, :name, :x, :y, :z, :allegiance, :population)
+                    ON CONFLICT (system_id64) DO UPDATE
+                        SET name       = EXCLUDED.name,
+                            x          = EXCLUDED.x,
+                            y          = EXCLUDED.y,
+                            z          = EXCLUDED.z,
+                            allegiance = EXCLUDED.allegiance,
+                            population = EXCLUDED.population
+                    RETURNING id
+                """),
+                {
+                    "id64": system_id64_c, "name": name_c,
+                    "x": xc, "y": yc, "z": zc,
+                    "allegiance": allegiance_c, "population": population_c,
+                },
+            )
+            system_db_id_c: int = sys_result_c.scalar_one()
+
+            db.execute(
+                text("""
+                    INSERT INTO pp_system_snapshots
+                        (system_id, ingestion_run_id, snapshot_time,
+                         power, power_state, control_progress,
+                         reinforcement, undermining)
+                    VALUES
+                        (:system_id, :run_id, :now,
+                         :power, :power_state, :control_progress,
+                         :reinforcement, :undermining)
+                """),
+                {
+                    "system_id":        system_db_id_c,
+                    "run_id":           run_id,
+                    "now":              datetime.utcnow(),
+                    "power":            power_c,
+                    "power_state":      power_state_c,
+                    "control_progress": control_progress_c,
+                    "reinforcement":    reinforcement_c,
+                    "undermining":      undermining_c,
+                },
+            )
+
+            records_processed += 1
+            contested_count   += 1
+            if records_processed % BATCH_COMMIT_SIZE == 0:
+                db.commit()
+
+        db.commit()
+        logger.info("  Finished Contested pass: %d systems stored", contested_count)
+
         # Final update
         db.execute(
             text("""
@@ -244,7 +399,7 @@ def run_spansh_ingest(db: Session) -> IngestionRun:
         db.commit()
         db.refresh(run)
         logger.info(
-            "Spansh PP ingest complete: %d total systems across %d powers (run_id=%d)",
+            "Spansh PP ingest complete: %d total systems across %d powers + contested pass (run_id=%d)",
             records_processed, len(ALL_POWERS), run_id,
         )
 
