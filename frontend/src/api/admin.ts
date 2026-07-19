@@ -101,3 +101,28 @@ export async function updateSettings(
   });
   if (!res.ok) throw new Error(`Failed to update settings (${res.status})`);
 }
+
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+  confirmPassword: string,
+): Promise<void> {
+  const res = await fetch("/api/admin/change-password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getAuthHeader() },
+    body: JSON.stringify({
+      current_password:  currentPassword,
+      new_password:      newPassword,
+      confirm_password:  confirmPassword,
+    }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    // Pydantic validation errors come back as an array under "detail"
+    const detail = (data as { detail?: unknown }).detail;
+    if (Array.isArray(detail)) {
+      throw new Error(detail.map((e: { msg?: string }) => e.msg ?? String(e)).join(" · "));
+    }
+    throw new Error(typeof detail === "string" ? detail : `Change password failed (${res.status})`);
+  }
+}

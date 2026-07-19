@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   getAdminToken, setAdminToken, clearAdminToken, getAuthHeader, getAdminStatus,
+  changePassword,
 } from "../api/admin";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -175,6 +176,14 @@ export default function AdminPage({ onClose }: Props) {
   const [settingsSaved, setSettingsSaved] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // ── Change-password form state ──────────────────────────────────────────────
+  const [pwCurrent,  setPwCurrent]  = useState("");
+  const [pwNew,      setPwNew]      = useState("");
+  const [pwConfirm,  setPwConfirm]  = useState("");
+  const [pwSaving,   setPwSaving]   = useState(false);
+  const [pwError,    setPwError]    = useState<string | null>(null);
+  const [pwSuccess,  setPwSuccess]  = useState(false);
 
   const loadData = useCallback(() => {
     if (!getAdminToken()) return;
@@ -640,6 +649,151 @@ export default function AdminPage({ onClose }: Props) {
           })}
         </div>
       </div>
+
+      {/* ── Change Password ─────────────────────────────────────────────────── */}
+      <div style={cardStyle}>
+        <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700 }}>Change Password</h3>
+        <p style={{ fontSize: 12, color: "#57606a", margin: "0 0 16px" }}>
+          Enter your current password to verify your identity, then set a new one.
+          Minimum 8 characters.
+        </p>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 380 }}>
+          {/* Current password */}
+          <div>
+            <label style={{ display: "block", fontSize: 12, color: "#57606a", marginBottom: 4 }}>
+              Current password
+            </label>
+            <input
+              type="password"
+              value={pwCurrent}
+              onChange={e => { setPwCurrent(e.target.value); setPwError(null); setPwSuccess(false); }}
+              autoComplete="current-password"
+              style={pwInputStyle}
+            />
+          </div>
+
+          {/* New password */}
+          <div>
+            <label style={{ display: "block", fontSize: 12, color: "#57606a", marginBottom: 4 }}>
+              New password
+              <span style={{ marginLeft: 6, fontSize: 11, color: "#bbb" }}>(min 8 characters)</span>
+            </label>
+            <input
+              type="password"
+              value={pwNew}
+              onChange={e => { setPwNew(e.target.value); setPwError(null); setPwSuccess(false); }}
+              autoComplete="new-password"
+              style={{
+                ...pwInputStyle,
+                borderColor: pwNew.length > 0 && pwNew.length < 8 ? "#D94A4A" : "#e5e7eb",
+              }}
+            />
+            {/* Strength indicator */}
+            {pwNew.length > 0 && (
+              <div style={{ marginTop: 4, display: "flex", gap: 3 }}>
+                {[8, 12, 16, 20].map(threshold => (
+                  <div
+                    key={threshold}
+                    style={{
+                      flex: 1, height: 3, borderRadius: 2,
+                      background: pwNew.length >= threshold ? (
+                        threshold <= 8  ? "#D94A4A" :
+                        threshold <= 12 ? "#FF8C00" :
+                        threshold <= 16 ? "#D9A84A" : "#4AD94A"
+                      ) : "#e5e7eb",
+                    }}
+                  />
+                ))}
+                <span style={{ fontSize: 10, color: "#bbb", marginLeft: 4, whiteSpace: "nowrap" }}>
+                  {pwNew.length < 8  ? "too short" :
+                   pwNew.length < 12 ? "weak" :
+                   pwNew.length < 16 ? "fair" :
+                   pwNew.length < 20 ? "good" : "strong"}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Confirm new password */}
+          <div>
+            <label style={{ display: "block", fontSize: 12, color: "#57606a", marginBottom: 4 }}>
+              Confirm new password
+            </label>
+            <input
+              type="password"
+              value={pwConfirm}
+              onChange={e => { setPwConfirm(e.target.value); setPwError(null); setPwSuccess(false); }}
+              autoComplete="new-password"
+              style={{
+                ...pwInputStyle,
+                borderColor: pwConfirm.length > 0 && pwConfirm !== pwNew ? "#D94A4A" : "#e5e7eb",
+              }}
+            />
+            {pwConfirm.length > 0 && pwConfirm !== pwNew && (
+              <p style={{ fontSize: 11, color: "#D94A4A", margin: "3px 0 0" }}>
+                Passwords do not match
+              </p>
+            )}
+          </div>
+
+          {/* Error / success feedback */}
+          {pwError && (
+            <p style={{ fontSize: 13, color: "#D94A4A", margin: 0, padding: "8px 10px", background: "#fff0f0", border: "1px solid #f5c0c0", borderRadius: 5 }}>
+              {pwError}
+            </p>
+          )}
+          {pwSuccess && (
+            <p style={{ fontSize: 13, color: "#1a7a2a", margin: 0, padding: "8px 10px", background: "#f0fff4", border: "1px solid #b2dfbd", borderRadius: 5 }}>
+              ✓ Password changed successfully.
+            </p>
+          )}
+
+          {/* Submit */}
+          <button
+            disabled={
+              pwSaving ||
+              !pwCurrent ||
+              pwNew.length < 8 ||
+              pwNew !== pwConfirm
+            }
+            onClick={async () => {
+              setPwSaving(true);
+              setPwError(null);
+              setPwSuccess(false);
+              try {
+                await changePassword(pwCurrent, pwNew, pwConfirm);
+                setPwSuccess(true);
+                setPwCurrent("");
+                setPwNew("");
+                setPwConfirm("");
+              } catch (err: unknown) {
+                setPwError(err instanceof Error ? err.message : "Change failed");
+              } finally {
+                setPwSaving(false);
+              }
+            }}
+            style={{
+              padding: "9px 20px", fontSize: 13, fontWeight: 700,
+              background: pwSaving || !pwCurrent || pwNew.length < 8 || pwNew !== pwConfirm
+                ? "#ccc" : "#3b82d4",
+              color: "#fff", border: "none", borderRadius: 6,
+              cursor: pwSaving || !pwCurrent || pwNew.length < 8 || pwNew !== pwConfirm
+                ? "not-allowed" : "pointer",
+              alignSelf: "flex-start",
+            }}
+          >
+            {pwSaving ? "Saving…" : "Change Password"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
+
+// ── Shared input style for password fields ─────────────────────────────────────
+const pwInputStyle: React.CSSProperties = {
+  width: "100%", padding: "8px 10px",
+  border: "1px solid #e5e7eb", borderRadius: 6,
+  fontSize: 14, boxSizing: "border-box", outline: "none",
+};

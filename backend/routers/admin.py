@@ -1,15 +1,16 @@
-"""Admin router — ingest triggers, status, and settings (JWT-gated)."""
+"""Admin router — ingest triggers, status, settings, and account management (JWT-gated)."""
 
 import logging
 from datetime import datetime
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Request
-from pydantic import BaseModel
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
 from db.session import SessionLocal
-from models.models import AdminSetting, IngestionRun
+from models.models import AdminSetting, AdminUser, IngestionRun
 from models.schemas import AdminSettingSchema, IngestionRunSchema
+from routers.auth import hash_password, verify_password
 from routers.deps import AdminUserDep, get_db
 from services.ingestion import run_spansh_ingest
 
@@ -94,3 +95,58 @@ async def trigger_spansh_ingest(
     background_tasks.add_task(run_spansh_ingest_task)
     logger.info("Spansh PP ingest triggered manually by %s", admin["email"])
     return {"message": "Spansh PP ingest started in background"}
+
+
+# ---------------------------------------------------------------------------
+# Change password
+# ---------------------------------------------------------------------------
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+    confirm_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("New password must be at least 8 characters.")
+        return v
+
+    @field_validator("confirm_password")
+    @classmethod
+    def passwords_match(cls, v: str, info: object) -> str:
+        # `info.data` contains already-validated fields
+        data = getattr(info, "data", {})
+        if "new_password" in data and v != data["new_password"]:
+            raise ValueError("Passwords do not match.")
+        return v
+
+
+@router.post("/change-password")
+def change_password(
+    body: ChangePasswordRequest,
+    admin: AdminUserDep,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Change the authenticated admin's password.
+
+    Requires the current password for verification.  The new password is
+    bcrypt-hashed before storage (same pipeline as the initial account
+    creation in create_admin.py).
+    """
+    user = db.query(AdminUser).filter(AdminUser.id == admin["id"]).first()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Admin user not found.")
+
+    if not verify_password(body.current_password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect.",
+        )
+
+    user.hashed_password = hash_password(body.new_password)
+    db.commit()
+    logger.info("Password changed for admin %s", user.email)
+    return {"message": "Password changed successfully."}
