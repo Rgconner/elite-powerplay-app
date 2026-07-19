@@ -641,7 +641,7 @@ export default function TableView() {
               ⚔ Contested Systems
             </h3>
             <span style={{ fontSize: 12, color: "#8b949e" }}>
-              Systems controlled by other powers where {powerName} has an active foothold
+              Systems currently in Contested state — sorted by proximity to {powerName}
             </span>
             {loadingContested && <span style={{ fontSize: 12, color: "#555" }}>Loading…</span>}
           </div>
@@ -651,7 +651,7 @@ export default function TableView() {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr>
-                    {["System", "Owner", "State", "Progress", "Days ↓", "Reinf.", "Underm.", "Net R–U", "Score", "Dist LY"].map(h => (
+                    {["System", "Owner", "State", "Progress", "Reinf.", "Underm.", "Net R–U", "Dist LY"].map(h => (
                       <th key={h} style={{
                         padding: "8px 10px", textAlign: "left", fontSize: 11, fontWeight: 700,
                         color: "#FF8C00", textTransform: "uppercase", letterSpacing: "0.05em",
@@ -708,14 +708,6 @@ export default function TableView() {
                             </div>
                           ) : <span style={{ color: "#555" }}>—</span>}
                         </td>
-                        {/* Days to downgrade */}
-                        <td style={{ padding: "7px 10px", textAlign: "center" }}>
-                          {item.days_to_downgrade == null
-                            ? <span style={{ color: "#555" }}>—</span>
-                            : item.days_to_downgrade === 0
-                            ? <span style={{ color: "#4AD94A", fontWeight: 800 }}>NOW ✓</span>
-                            : <span style={{ color: item.days_to_downgrade < 3 ? "#4AD94A" : "#D9A84A", fontWeight: 600 }}>{item.days_to_downgrade.toFixed(1)}d</span>}
-                        </td>
                         {/* Reinforcement */}
                         <td style={{ padding: "7px 10px", textAlign: "right", color: "#4AD94A", fontVariantNumeric: "tabular-nums" }}>
                           {r > 0 ? r.toLocaleString() : <span style={{ color: "#555" }}>—</span>}
@@ -728,13 +720,9 @@ export default function TableView() {
                         <td style={{ padding: "7px 10px", textAlign: "right", color: net < 0 ? "#4AD94A" : net > 0 ? "#D94A4A" : "#555", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
                           {(r > 0 || u > 0) ? `${net >= 0 ? "+" : ""}${net.toLocaleString()}` : <span style={{ color: "#555" }}>—</span>}
                         </td>
-                        {/* Score */}
-                        <td style={{ padding: "7px 10px", textAlign: "right", color: "#FF8C00", fontWeight: 700 }}>
-                          {item.score.toFixed(0)}
-                        </td>
                         {/* Distance */}
-                        <td style={{ padding: "7px 10px", textAlign: "right", color: item.distance_from_attacker != null && item.distance_from_attacker <= 10 ? "#FF8C00" : "#8b949e" }}>
-                          {item.distance_from_attacker != null ? `${item.distance_from_attacker.toFixed(1)}` : "—"}
+                        <td style={{ padding: "7px 10px", textAlign: "right", color: item.distance_from_power != null && item.distance_from_power <= 10 ? "#FF8C00" : "#8b949e" }}>
+                          {item.distance_from_power != null ? `${item.distance_from_power.toFixed(1)}` : "—"}
                         </td>
                       </tr>
                     );

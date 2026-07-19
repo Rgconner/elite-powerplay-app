@@ -24,5 +24,5 @@ Version history:
                      cache-dependency-path that crashed when package-lock.json absent.
 """
 
-BACKEND_VERSION      = "1.2.0"
-BACKEND_RELEASE_DATE = "2025-07-11T18:00:00Z"
+BACKEND_VERSION      = "1.2.1"
+BACKEND_RELEASE_DATE = "2025-07-11T20:00:00Z"

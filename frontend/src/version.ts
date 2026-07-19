@@ -20,5 +20,5 @@
  *                      fetched via separate power_state filter pass.
  */
 
-export const FRONTEND_VERSION      = "1.2.0";
-export const FRONTEND_RELEASE_DATE = "2025-07-11T18:00:00Z";
+export const FRONTEND_VERSION      = "1.2.1";
+export const FRONTEND_RELEASE_DATE = "2025-07-11T20:00:00Z";
