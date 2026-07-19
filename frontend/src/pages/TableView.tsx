@@ -504,8 +504,13 @@ export default function TableView() {
         </div>
       )}
 
-      {/* Recommendation panel */}
-      <RecommendationPanel recommendations={filteredRecommendations} loading={loadingRecos} />
+      {/* Recommendation panel — includes Contested section */}
+      <RecommendationPanel
+        recommendations={filteredRecommendations}
+        loading={loadingRecos}
+        contested={contestedSystems}
+        loadingContested={loadingContested}
+      />
 
       {/* Empty states */}
       {!powerName && (

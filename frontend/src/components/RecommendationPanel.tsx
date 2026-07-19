@@ -1,10 +1,13 @@
 import { useState } from "react";
 import { RecommendationsResponse, RecommendationItem } from "../api/recommendations";
+import { TargetAnalysisItem } from "../api/targeting";
 import { ppStateColor, PP_STATE_LABELS } from "../constants/ppColors";
 
 interface Props {
   recommendations: RecommendationsResponse | null;
   loading: boolean;
+  contested: TargetAnalysisItem[];
+  loadingContested: boolean;
 }
 
 // ── Urgency band helpers ───────────────────────────────────────────────────
@@ -278,7 +281,117 @@ function Section({ title, items, color }: { title: string; items: Recommendation
   );
 }
 
-export default function RecommendationPanel({ recommendations, loading }: Props) {
+// ── Contested Systems section ──────────────────────────────────────────────
+
+function ContestedRow({ item }: { item: TargetAnalysisItem }) {
+  const pct = item.control_progress != null
+    ? Math.max(0, Math.min(1, item.control_progress)) * 100
+    : null;
+
+  return (
+    <div style={{
+      padding: "10px 12px", marginBottom: 6, borderRadius: 6,
+      background: "#1a1000", border: "1px solid #FF8C0055",
+    }}>
+      {/* Header row */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
+        <span style={{
+          background: "#FF8C0022", color: "#FF8C00", borderRadius: 3,
+          padding: "1px 7px", fontSize: 10, fontWeight: 800, letterSpacing: "0.06em",
+          border: "1px solid #FF8C0044", flexShrink: 0,
+        }}>
+          ⚔ CONTESTED
+        </span>
+        <span style={{ fontWeight: 700, fontSize: 13, color: "#e6edf3", flex: 1 }}>{item.system_name}</span>
+        {item.power_state && (
+          <span style={{
+            background: ppStateColor(item.power_state), color: "#fff",
+            borderRadius: 4, padding: "2px 7px", fontSize: 10, fontWeight: 600, flexShrink: 0,
+          }}>
+            {PP_STATE_LABELS[item.power_state] ?? item.power_state}
+          </span>
+        )}
+        <span style={{ fontWeight: 700, fontSize: 12, color: "#FF8C00", flexShrink: 0, minWidth: 52, textAlign: "right" }}>
+          {item.score.toFixed(0)} pts
+        </span>
+      </div>
+
+      {/* Owner + progress row */}
+      <div style={{ display: "flex", gap: 16, fontSize: 11, color: "#8b949e", flexWrap: "wrap", marginBottom: pct != null ? 6 : 0 }}>
+        <span>
+          Owner: <strong style={{ color: "#FF8C00" }}>{item.controlling_power}</strong>
+        </span>
+        {item.distance_from_attacker != null && (
+          <span>Dist: <strong style={{ color: item.distance_from_attacker <= 10 ? "#FF8C00" : "#8b949e" }}>
+            {item.distance_from_attacker.toFixed(1)} LY
+          </strong></span>
+        )}
+        {item.days_to_downgrade != null && (
+          <span>
+            {item.days_to_downgrade === 0
+              ? <strong style={{ color: "#4AD94A" }}>Collapse NOW ✓</strong>
+              : <span>Collapse in: <strong style={{ color: item.days_to_downgrade < 3 ? "#4AD94A" : "#D9A84A" }}>
+                  ~{item.days_to_downgrade.toFixed(1)}d
+                </strong></span>
+            }
+          </span>
+        )}
+        {item.reinforcement != null && item.undermining != null && (
+          <span>
+            R: <strong style={{ color: "#4AD94A" }}>{item.reinforcement.toLocaleString()}</strong>
+            {" "}U: <strong style={{ color: item.undermining > item.reinforcement ? "#D94A4A" : "#8b949e" }}>
+              {item.undermining.toLocaleString()}
+            </strong>
+          </span>
+        )}
+      </div>
+
+      {/* Progress bar */}
+      {pct != null && (
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#8b949e", marginBottom: 2 }}>
+            <span>Enemy control: {pct.toFixed(1)}%</span>
+            {item.trend === "worsening" && <span style={{ color: "#4AD94A" }}>↘ Weakening</span>}
+            {item.trend === "improving" && <span style={{ color: "#D94A4A" }}>↗ Strengthening</span>}
+          </div>
+          <div style={{ height: 4, borderRadius: 2, background: "#21262d", overflow: "hidden" }}>
+            <div style={{
+              height: "100%",
+              width: `${pct}%`,
+              background: pct <= 20 ? "#4AD94A" : pct <= 50 ? "#D9A84A" : "#D94A4A",
+              borderRadius: 2, transition: "width 0.3s",
+            }} />
+          </div>
+        </div>
+      )}
+
+      {/* Reasons */}
+      {item.reasons.length > 0 && (
+        <div style={{ fontSize: 11, color: "#8b949e", marginTop: 5, lineHeight: 1.5 }}>
+          {item.reasons.slice(0, 3).map((r, i) => <div key={i}>{r}</div>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ContestedSection({ items, loading }: { items: TargetAnalysisItem[]; loading: boolean }) {
+  if (!loading && items.length === 0) return null;
+  return (
+    <div style={{ flex: 1, minWidth: 280 }}>
+      <h4 style={{ margin: "0 0 10px", fontSize: 12, fontWeight: 700, color: "#FF8C00", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+        ⚔ Contested Systems{" "}
+        <span style={{ color: "#57606a", fontWeight: 400 }}>
+          {loading ? "(loading…)" : `(${items.length})`}
+        </span>
+      </h4>
+      {loading && <p style={{ fontSize: 13, color: "#57606a", margin: 0 }}>Loading contested systems…</p>}
+      {!loading && items.slice(0, 15).map((item) => <ContestedRow key={item.system_id64} item={item} />)}
+    </div>
+  );
+}
+
+export default function RecommendationPanel({ recommendations, loading, contested, loadingContested }: Props) {
   const [collapsed, setCollapsed] = useState(false);
 
   const criticalCount = recommendations?.fortify.filter(i => i.score >= 950 || i.days_to_failure === 0).length ?? 0;
@@ -307,6 +420,11 @@ export default function RecommendationPanel({ recommendations, loading }: Props)
             )}
             <span style={{ fontSize: 12, color: "#57606a" }}>
               {recommendations.fortify.length} fortify · {recommendations.expand.length} expand
+              {(contested.length > 0 || loadingContested) && (
+                <span style={{ marginLeft: 6, color: "#FF8C00", fontWeight: 700 }}>
+                  · {loadingContested ? "…" : contested.length} ⚔ contested
+                </span>
+              )}
             </span>
           </div>
         )}
@@ -327,6 +445,7 @@ export default function RecommendationPanel({ recommendations, loading }: Props)
             <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
               <Section title="Fortify Priorities" items={recommendations.fortify} color="#D94A4A" />
               <Section title="Expansion Targets"  items={recommendations.expand}  color="#4A90D9" />
+              <ContestedSection items={contested} loading={loadingContested} />
             </div>
           )}
         </div>
