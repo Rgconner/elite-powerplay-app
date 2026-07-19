@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { RecommendationsResponse, RecommendationItem } from "../api/recommendations";
-import { TargetAnalysisItem } from "../api/targeting";
+import { ContestedSystemInfo } from "../api/contested";
 import { ppStateColor, PP_STATE_LABELS } from "../constants/ppColors";
 
 interface Props {
   recommendations: RecommendationsResponse | null;
   loading: boolean;
-  contested: TargetAnalysisItem[];
+  contested: ContestedSystemInfo[];
   loadingContested: boolean;
 }
 
@@ -283,7 +283,7 @@ function Section({ title, items, color }: { title: string; items: Recommendation
 
 // ── Contested Systems section ──────────────────────────────────────────────
 
-function ContestedRow({ item }: { item: TargetAnalysisItem }) {
+function ContestedRow({ item }: { item: ContestedSystemInfo }) {
   const pct = item.control_progress != null
     ? Math.max(0, Math.min(1, item.control_progress)) * 100
     : null;
@@ -293,7 +293,7 @@ function ContestedRow({ item }: { item: TargetAnalysisItem }) {
       padding: "10px 12px", marginBottom: 6, borderRadius: 6,
       background: "#1a1000", border: "1px solid #FF8C0055",
     }}>
-      {/* Header row */}
+      {/* Header row — no score, just name + state badge */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
         <span style={{
           background: "#FF8C0022", color: "#FF8C00", borderRadius: 3,
@@ -302,80 +302,65 @@ function ContestedRow({ item }: { item: TargetAnalysisItem }) {
         }}>
           ⚔ CONTESTED
         </span>
-        <span style={{ fontWeight: 700, fontSize: 13, color: "#e6edf3", flex: 1 }}>{item.system_name}</span>
-        {item.power_state && (
-          <span style={{
-            background: ppStateColor(item.power_state), color: "#fff",
-            borderRadius: 4, padding: "2px 7px", fontSize: 10, fontWeight: 600, flexShrink: 0,
-          }}>
-            {PP_STATE_LABELS[item.power_state] ?? item.power_state}
-          </span>
-        )}
-        <span style={{ fontWeight: 700, fontSize: 12, color: "#FF8C00", flexShrink: 0, minWidth: 52, textAlign: "right" }}>
-          {item.score.toFixed(0)} pts
+        <span style={{ fontWeight: 700, fontSize: 13, color: "#e6edf3", flex: 1 }}>
+          <a
+            href={`https://www.edsm.net/en/system/id/-/name/${encodeURIComponent(item.system_name)}`}
+            target="_blank" rel="noreferrer"
+            style={{ color: "#FF8C00", textDecoration: "none" }}
+          >
+            {item.system_name}
+          </a>
+        </span>
+        <span style={{
+          background: ppStateColor("Contested"), color: "#fff",
+          borderRadius: 4, padding: "2px 7px", fontSize: 10, fontWeight: 600, flexShrink: 0,
+        }}>
+          Contested
         </span>
       </div>
 
-      {/* Owner + progress row */}
+      {/* Detail row — owner, distance, R/U */}
       <div style={{ display: "flex", gap: 16, fontSize: 11, color: "#8b949e", flexWrap: "wrap", marginBottom: pct != null ? 6 : 0 }}>
         <span>
-          Owner: <strong style={{ color: "#FF8C00" }}>{item.controlling_power}</strong>
+          Controlled by: <strong style={{ color: "#e6edf3" }}>{item.controlling_power}</strong>
         </span>
-        {item.distance_from_attacker != null && (
-          <span>Dist: <strong style={{ color: item.distance_from_attacker <= 10 ? "#FF8C00" : "#8b949e" }}>
-            {item.distance_from_attacker.toFixed(1)} LY
-          </strong></span>
-        )}
-        {item.days_to_downgrade != null && (
+        {item.distance_from_power != null && (
           <span>
-            {item.days_to_downgrade === 0
-              ? <strong style={{ color: "#4AD94A" }}>Collapse NOW ✓</strong>
-              : <span>Collapse in: <strong style={{ color: item.days_to_downgrade < 3 ? "#4AD94A" : "#D9A84A" }}>
-                  ~{item.days_to_downgrade.toFixed(1)}d
-                </strong></span>
-            }
-          </span>
-        )}
-        {item.reinforcement != null && item.undermining != null && (
-          <span>
-            R: <strong style={{ color: "#4AD94A" }}>{item.reinforcement.toLocaleString()}</strong>
-            {" "}U: <strong style={{ color: item.undermining > item.reinforcement ? "#D94A4A" : "#8b949e" }}>
-              {item.undermining.toLocaleString()}
+            Dist: <strong style={{ color: item.distance_from_power <= 15 ? "#FF8C00" : "#8b949e" }}>
+              {item.distance_from_power.toFixed(1)} LY
             </strong>
           </span>
         )}
+        {item.reinforcement != null && (
+          <span>R: <strong style={{ color: "#4AD94A" }}>{item.reinforcement.toLocaleString()}</strong></span>
+        )}
+        {item.undermining != null && (
+          <span>U: <strong style={{
+            color: (item.undermining ?? 0) > (item.reinforcement ?? 0) ? "#D94A4A" : "#8b949e"
+          }}>{item.undermining.toLocaleString()}</strong></span>
+        )}
       </div>
 
-      {/* Progress bar */}
+      {/* Progress bar — control_progress for this contested system */}
       {pct != null && (
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#8b949e", marginBottom: 2 }}>
-            <span>Enemy control: {pct.toFixed(1)}%</span>
-            {item.trend === "worsening" && <span style={{ color: "#4AD94A" }}>↘ Weakening</span>}
-            {item.trend === "improving" && <span style={{ color: "#D94A4A" }}>↗ Strengthening</span>}
+            <span>Control progress: {pct.toFixed(1)}%</span>
           </div>
           <div style={{ height: 4, borderRadius: 2, background: "#21262d", overflow: "hidden" }}>
             <div style={{
-              height: "100%",
-              width: `${pct}%`,
-              background: pct <= 20 ? "#4AD94A" : pct <= 50 ? "#D9A84A" : "#D94A4A",
+              height: "100%", width: `${pct}%`,
+              background: "#FF8C00",
               borderRadius: 2, transition: "width 0.3s",
             }} />
           </div>
-        </div>
-      )}
-
-      {/* Reasons */}
-      {item.reasons.length > 0 && (
-        <div style={{ fontSize: 11, color: "#8b949e", marginTop: 5, lineHeight: 1.5 }}>
-          {item.reasons.slice(0, 3).map((r, i) => <div key={i}>{r}</div>)}
         </div>
       )}
     </div>
   );
 }
 
-function ContestedSection({ items, loading }: { items: TargetAnalysisItem[]; loading: boolean }) {
+function ContestedSection({ items, loading }: { items: ContestedSystemInfo[]; loading: boolean }) {
   if (!loading && items.length === 0) return null;
   return (
     <div style={{ flex: 1, minWidth: 280 }}>
@@ -385,8 +370,12 @@ function ContestedSection({ items, loading }: { items: TargetAnalysisItem[]; loa
           {loading ? "(loading…)" : `(${items.length})`}
         </span>
       </h4>
-      {loading && <p style={{ fontSize: 13, color: "#57606a", margin: 0 }}>Loading contested systems…</p>}
-      {!loading && items.slice(0, 15).map((item) => <ContestedRow key={item.system_id64} item={item} />)}
+      <p style={{ fontSize: 11, color: "#57606a", margin: "0 0 8px", lineHeight: 1.5 }}>
+        Systems with <code style={{ fontSize: 10 }}>power_state = Contested</code> near your territory.
+        Listed by proximity — no score applied.
+      </p>
+      {loading && <p style={{ fontSize: 13, color: "#57606a", margin: 0 }}>Loading…</p>}
+      {!loading && items.slice(0, 20).map((item) => <ContestedRow key={item.system_id64} item={item} />)}
     </div>
   );
 }
@@ -441,10 +430,14 @@ export default function RecommendationPanel({ recommendations, loading, conteste
           {!recommendations && !loading && (
             <p style={{ fontSize: 13, color: "#57606a", margin: 0 }}>Select a Power to see recommendations.</p>
           )}
-          {recommendations && (
+          {(recommendations || contested.length > 0 || loadingContested) && (
             <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
-              <Section title="Fortify Priorities" items={recommendations.fortify} color="#D94A4A" />
-              <Section title="Expansion Targets"  items={recommendations.expand}  color="#4A90D9" />
+              {recommendations && (
+                <>
+                  <Section title="Fortify Priorities" items={recommendations.fortify} color="#D94A4A" />
+                  <Section title="Expansion Targets"  items={recommendations.expand}  color="#4A90D9" />
+                </>
+              )}
               <ContestedSection items={contested} loading={loadingContested} />
             </div>
           )}

@@ -13,7 +13,12 @@ Version history:
                      Target Analysis, Contested detection, public ingest-status
                      and version endpoints, JWT admin auth, change-password,
                      configurable scoring weights persisted in AdminSetting table.
+  1.1.0  2025-07-11  Contested systems rewrite: new GET /api/powers/{name}/contested
+                     endpoint queries power_state='Contested' directly from Spansh
+                     data. New ContestedSystemInfo schema (no scoring). Removed
+                     broken subquery that incorrectly used pp_system_snapshots.power
+                     (controller field) to detect attacker presence.
 """
 
-BACKEND_VERSION      = "1.0.0"
-BACKEND_RELEASE_DATE = "2025-07-11T00:00:00Z"
+BACKEND_VERSION      = "1.1.0"
+BACKEND_RELEASE_DATE = "2025-07-11T12:00:00Z"

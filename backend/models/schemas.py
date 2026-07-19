@@ -203,3 +203,25 @@ class TargetAnalysisResponse(BaseModel):
     # Active scoring thresholds sent back so the UI can render calibrated labels
     # without needing a separate /admin/settings round-trip
     progress_thresholds: dict[str, float] = {}
+
+
+# ---------------------------------------------------------------------------
+# Contested Systems
+# ---------------------------------------------------------------------------
+
+
+class ContestedSystemInfo(BaseModel):
+    """A system currently in Contested state where the selected power is one
+    of the contesters.  No scoring — listed purely for awareness."""
+
+    system_id64: int
+    system_name: str
+    controlling_power: str          # the power whose snapshot has power_state='Contested'
+    power_state: str = "Contested"
+    control_progress: Optional[float] = None
+    reinforcement: Optional[int] = None
+    undermining: Optional[int] = None
+    distance_from_power: Optional[float] = None   # distance from nearest system of selected power
+    x: Optional[float] = None
+    y: Optional[float] = None
+    z: Optional[float] = None

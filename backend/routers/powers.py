@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from db.session import get_db
 from models.models import PPSystem, PPSystemSnapshot
 from models.schemas import (
+    ContestedSystemInfo,
     PPSystemEntry,
     PowersList,
     RecommendationsResponse,
@@ -174,6 +175,98 @@ def get_power_recommendations(
 
 
 # ---------------------------------------------------------------------------
+# GET /api/powers/{name}/contested
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{name}/contested", response_model=list[ContestedSystemInfo])
+def get_contested_systems(
+    name: str,
+    db: Session = Depends(get_db),
+) -> list[ContestedSystemInfo]:
+    """Return all systems currently in Contested state that are relevant to
+    the given power.
+
+    A system is returned when its latest snapshot has power_state = 'Contested'
+    AND it is controlled by any power (including the selected power itself —
+    it may be one of ours being contested by others, or one of theirs we are
+    contesting).
+
+    The Spansh API emits power_state='Contested' directly when two or more
+    powers are fighting over a system.  We surface ALL such systems near the
+    selected power's territory, sorted by distance.
+    """
+    # Get the latest snapshot for every Contested system across all powers
+    contested_rows = db.execute(text("""
+        SELECT DISTINCT ON (system_id)
+               system_id, power, power_state,
+               control_progress, reinforcement, undermining
+        FROM pp_system_snapshots
+        WHERE power_state = 'Contested'
+        ORDER BY system_id, snapshot_time DESC
+    """)).mappings().all()
+
+    if not contested_rows:
+        return []
+
+    contested_sys_ids = [r["system_id"] for r in contested_rows]
+    contested_snaps   = {r["system_id"]: r for r in contested_rows}
+
+    # Fetch system coords
+    contested_systems = db.query(PPSystem).filter(
+        PPSystem.id.in_(contested_sys_ids)
+    ).all()
+    sys_by_id = {s.id: s for s in contested_systems}
+
+    # Get coords for the selected power's systems to compute distance
+    power_snap_rows = db.execute(text("""
+        SELECT DISTINCT ON (system_id) system_id
+        FROM pp_system_snapshots
+        WHERE power = :power
+        ORDER BY system_id, snapshot_time DESC
+    """), {"power": name}).mappings().all()
+
+    power_sys_ids = [r["system_id"] for r in power_snap_rows]
+    power_systems = db.query(PPSystem).filter(
+        PPSystem.id.in_(power_sys_ids)
+    ).all() if power_sys_ids else []
+    power_coords = [
+        (s.x or 0.0, s.y or 0.0, s.z or 0.0) for s in power_systems
+    ]
+
+    results: list[ContestedSystemInfo] = []
+    for sid, snap in contested_snaps.items():
+        system = sys_by_id.get(sid)
+        if system is None:
+            continue
+
+        sx, sy, sz = system.x or 0.0, system.y or 0.0, system.z or 0.0
+
+        dist: Optional[float] = None
+        if power_coords:
+            dist = min(
+                _dist3(sx, sy, sz, cx, cy, cz)
+                for cx, cy, cz in power_coords
+            )
+
+        results.append(ContestedSystemInfo(
+            system_id64=system.system_id64,
+            system_name=system.name,
+            controlling_power=snap["power"] or "Unknown",
+            power_state="Contested",
+            control_progress=snap["control_progress"],
+            reinforcement=snap["reinforcement"] if (snap["reinforcement"] or 0) > 0 else None,
+            undermining=snap["undermining"] if (snap["undermining"] or 0) > 0 else None,
+            distance_from_power=dist,
+            x=sx, y=sy, z=sz,
+        ))
+
+    # Sort by distance to the selected power's territory
+    results.sort(key=lambda r: r.distance_from_power if r.distance_from_power is not None else 9999.0)
+    return results
+
+
+# ---------------------------------------------------------------------------
 # POST /api/powers/target-analysis
 # ---------------------------------------------------------------------------
 
@@ -289,23 +382,18 @@ def target_analysis(
         ORDER BY system_id, snapshot_time DESC
     """), {"powers": targets}).mappings().all()
 
-    # ── 2b. Also fetch Contested systems where attacker has a foothold ────────
-    # Contested = any system in the DB where latest snapshot power ≠ attacker
-    # but has a snapshot row with power = attacker (attacker was there recently)
-    # Simpler approach: query pp_system_snapshots for systems where ANY snapshot
-    # belongs to one of the target powers AND there is also a snapshot for the
-    # attacker — these are contested.
-    contested_sys_ids: set[int] = set()
-    if attacker_snap_rows:
-        contested_rows = db.execute(text("""
-            SELECT DISTINCT s.system_id
-            FROM pp_system_snapshots s
-            WHERE s.power = ANY(:targets)
-              AND s.system_id IN (
-                  SELECT system_id FROM pp_system_snapshots WHERE power = :attacker
-              )
-        """), {"targets": targets, "attacker": attacker}).all()
-        contested_sys_ids = {r[0] for r in contested_rows}
+    # ── 2b. Contested systems — identified from undermining data ──────────────
+    # "Contested" means: a system controlled by a target power where undermining
+    # is actively beating reinforcement (net_u > 0), AND the system is within
+    # proximity of the attacker's territory.
+    #
+    # NOTE: pp_system_snapshots.power is the CONTROLLING power, not the underminer.
+    # There is no "who is undermining me" field in Spansh data — only the totals.
+    # So we cannot filter by "attacker has a row there". Instead we mark as
+    # contested any system where undermining > reinforcement in the latest snapshot,
+    # indicating active net pressure — regardless of who is applying it.
+    # These are the highest-priority undermine targets for *any* power's campaign.
+    contested_sys_ids: set[int] = set()   # populated below after snap_by_id is built
 
     if not target_snap_rows:
         return TargetAnalysisResponse(
@@ -354,6 +442,13 @@ def target_analysis(
         if p_new > p_old + 0.01:
             return "improving"
         return "stable"
+
+    # ── 3b. Build contested_sys_ids from snap data (U > R = actively pressured) ─
+    for sid, snap in snap_by_id.items():
+        r_val = snap["reinforcement"] or 0
+        u_val = snap["undermining"]   or 0
+        if u_val > r_val and u_val > 0:
+            contested_sys_ids.add(sid)
 
     # ── 4. Score each target system ───────────────────────────────────────────
     items: list[TargetAnalysisItem] = []

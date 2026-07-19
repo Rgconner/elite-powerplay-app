@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { getPowerSystems, listPowers, PPSystemEntry } from "../api/powers";
+import { getPowerSystems, PPSystemEntry } from "../api/powers";
 import { getRecommendations, RecommendationsResponse, RecommendationItem } from "../api/recommendations";
-import { getTargetAnalysis, TargetAnalysisItem } from "../api/targeting";
+import { getContestedSystems, ContestedSystemInfo } from "../api/contested";
 import { useSelectionState } from "../hooks/useSelectionState";
 import { ppStateColor, PP_STATE_LABELS } from "../constants/ppColors";
 import PowerSelector from "../components/PowerSelector";
@@ -287,7 +287,7 @@ export default function TableView() {
 
   const [systems,           setSystems]           = useState<PPSystemEntry[]>([]);
   const [recommendations,   setRecommendations]   = useState<RecommendationsResponse | null>(null);
-  const [contestedSystems,  setContestedSystems]  = useState<TargetAnalysisItem[]>([]);
+  const [contestedSystems,  setContestedSystems]  = useState<ContestedSystemInfo[]>([]);
   const [loadingSystems,    setLoadingSystems]    = useState(false);
   const [loadingRecos,      setLoadingRecos]      = useState(false);
   const [loadingContested,  setLoadingContested]  = useState(false);
@@ -349,27 +349,14 @@ export default function TableView() {
       .finally(() => setLoadingRecos(false));
   }, [powerName, refSystem?.id]);
 
-  // Fetch contested systems: systems controlled by OTHER powers where our power
-  // also has a historical snapshot (we've been undermining there).
-  // We do this by running a target-analysis with our power as attacker against
-  // all OTHER powers in the dataset, then filtering for contested=true.
+  // Fetch contested systems — direct endpoint: power_state='Contested' near our territory
   useEffect(() => {
     if (!powerName) { setContestedSystems([]); return; }
     setLoadingContested(true);
-    listPowers()
-      .then(allPowers => {
-        const others = allPowers.filter(p => p !== powerName);
-        if (others.length === 0) {
-          setContestedSystems([]);
-          setLoadingContested(false);
-          return;
-        }
-        getTargetAnalysis(powerName, others)
-          .then(r => setContestedSystems(r.targets.filter(t => t.contested)))
-          .catch(() => setContestedSystems([]))
-          .finally(() => setLoadingContested(false));
-      })
-      .catch(() => setLoadingContested(false));
+    getContestedSystems(powerName)
+      .then(setContestedSystems)
+      .catch(() => setContestedSystems([]))
+      .finally(() => setLoadingContested(false));
   }, [powerName]);
 
   // Default sort: by control_progress ascending (most at-risk first) when no ref;
