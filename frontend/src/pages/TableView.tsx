@@ -1,13 +1,14 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { getPowerSystems, PPSystemEntry } from "../api/powers";
 import { getRecommendations, RecommendationsResponse, RecommendationItem } from "../api/recommendations";
-import { getContestedSystems, ContestedSystemInfo } from "../api/contested";
+import { getContestedSystems, ContestedSystemInfo, parseConflictProgress } from "../api/contested";
 import { useSelectionState } from "../hooks/useSelectionState";
 import { ppStateColor, PP_STATE_LABELS } from "../constants/ppColors";
 import PowerSelector from "../components/PowerSelector";
 import RefSystemSelector from "../components/RefSystemSelector";
 import SystemListInput from "../components/SystemListInput";
 import RecommendationPanel from "../components/RecommendationPanel";
+import { useFilterSettings, FILTER_DEFAULTS } from "../hooks/useFilterSettings";
 
 // ── PP Cycle clock helpers ─────────────────────────────────────────────────
 // Cycles reset every Thursday at 07:00 UTC
@@ -295,9 +296,9 @@ export default function TableView() {
   const [sortKey,           setSortKey]           = useState<string>("control_progress");
   const [sortDir,           setSortDir]           = useState<SortDir>("asc");
 
-  // Expand distance filter sliders (client-side, do not re-query backend)
-  const [expandFortDist,    setExpandFortDist]    = useState<number>(20);
-  const [expandShDist,      setExpandShDist]      = useState<number>(30);
+  // Centralised filter settings with optional cookie persistence
+  const { settings, saveEnabled, setSaveEnabled, set: setFilter } = useFilterSettings();
+  const { expandFortDist, expandShDist, expandMinMerits, contestedMaxGap } = settings;
 
   // Spansh ingest status (public endpoint, no auth)
   const [ingestStatus,      setIngestStatus]      = useState<IngestStatus | null>(null);
@@ -399,26 +400,42 @@ export default function TableView() {
 
   const showDist = !!refSystem;
 
-  // Client-side filter: hide expand items that don't meet the slider distance
+  // Client-side filters for expand targets
   const filteredRecommendations = useMemo<RecommendationsResponse | null>(() => {
     if (!recommendations) return null;
     const filteredExpand = recommendations.expand.filter(item => {
+      // Distance filter: suppress items whose anchor type doesn't match the enabled ranges
       const anchor = item.anchor_type;
-      if (anchor === "fortified") {
-        // Only kept if the item appears within the Fortified slider distance.
-        // We approximate using distance_from_center as a proxy: if no dist available, keep it.
-        // The real distance check was done server-side; here we just let the slider visually
-        // suppress items whose anchor_type doesn't match the enabled ranges.
-        return expandFortDist > 0;
-      }
-      if (anchor === "stronghold") {
-        return expandShDist > 0;
-      }
-      // "both" → kept if either slider > 0
-      return expandFortDist > 0 || expandShDist > 0;
+      if (anchor === "fortified" && expandFortDist === 0) return false;
+      if (anchor === "stronghold" && expandShDist === 0) return false;
+      if (anchor === "both" && expandFortDist === 0 && expandShDist === 0) return false;
+
+      // Merit threshold filter: hide targets needing fewer than the minimum
+      // RecommendationItem carries a `merits_needed` field from the backend
+      const meritsNeeded = (item as unknown as Record<string, unknown>)["merits_needed"];
+      if (
+        expandMinMerits > 0 &&
+        typeof meritsNeeded === "number" &&
+        meritsNeeded < expandMinMerits
+      ) return false;
+
+      return true;
     });
     return { ...recommendations, expand: filteredExpand };
-  }, [recommendations, expandFortDist, expandShDist]);
+  }, [recommendations, expandFortDist, expandShDist, expandMinMerits]);
+
+  // Client-side filter for contested systems by gap between top two powers
+  const filteredContested = useMemo<ContestedSystemInfo[]>(() => {
+    if (contestedMaxGap >= 100) return contestedSystems;  // "show all" default
+    return contestedSystems.filter(item => {
+      const entries = parseConflictProgress(item);
+      if (entries.length < 2) return true;  // can't compute gap — keep it
+      const ranked = [...entries].sort((a, b) => b.progress - a.progress);
+      // progress is normalised 0–1+ where 1.0 = 120k merits
+      const gapPct = (ranked[0].progress - ranked[1].progress) * 100;
+      return gapPct <= contestedMaxGap;
+    });
+  }, [contestedSystems, contestedMaxGap]);
 
   return (
     <div style={{
@@ -451,43 +468,160 @@ export default function TableView() {
         )}
       </div>
 
-      {/* Expand distance filter sliders */}
-      {recommendations && recommendations.expand.length > 0 && (
+      {/* ── Filter bars ─────────────────────────────────────────────────────── */}
+      {(recommendations?.expand.length ?? 0) > 0 && (
         <div style={{
-          display: "flex", gap: 20, flexWrap: "wrap", alignItems: "center",
+          display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center",
           background: "#0d2a4a22", border: "1px solid #1f6feb33", borderRadius: 6,
-          padding: "8px 14px", marginBottom: 10, fontSize: 12,
+          padding: "8px 14px", marginBottom: 6, fontSize: 12,
         }}>
-          <span style={{ color: "#4A90D9", fontWeight: 700, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          <span style={{ color: "#4A90D9", fontWeight: 700, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", flexShrink: 0 }}>
             Expand Filters
           </span>
+
+          {/* Fortified anchor distance */}
           <label style={{ display: "flex", alignItems: "center", gap: 8, color: "#8b949e" }}>
-            <span style={{ color: "#4AD94A", fontWeight: 600 }}>⬡ Fortified anchor ≤</span>
+            <span style={{ color: "#4AD94A", fontWeight: 600, whiteSpace: "nowrap" }}>⬡ Fortified anchor ≤</span>
             <input
               type="range" min={0} max={50} step={5}
               value={expandFortDist}
-              onChange={e => setExpandFortDist(Number(e.target.value))}
+              onChange={e => setFilter("expandFortDist", Number(e.target.value))}
               style={{ accentColor: "#4AD94A", width: 100 }}
             />
             <span style={{ color: "#e6edf3", minWidth: 32, fontWeight: 700 }}>
               {expandFortDist === 0 ? "OFF" : `${expandFortDist} LY`}
             </span>
           </label>
+
+          {/* Stronghold anchor distance */}
           <label style={{ display: "flex", alignItems: "center", gap: 8, color: "#8b949e" }}>
-            <span style={{ color: "#4A90D9", fontWeight: 600 }}>★ Stronghold anchor ≤</span>
+            <span style={{ color: "#4A90D9", fontWeight: 600, whiteSpace: "nowrap" }}>★ Stronghold anchor ≤</span>
             <input
               type="range" min={0} max={60} step={5}
               value={expandShDist}
-              onChange={e => setExpandShDist(Number(e.target.value))}
+              onChange={e => setFilter("expandShDist", Number(e.target.value))}
               style={{ accentColor: "#4A90D9", width: 100 }}
             />
             <span style={{ color: "#e6edf3", minWidth: 32, fontWeight: 700 }}>
               {expandShDist === 0 ? "OFF" : `${expandShDist} LY`}
             </span>
           </label>
-          <span style={{ color: "#57606a", fontSize: 11 }}>
-            {filteredRecommendations?.expand.length ?? 0} / {recommendations.expand.length} expand targets shown
+
+          {/* Min merits filter — new */}
+          <label style={{ display: "flex", alignItems: "center", gap: 8, color: "#8b949e" }}>
+            <span style={{ color: "#D9A84A", fontWeight: 600, whiteSpace: "nowrap" }}>⚡ Min merits ≥</span>
+            <input
+              type="range" min={0} max={120000} step={5000}
+              value={expandMinMerits}
+              onChange={e => setFilter("expandMinMerits", Number(e.target.value))}
+              style={{ accentColor: "#D9A84A", width: 120 }}
+            />
+            <input
+              type="number" min={0} max={120000} step={1000}
+              value={expandMinMerits}
+              onChange={e => setFilter("expandMinMerits", Math.max(0, Math.min(120000, Number(e.target.value))))}
+              style={{
+                width: 72, background: "#161b22", border: "1px solid #30363d", borderRadius: 4,
+                color: "#e6edf3", fontSize: 12, padding: "2px 5px", fontVariantNumeric: "tabular-nums",
+              }}
+            />
+          </label>
+
+          <span style={{ color: "#57606a", fontSize: 11, marginLeft: "auto" }}>
+            {filteredRecommendations?.expand.length ?? 0} / {recommendations!.expand.length} shown
           </span>
+        </div>
+      )}
+
+      {/* Contested gap filter (only shown when contested data is present) */}
+      {(contestedSystems.length > 0 || loadingContested) && (
+        <div style={{
+          display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center",
+          background: "#1a100022", border: "1px solid #FF8C0033", borderRadius: 6,
+          padding: "8px 14px", marginBottom: 6, fontSize: 12,
+        }}>
+          <span style={{ color: "#FF8C00", fontWeight: 700, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", flexShrink: 0 }}>
+            Contested Filters
+          </span>
+
+          {/* Max gap slider */}
+          <label style={{ display: "flex", alignItems: "center", gap: 8, color: "#8b949e" }}>
+            <span
+              style={{ color: "#FF8C00", fontWeight: 600, whiteSpace: "nowrap", cursor: "help", borderBottom: "1px dashed #FF8C0066" }}
+              title={
+                "Hides contested systems where the leading power is more than N% ahead of the second-placed power.\n" +
+                "Example: setting 15% means only show systems where the gap between 1st and 2nd place is ≤ 15%.\n" +
+                "Lower values = more evenly-matched contests where your intervention could change the outcome.\n" +
+                "100% = show all contested systems."
+              }
+            >
+              ⚔ Max lead gap ≤
+            </span>
+            <input
+              type="range" min={0} max={100} step={5}
+              value={contestedMaxGap}
+              onChange={e => setFilter("contestedMaxGap", Number(e.target.value))}
+              style={{ accentColor: "#FF8C00", width: 120 }}
+            />
+            <input
+              type="number" min={0} max={100} step={1}
+              value={contestedMaxGap}
+              onChange={e => setFilter("contestedMaxGap", Math.max(0, Math.min(100, Number(e.target.value))))}
+              style={{
+                width: 48, background: "#161b22", border: "1px solid #30363d", borderRadius: 4,
+                color: "#e6edf3", fontSize: 12, padding: "2px 5px", fontVariantNumeric: "tabular-nums",
+              }}
+            />
+            <span style={{ color: "#e6edf3", fontWeight: 700 }}>
+              {contestedMaxGap >= 100 ? "ALL" : `${contestedMaxGap}%`}
+            </span>
+          </label>
+
+          <span style={{ color: "#57606a", fontSize: 11, marginLeft: "auto" }}>
+            {filteredContested.length} / {contestedSystems.length} contested shown
+          </span>
+        </div>
+      )}
+
+      {/* Cookie persistence checkbox — shown whenever any filter bar is visible */}
+      {((recommendations?.expand.length ?? 0) > 0 || contestedSystems.length > 0) && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "4px 14px", marginBottom: 10, fontSize: 12,
+        }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", color: "#8b949e", userSelect: "none" }}>
+            <input
+              type="checkbox"
+              checked={saveEnabled}
+              onChange={e => setSaveEnabled(e.target.checked)}
+              style={{ accentColor: "#4A90D9", width: 14, height: 14 }}
+            />
+            <span>Remember filter settings in this browser</span>
+          </label>
+          {saveEnabled && (
+            <span style={{ color: "#57606a", fontSize: 11 }}>
+              ✓ Settings are saved (cookie expires in 365 days)
+            </span>
+          )}
+          {!saveEnabled && (
+            <span style={{ color: "#57606a", fontSize: 11 }}>
+              Defaults loaded — check the box to persist your settings
+            </span>
+          )}
+          {/* Reset to defaults */}
+          <button
+            onClick={() => {
+              Object.entries(FILTER_DEFAULTS).forEach(([k, v]) =>
+                setFilter(k as keyof typeof FILTER_DEFAULTS, v as never)
+              );
+            }}
+            style={{
+              marginLeft: 12, background: "none", border: "1px solid #30363d", borderRadius: 4,
+              color: "#8b949e", fontSize: 11, padding: "2px 8px", cursor: "pointer",
+            }}
+          >
+            Reset to defaults
+          </button>
         </div>
       )}
 
@@ -495,7 +629,7 @@ export default function TableView() {
       <RecommendationPanel
         recommendations={filteredRecommendations}
         loading={loadingRecos}
-        contested={contestedSystems}
+        contested={filteredContested}
         loadingContested={loadingContested}
       />
 
@@ -644,9 +778,14 @@ export default function TableView() {
               Systems currently in Contested state — sorted by proximity to {powerName}
             </span>
             {loadingContested && <span style={{ fontSize: 12, color: "#555" }}>Loading…</span>}
+            {!loadingContested && filteredContested.length < contestedSystems.length && (
+              <span style={{ fontSize: 12, color: "#FF8C00" }}>
+                {filteredContested.length} of {contestedSystems.length} shown (gap filter active)
+              </span>
+            )}
           </div>
 
-          {contestedSystems.length > 0 && (
+          {filteredContested.length > 0 && (
             <div style={{ overflowX: "auto", borderRadius: 8, border: "1px solid #FF8C0033" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
@@ -664,7 +803,7 @@ export default function TableView() {
                   </tr>
                 </thead>
                 <tbody>
-                  {contestedSystems.slice(0, 30).map((item, i) => {
+                  {filteredContested.slice(0, 30).map((item, i) => {
                     const r   = item.reinforcement ?? 0;
                     const u   = item.undermining   ?? 0;
                     const net = r - u;
