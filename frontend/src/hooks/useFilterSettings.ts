@@ -18,11 +18,7 @@ import { useState, useEffect, useCallback } from "react";
 // ── Shape of persisted settings ────────────────────────────────────────────
 
 export interface FilterSettings {
-  /** Expand distance filter — hide expand targets anchored from a Fortified system > N LY */
-  expandFortDist: number;
-  /** Expand distance filter — hide expand targets anchored from a Stronghold system > N LY */
-  expandShDist: number;
-  /** Expansion merit filter — hide expand targets with fewer than N merits needed */
+  /** Expansion merit filter — hide expand targets needing more than N merits to acquire */
   expandMinMerits: number;
   /** Contested gap filter — hide contested systems where top power leads next by > N % */
   contestedMaxGap: number;
@@ -31,8 +27,6 @@ export interface FilterSettings {
 // ── Defaults (used when no cookie present) ────────────────────────────────
 
 export const FILTER_DEFAULTS: FilterSettings = {
-  expandFortDist:  20,
-  expandShDist:    30,
   expandMinMerits: 0,
   contestedMaxGap: 100,   // 100 = effectively "show all"
 };

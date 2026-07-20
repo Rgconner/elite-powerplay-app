@@ -287,12 +287,29 @@ def _dist(ax: float, ay: float, az: float, bx: float, by: float, bz: float) -> f
 
 
 def get_latest_snapshots(db: Session) -> dict[int, dict]:
-    """Return latest PP snapshot per pp_systems.id using DISTINCT ON."""
+    """Return latest PP snapshot per pp_systems.id using DISTINCT ON.
+
+    Staleness filter: exclude snapshots where Spansh's own updated_at is older
+    than 24 hours.  This prevents resolved systems (e.g. a formerly-contested
+    system that is now Exploited) from appearing stale in recommendations.
+
+    Rows with NULL spansh_updated_at are only kept if their snapshot_time
+    is also recent (within 48 h), so pre-migration rows eventually age out
+    instead of persisting forever.
+    """
     rows = db.execute(text("""
         SELECT DISTINCT ON (system_id)
                system_id, power, power_state,
-               reinforcement, undermining, control_progress, snapshot_time
+               reinforcement, undermining, control_progress,
+               snapshot_time, spansh_updated_at
         FROM pp_system_snapshots
+        WHERE (
+            spansh_updated_at > NOW() - INTERVAL '24 hours'
+            OR (
+                spansh_updated_at IS NULL
+                AND snapshot_time > NOW() - INTERVAL '48 hours'
+            )
+        )
         ORDER BY system_id, snapshot_time DESC
     """)).mappings().all()
     return {row["system_id"]: dict(row) for row in rows}

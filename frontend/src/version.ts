@@ -23,11 +23,11 @@
  *                      ContestedSystemInfo extended with powers_list & conflict_progress.
  *                      ContestedRow shows per-power coloured progress bars.
  *                      Removed unused pct variable / void pct lint issue.
- *   1.4.0  2025-07-12  Stale data fix: spansh_updated_at surfaced from API.
+ *   1.5.0  2025-07-12  Stale data fix: spansh_updated_at surfaced from API.
  *                      All live queries filter spansh_updated_at > 24h old.
  *                      Contested table: Data Age column, ⚠ amber stale warning.
  *                      formatDataAge() / isStale() helpers added to contested.ts.
  */
 
-export const FRONTEND_VERSION      = "1.4.0";
+export const FRONTEND_VERSION      = "1.5.0";
 export const FRONTEND_RELEASE_DATE = "2025-07-12T12:00:00Z";

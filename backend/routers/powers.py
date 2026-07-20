@@ -7,15 +7,18 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-# Snapshots older than this (by Spansh's own updated_at field) are considered
-# stale and excluded from all live queries.  Historical endpoints (e.g. /history)
-# are NOT filtered — they should return all data for trend analysis.
-# NULL spansh_updated_at (rows ingested before this column was added) are kept
-# so the app degrades gracefully on first deploy after the schema migration.
+# Staleness filter for all live data queries.
+# Uses Spansh's own updated_at field (authoritative game-data age).
+# Rows with NULL spansh_updated_at (ingested before the column was added)
+# are kept ONLY if snapshot_time is recent — so old pre-migration rows
+# eventually age out rather than persisting forever as "valid".
 _STALE_FILTER = """
     AND (
-        spansh_updated_at IS NULL
-        OR spansh_updated_at > NOW() - INTERVAL '24 hours'
+        spansh_updated_at > NOW() - INTERVAL '24 hours'
+        OR (
+            spansh_updated_at IS NULL
+            AND snapshot_time > NOW() - INTERVAL '48 hours'
+        )
     )
 """
 

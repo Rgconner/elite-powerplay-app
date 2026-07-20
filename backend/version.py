@@ -39,7 +39,17 @@ Version history:
                     Added index on spansh_updated_at. Data Age column added to
                     contested table with amber ⚠ warning for stale rows.
                     formatDataAge() / isStale() helpers added to contested.ts.
+   1.5.0  2025-07-12  Stale filter hardened: NULL spansh_updated_at rows now also
+                    gated on snapshot_time < 48h so pre-migration rows age out.
+                    get_latest_snapshots() in scoring.py now applies the same
+                    24h/48h staleness gate — fortify/expand recommendations no
+                    longer use stale data. RST 1153 min-merits filter fixed:
+                    was checking nonexistent merits_needed field; now correctly
+                    uses merits_to_upgrade from RecommendationItem. Expand
+                    Filters distance sliders removed from Table page; only the
+                    'Within merits of acquire' slider remains with tooltip.
+                    expandFortDist/expandShDist removed from FilterSettings.
 """
 
-BACKEND_VERSION      = "1.4.0"
-BACKEND_RELEASE_DATE = "2025-07-12T12:00:00Z"
+BACKEND_VERSION      = "1.5.0"
+BACKEND_RELEASE_DATE = "2025-07-12T16:00:00Z"

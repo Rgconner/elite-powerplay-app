@@ -298,7 +298,7 @@ export default function TableView() {
 
   // Centralised filter settings with optional cookie persistence
   const { settings, saveEnabled, setSaveEnabled, set: setFilter } = useFilterSettings();
-  const { expandFortDist, expandShDist, expandMinMerits, contestedMaxGap } = settings;
+  const { expandMinMerits, contestedMaxGap } = settings;
 
   // Spansh ingest status (public endpoint, no auth)
   const [ingestStatus,      setIngestStatus]      = useState<IngestStatus | null>(null);
@@ -400,29 +400,29 @@ export default function TableView() {
 
   const showDist = !!refSystem;
 
-  // Client-side filters for expand targets
+  // Client-side filter for expand targets: min merits threshold
+  // merits_to_upgrade = additional merits needed to reach 100% (acquisition)
+  // A system at 95k/120k merits has merits_to_upgrade ≈ 25,000 — high value.
+  // A system at 5k/120k merits has merits_to_upgrade ≈ 115,000 — more work needed.
+  // The slider hides systems where merits_to_upgrade EXCEEDS the threshold,
+  // meaning: "only show systems that need LESS than N more merits to acquire".
+  // (i.e. those closest to the acquisition threshold — the highest priority targets)
   const filteredRecommendations = useMemo<RecommendationsResponse | null>(() => {
     if (!recommendations) return null;
     const filteredExpand = recommendations.expand.filter(item => {
-      // Distance filter: suppress items whose anchor type doesn't match the enabled ranges
-      const anchor = item.anchor_type;
-      if (anchor === "fortified" && expandFortDist === 0) return false;
-      if (anchor === "stronghold" && expandShDist === 0) return false;
-      if (anchor === "both" && expandFortDist === 0 && expandShDist === 0) return false;
-
-      // Merit threshold filter: hide targets needing fewer than the minimum
-      // RecommendationItem carries a `merits_needed` field from the backend
-      const meritsNeeded = (item as unknown as Record<string, unknown>)["merits_needed"];
-      if (
-        expandMinMerits > 0 &&
-        typeof meritsNeeded === "number" &&
-        meritsNeeded < expandMinMerits
-      ) return false;
-
+      if (expandMinMerits <= 0) return true;
+      // merits_to_upgrade = how many more merits until acquisition (120k threshold)
+      // Hide items where more merits are needed than the filter allows
+      // i.e. only show systems within N merits of acquisition
+      const meritsLeft = item.merits_to_upgrade;
+      if (meritsLeft !== null && meritsLeft !== undefined) {
+        return meritsLeft <= (120_000 - expandMinMerits);
+      }
+      // No merit data — keep it (don't hide unknowns)
       return true;
     });
     return { ...recommendations, expand: filteredExpand };
-  }, [recommendations, expandFortDist, expandShDist, expandMinMerits]);
+  }, [recommendations, expandMinMerits]);
 
   // Client-side filter for contested systems by gap between top two powers
   const filteredContested = useMemo<ContestedSystemInfo[]>(() => {
@@ -468,7 +468,7 @@ export default function TableView() {
         )}
       </div>
 
-      {/* ── Filter bars ─────────────────────────────────────────────────────── */}
+      {/* ── Expand Filters bar — min merits threshold ──────────────────────── */}
       {(recommendations?.expand.length ?? 0) > 0 && (
         <div style={{
           display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center",
@@ -479,52 +479,38 @@ export default function TableView() {
             Expand Filters
           </span>
 
-          {/* Fortified anchor distance */}
+          {/* Min merits slider: hides systems that need more than (120k - N) merits to acquire */}
+          {/* Setting to 5k = only show systems within 5k merits of the 120k acquisition threshold */}
           <label style={{ display: "flex", alignItems: "center", gap: 8, color: "#8b949e" }}>
-            <span style={{ color: "#4AD94A", fontWeight: 600, whiteSpace: "nowrap" }}>⬡ Fortified anchor ≤</span>
-            <input
-              type="range" min={0} max={50} step={5}
-              value={expandFortDist}
-              onChange={e => setFilter("expandFortDist", Number(e.target.value))}
-              style={{ accentColor: "#4AD94A", width: 100 }}
-            />
-            <span style={{ color: "#e6edf3", minWidth: 32, fontWeight: 700 }}>
-              {expandFortDist === 0 ? "OFF" : `${expandFortDist} LY`}
+            <span
+              style={{ color: "#D9A84A", fontWeight: 600, whiteSpace: "nowrap", cursor: "help", borderBottom: "1px dashed #D9A84A66" }}
+              title={
+                "Hides expansion targets that are far from the acquisition threshold.\n" +
+                "Setting to 5,000 shows only systems within 5,000 merits of the 120,000 acquisition threshold.\n" +
+                "Setting to 0 shows all expansion targets.\n" +
+                "Use this to focus on near-ready acquisitions this cycle."
+              }
+            >
+              ⚡ Within merits of acquire
             </span>
-          </label>
-
-          {/* Stronghold anchor distance */}
-          <label style={{ display: "flex", alignItems: "center", gap: 8, color: "#8b949e" }}>
-            <span style={{ color: "#4A90D9", fontWeight: 600, whiteSpace: "nowrap" }}>★ Stronghold anchor ≤</span>
-            <input
-              type="range" min={0} max={60} step={5}
-              value={expandShDist}
-              onChange={e => setFilter("expandShDist", Number(e.target.value))}
-              style={{ accentColor: "#4A90D9", width: 100 }}
-            />
-            <span style={{ color: "#e6edf3", minWidth: 32, fontWeight: 700 }}>
-              {expandShDist === 0 ? "OFF" : `${expandShDist} LY`}
-            </span>
-          </label>
-
-          {/* Min merits filter — new */}
-          <label style={{ display: "flex", alignItems: "center", gap: 8, color: "#8b949e" }}>
-            <span style={{ color: "#D9A84A", fontWeight: 600, whiteSpace: "nowrap" }}>⚡ Min merits ≥</span>
             <input
               type="range" min={0} max={120000} step={5000}
               value={expandMinMerits}
               onChange={e => setFilter("expandMinMerits", Number(e.target.value))}
-              style={{ accentColor: "#D9A84A", width: 120 }}
+              style={{ accentColor: "#D9A84A", width: 140 }}
             />
             <input
               type="number" min={0} max={120000} step={1000}
               value={expandMinMerits}
               onChange={e => setFilter("expandMinMerits", Math.max(0, Math.min(120000, Number(e.target.value))))}
               style={{
-                width: 72, background: "#161b22", border: "1px solid #30363d", borderRadius: 4,
+                width: 80, background: "#161b22", border: "1px solid #30363d", borderRadius: 4,
                 color: "#e6edf3", fontSize: 12, padding: "2px 5px", fontVariantNumeric: "tabular-nums",
               }}
             />
+            <span style={{ color: expandMinMerits === 0 ? "#57606a" : "#D9A84A", fontWeight: 700 }}>
+              {expandMinMerits === 0 ? "ALL" : `≤ ${expandMinMerits.toLocaleString()} left`}
+            </span>
           </label>
 
           <span style={{ color: "#57606a", fontSize: 11, marginLeft: "auto" }}>
