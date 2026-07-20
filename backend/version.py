@@ -50,18 +50,35 @@ Version history:
                     'Within merits of acquire' slider remains with tooltip.
                     expandFortDist/expandShDist removed from FilterSettings.
    1.6.0  2025-07-12  Expand eligibility refactor:
-                    - Unoccupied gate fixed: was `power_state != "Unoccupied" AND
-                      current_power` (wrong — passed systems with no snapshot).
-                      Now simply `if power_state != "Unoccupied": continue`.
-                    - Stale bypass fixed: `snapshots.get(system.id, {})` returned
-                      empty dict for systems with no fresh data, letting them pass
-                      the Unoccupied check. Now `None` check before any field read.
-                    - Frontend merit filter inverted: was `meritsLeft <= 120k-N`
-                      (showed FAR systems). Fixed to `meritsLeft <= N` (shows
-                      systems with ≤ N merits remaining — closest to acquisition).
-                    - Slider label updated: 'Merits left to acquire ≤'
-                    - Added /api/powers/{name}/expand-debug endpoint for verification.
+                     - Unoccupied gate fixed: was `power_state != "Unoccupied" AND
+                       current_power` (wrong — passed systems with no snapshot).
+                       Now simply `if power_state != "Unoccupied": continue`.
+                     - Stale bypass fixed: `snapshots.get(system.id, {})` returned
+                       empty dict for systems with no fresh data, letting them pass
+                       the Unoccupied check. Now `None` check before any field read.
+                     - Frontend merit filter inverted: was `meritsLeft <= 120k-N`
+                       (showed FAR systems). Fixed to `meritsLeft <= N` (shows
+                       systems with ≤ N merits remaining — closest to acquisition).
+                     - Slider label updated: 'Merits left to acquire ≤'
+                     - Added /api/powers/{name}/expand-debug endpoint for verification.
+   1.7.0  2026-06-27  Contested Target logic overhauled (spec-correct):
+                     - /target-analysis: replaced U>R heuristic with real Contested
+                       query (power_state='Contested', attacker in powers_list,
+                       progress>0 in conflict_progress, stale filter).
+                     - /contested: added conflict_progress>0 gate for selected power.
+                     - isStale(): null-timestamp behaviour controlled by
+                       contested_null_ts_is_stale admin setting.
+                     - Admin panel: Staleness Settings card with toggle checkbox.
+                     - Expansion state systems now included in expand scoring;
+                       anchor proximity check skipped for Expansion state.
+                     - RecommendationItem: conflict_progress field added.
+                     - Expansion Targets: per-power conflict bars + ranking pill
+                       (#N% lead, combined %), sorted maxProgress then sumProgress.
+                     - Expand filter: 'Min lead progress %' replaces merit slider.
+                     - Contested list: hard gates — max progress >= 100% AND
+                       selected power present in conflict_progress.
+                     - Admin settings TypeScript type fix in saveSettings payload.
 """
 
-BACKEND_VERSION      = "1.6.0"
-BACKEND_RELEASE_DATE = "2025-07-12T20:00:00Z"
+BACKEND_VERSION      = "1.7.0"
+BACKEND_RELEASE_DATE = "2026-06-27T00:00:00Z"

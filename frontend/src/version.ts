@@ -30,7 +30,16 @@
  *   1.6.0  2025-07-12  Expand eligibility refactor: correct Unoccupied gate,
  *                      stale-bypass fix, merit filter direction corrected.
  *                      Slider relabeled 'Merits left to acquire ≤'.
+ *   1.7.0  2026-06-27  Contested Target logic overhauled (spec-correct):
+ *                      power_state='Contested' gate, conflict_progress>0 check,
+ *                      stale filter via admin toggle (contested_null_ts_is_stale).
+ *                      Expansion state systems included in expand scoring.
+ *                      Expansion Targets reworked: per-power conflict bars,
+ *                      ranking pill (#N% lead), sort by maxProgress then
+ *                      sumProgress. Expand filter changed to 'Min lead progress %'.
+ *                      Contested list: acquisition gate (max>=100%) + selected
+ *                      power present filter. Admin: Staleness Settings card.
  */
 
-export const FRONTEND_VERSION      = "1.6.0";
-export const FRONTEND_RELEASE_DATE = "2025-07-12T20:00:00Z";
+export const FRONTEND_VERSION      = "1.7.0";
+export const FRONTEND_RELEASE_DATE = "2026-06-27T00:00:00Z";
