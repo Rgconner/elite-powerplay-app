@@ -65,51 +65,79 @@ function fmt(n: number): string {
   return n.toLocaleString();
 }
 
-function MeritBar({ item }: { item: RecommendationItem }) {
-  if (item.merit_position == null || item.control_progress == null) return null;
+/** Parse conflict_progress JSON safely */
+function parseCP(raw: string | null | undefined): Array<{ power: string; progress: number }> {
+  if (!raw) return [];
+  try { return JSON.parse(raw); } catch { return []; }
+}
 
-  const isExpand = item.type === "expand";
+/** Per-power conflict bars for expand items, with a ranking score pill. */
+function ExpandConflictBars({ item }: { item: RecommendationItem }) {
+  const entries = parseCP(item.conflict_progress);
+  const maxProg = entries.length > 0 ? Math.max(...entries.map(e => e.progress)) : (item.control_progress ?? 0);
+  const rankPct = Math.round(maxProg * 100);
 
-  if (isExpand) {
-    // Expand items: show 0 → 120k acquisition scale
-    const pos  = item.merit_position;
-    const pct  = Math.min(100, Math.max(0, (pos / MERIT_ACQUIRE) * 100));
-    const p    = item.control_progress;
-    const barColor = pct >= 100 ? "#00E5CC"
-                   : pct >= 75  ? "#4AD94A"
-                   : pct >= 40  ? "#D9A84A"
-                   : pct > 0   ? "#4A90D9"
-                   : "#555";
-
+  if (entries.length === 0) {
+    const p   = item.control_progress ?? 0;
+    const pct = Math.min(100, Math.max(0, p * 100));
+    const col = pct >= 100 ? "#00E5CC" : pct >= 75 ? "#4AD94A" : pct >= 40 ? "#D9A84A" : pct > 0 ? "#4A90D9" : "#555";
     return (
       <div style={{ marginTop: 6 }}>
-        {/* Scale bar: 0 → 120k */}
-        <div style={{ position: "relative", height: 8, borderRadius: 4, background: "#21262d", overflow: "hidden", marginBottom: 2 }}>
-          <div style={{ height: "100%", width: `${pct}%`, background: barColor, borderRadius: 4, transition: "width 0.3s" }} />
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#8b949e", marginBottom: 2 }}>
+          <span>Acquisition progress</span>
+          <span style={{ color: col, fontWeight: 700 }}>{pct.toFixed(1)}%</span>
         </div>
-        {/* Labels */}
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "#555", marginBottom: 4 }}>
-          <span>0</span>
-          <span style={{ color: "#4A90D9", fontWeight: 700 }}>120k — Acquisition</span>
-        </div>
-        {/* Merit figures */}
-        <div style={{ display: "flex", gap: 12, fontSize: 11, flexWrap: "wrap" }}>
-          <span style={{ color: "#8b949e" }}>
-            Acquired: <strong style={{ color: barColor }}>{fmt(pos)}</strong>
-          </span>
-          {item.merits_to_upgrade != null && item.merits_to_upgrade > 0 && (
-            <span style={{ color: "#8b949e" }}>
-              Still needed: <strong style={{ color: "#4A90D9" }}>{fmt(item.merits_to_upgrade)}</strong>
-            </span>
-          )}
-          {p >= 1.0 && (
-            <span style={{ color: "#00E5CC", fontWeight: 700 }}>🚀 Acquisition threshold met — claim now!</span>
-          )}
+        <div style={{ height: 5, borderRadius: 3, background: "#21262d", overflow: "hidden" }}>
+          <div style={{ height: "100%", width: `${pct}%`, background: col, borderRadius: 3 }} />
         </div>
       </div>
     );
   }
 
+  const sorted = [...entries].sort((a, b) => b.progress - a.progress);
+  return (
+    <div style={{ marginTop: 6 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+        <span style={{
+          background: rankPct >= 75 ? "#0d2e17" : rankPct >= 40 ? "#2a2000" : "#1a1a2e",
+          color:      rankPct >= 75 ? "#4AD94A"  : rankPct >= 40 ? "#D9A84A"  : "#4A90D9",
+          border: `1px solid ${rankPct >= 75 ? "#4AD94A44" : rankPct >= 40 ? "#D9A84A44" : "#4A90D944"}`,
+          borderRadius: 4, padding: "1px 8px", fontSize: 11, fontWeight: 800,
+        }}>
+          #{rankPct}% lead
+        </span>
+        <span style={{ fontSize: 10, color: "#57606a" }}>
+          combined: {Math.round(sorted.reduce((s, e) => s + e.progress, 0) * 100)}%
+        </span>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        {sorted.map((entry, idx) => {
+          const pct     = Math.min(100, Math.max(0, entry.progress * 100));
+          const color   = CONTEST_COLORS[idx % CONTEST_COLORS.length];
+          const acquired = entry.progress >= 1.0;
+          return (
+            <div key={entry.power}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#8b949e", marginBottom: 2 }}>
+                <span style={{ color, fontWeight: 600 }}>{entry.power}</span>
+                <span style={{ color: acquired ? "#00E5CC" : color }}>
+                  {acquired ? "🚀 Acquired!" : `${pct.toFixed(1)}%`}
+                </span>
+              </div>
+              <div style={{ height: 5, borderRadius: 3, background: "#21262d", overflow: "hidden" }}>
+                <div style={{ height: "100%", width: `${pct}%`, background: acquired ? "#00E5CC" : color, borderRadius: 3, transition: "width 0.3s" }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function MeritBar({ item }: { item: RecommendationItem }) {
+  if (item.merit_position == null || item.control_progress == null) return null;
+  // Expand items use ExpandConflictBars instead
+  if (item.type === "expand") return null;
   // Fortify items: full 0 → 667k scale
   const pos = item.merit_position;
   const pct = Math.min(100, Math.max(0, (pos / MERIT_STRONGHOLD) * 100));
@@ -204,7 +232,10 @@ function ItemRow({ item }: { item: RecommendationItem }) {
         <DaysBar progress={item.control_progress} daysToFailure={item.days_to_failure} />
       )}
 
-      {/* Merit bar — shown for both fortify and expand */}
+      {/* Expand: per-power conflict bars + ranking pill */}
+      {item.type === "expand" && <ExpandConflictBars item={item} />}
+
+      {/* Merit bar — fortify only */}
       <MeritBar item={item} />
 
       {/* Stats row — fortify */}

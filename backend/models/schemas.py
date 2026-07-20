@@ -146,8 +146,11 @@ class RecommendationItem(BaseModel):
     merits_to_safety: Optional[int] = None
     # Additional merits needed to reach 100% (next state upgrade)
     merits_to_upgrade: Optional[int] = None
-    # For expand items: "fortified" | "stronghold" | "both" — which anchor type qualifies it
+    # For expand items: "fortified" | "stronghold" | "both" | "expansion" — which anchor qualifies it
     anchor_type: Optional[str] = None
+    # For expand items: JSON string [{power, progress}, ...] from power_conflict_progress.
+    # Mirrors the same field on ContestedSystemInfo — enables per-power progress bars in the UI.
+    conflict_progress: Optional[str] = None
 
 
 class RecommendationsResponse(BaseModel):

@@ -855,6 +855,9 @@ def compute_expand_scores(
             merits_to_safety=None,               # not applicable for Unoccupied
             merits_to_upgrade=merits_left,       # merits remaining to acquire
             anchor_type=anchor_type,
+            # Per-power conflict progress — mirrors ContestedSystemInfo.conflict_progress
+            # Lets the UI render per-power bars and a combined ranking score
+            conflict_progress=snap.get("conflict_progress"),
         ))
 
     # Sort: score descending (highest acquisition progress first)

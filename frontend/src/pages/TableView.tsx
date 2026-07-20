@@ -298,7 +298,7 @@ export default function TableView() {
 
   // Centralised filter settings with optional cookie persistence
   const { settings, saveEnabled, setSaveEnabled, set: setFilter } = useFilterSettings();
-  const { expandMinMerits, contestedMaxGap } = settings;
+  const { expandMinProgress, contestedMaxGap } = settings;
 
   // Spansh ingest status (public endpoint, no auth)
   const [ingestStatus,      setIngestStatus]      = useState<IngestStatus | null>(null);
@@ -400,29 +400,48 @@ export default function TableView() {
 
   const showDist = !!refSystem;
 
-  // Client-side filter for expand targets: merits-remaining threshold.
+  // Helper: parse conflict_progress JSON string on a RecommendationItem (same format
+  // as ContestedSystemInfo.conflict_progress)
+  function parseExpandConflict(item: { conflict_progress: string | null }): Array<{ power: string; progress: number }> {
+    if (!item.conflict_progress) return [];
+    try { return JSON.parse(item.conflict_progress); } catch { return []; }
+  }
+
+  // Client-side filter + sort for expand targets.
   //
-  // expandMinMerits slider = "show only systems with ≤ N merits left to acquire".
-  // merits_to_upgrade is set by the backend to MERIT_ACQUIRE - merit_position
-  // (how many more merits are needed to hit the 120,000 acquisition threshold).
+  // Filter:  hide systems where NO power has reached expandMinProgress %.
+  //          progress is 0–1+ where 1.0 = 120k merits (same scale as Contested).
+  //          0% = show all.
   //
-  // slider = 30,000  → show systems with ≤ 30,000 merits remaining
-  //                    i.e. 90,000+ merits already delivered — near-ready acquisitions
-  // slider = 0       → show all (no filter)
+  // Sort:    1. max(power progress) DESC — highest lead progress first
+  //          2. sum(all power progress) DESC — most total activity as tiebreak
+  //
+  // Ranking score shown in pill = round(maxProgress * 100) to nearest integer.
   const filteredRecommendations = useMemo<RecommendationsResponse | null>(() => {
     if (!recommendations) return null;
-    const filteredExpand = recommendations.expand.filter(item => {
-      if (expandMinMerits <= 0) return true;
-      const meritsLeft = item.merits_to_upgrade;
-      if (meritsLeft !== null && meritsLeft !== undefined) {
-        // Keep only systems where merits remaining ≤ the slider value
-        return meritsLeft <= expandMinMerits;
-      }
-      // No merit data — keep it (don't hide unknowns)
-      return true;
+
+    const filtered = recommendations.expand.filter(item => {
+      if (expandMinProgress <= 0) return true;
+      const entries = parseExpandConflict(item);
+      const maxProg = entries.length > 0
+        ? Math.max(...entries.map(e => e.progress))
+        : (item.control_progress ?? 0);
+      return maxProg * 100 >= expandMinProgress;
     });
-    return { ...recommendations, expand: filteredExpand };
-  }, [recommendations, expandMinMerits]);
+
+    const sorted = [...filtered].sort((a, b) => {
+      const ea = parseExpandConflict(a);
+      const eb = parseExpandConflict(b);
+      const maxA = ea.length > 0 ? Math.max(...ea.map(e => e.progress)) : (a.control_progress ?? 0);
+      const maxB = eb.length > 0 ? Math.max(...eb.map(e => e.progress)) : (b.control_progress ?? 0);
+      if (maxB !== maxA) return maxB - maxA;                                    // highest lead first
+      const sumA = ea.reduce((s, e) => s + e.progress, 0) || (a.control_progress ?? 0);
+      const sumB = eb.reduce((s, e) => s + e.progress, 0) || (b.control_progress ?? 0);
+      return sumB - sumA;                                                        // most total activity
+    });
+
+    return { ...recommendations, expand: sorted };
+  }, [recommendations, expandMinProgress]);
 
   // Client-side filter for contested systems
   const filteredContested = useMemo<ContestedSystemInfo[]>(() => {
@@ -487,7 +506,7 @@ export default function TableView() {
         )}
       </div>
 
-      {/* ── Expand Filters bar — min merits threshold ──────────────────────── */}
+      {/* ── Expand Filters bar — min lead progress ─────────────────────────── */}
       {(recommendations?.expand.length ?? 0) > 0 && (
         <div style={{
           display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center",
@@ -498,37 +517,35 @@ export default function TableView() {
             Expand Filters
           </span>
 
-          {/* Min merits slider: hides systems that need more than (120k - N) merits to acquire */}
-          {/* Setting to 5k = only show systems within 5k merits of the 120k acquisition threshold */}
+          {/* Min lead-progress slider: hides systems where no power has reached N% */}
           <label style={{ display: "flex", alignItems: "center", gap: 8, color: "#8b949e" }}>
             <span
-              style={{ color: "#D9A84A", fontWeight: 600, whiteSpace: "nowrap", cursor: "help", borderBottom: "1px dashed #D9A84A66" }}
+              style={{ color: "#4A90D9", fontWeight: 600, whiteSpace: "nowrap", cursor: "help", borderBottom: "1px dashed #4A90D966" }}
               title={
-                "Shows only expansion targets with ≤ N merits remaining to reach the 120,000 acquisition threshold.\n" +
-                "Example: slider at 30,000 shows only systems that already have ≥ 90,000 merits delivered\n" +
-                "— i.e. the near-ready acquisitions that could flip this cycle.\n" +
-                "Set to 0 to show all qualifying expansion targets."
+                "Hides expansion targets where no power has yet reached N% of the 120,000-merit acquisition threshold.\n" +
+                "Example: 25% shows only systems where at least one power has ≥ 30,000 merits.\n" +
+                "0% = show all. Systems are always sorted: highest lead % first, then highest combined total."
               }
             >
-              ⚡ Merits left to acquire ≤
+              ⚡ Min lead progress ≥
             </span>
             <input
-              type="range" min={0} max={120000} step={5000}
-              value={expandMinMerits}
-              onChange={e => setFilter("expandMinMerits", Number(e.target.value))}
-              style={{ accentColor: "#D9A84A", width: 140 }}
+              type="range" min={0} max={100} step={5}
+              value={expandMinProgress}
+              onChange={e => setFilter("expandMinProgress", Number(e.target.value))}
+              style={{ accentColor: "#4A90D9", width: 140 }}
             />
             <input
-              type="number" min={0} max={120000} step={1000}
-              value={expandMinMerits}
-              onChange={e => setFilter("expandMinMerits", Math.max(0, Math.min(120000, Number(e.target.value))))}
+              type="number" min={0} max={100} step={1}
+              value={expandMinProgress}
+              onChange={e => setFilter("expandMinProgress", Math.max(0, Math.min(100, Number(e.target.value))))}
               style={{
-                width: 80, background: "#161b22", border: "1px solid #30363d", borderRadius: 4,
+                width: 48, background: "#161b22", border: "1px solid #30363d", borderRadius: 4,
                 color: "#e6edf3", fontSize: 12, padding: "2px 5px", fontVariantNumeric: "tabular-nums",
               }}
             />
-            <span style={{ color: expandMinMerits === 0 ? "#57606a" : "#D9A84A", fontWeight: 700 }}>
-              {expandMinMerits === 0 ? "ALL" : `≤ ${expandMinMerits.toLocaleString()} left`}
+            <span style={{ color: expandMinProgress === 0 ? "#57606a" : "#4A90D9", fontWeight: 700 }}>
+              {expandMinProgress === 0 ? "ALL" : `≥ ${expandMinProgress}%`}
             </span>
           </label>
 

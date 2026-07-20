@@ -25,8 +25,12 @@ export interface RecommendationItem {
   merits_to_safety: number | null;
   /** Additional merits needed to reach 100% (next state upgrade) */
   merits_to_upgrade: number | null;
-  /** For expand items: "fortified" | "stronghold" | "both" — which anchor qualifies it */
+  /** For expand items: "fortified" | "stronghold" | "both" | "expansion" — which anchor qualifies it */
   anchor_type: string | null;
+  /** For expand items: JSON string [{power, progress}, ...] — per-power conflict progress.
+   *  Same format as ContestedSystemInfo.conflict_progress. Null for Unoccupied systems
+   *  with no conflict data. */
+  conflict_progress: string | null;
 }
 
 export interface RecommendationsResponse {

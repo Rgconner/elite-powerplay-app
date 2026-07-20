@@ -18,8 +18,8 @@ import { useState, useEffect, useCallback } from "react";
 // ── Shape of persisted settings ────────────────────────────────────────────
 
 export interface FilterSettings {
-  /** Expansion merit filter — hide expand targets needing more than N merits to acquire */
-  expandMinMerits: number;
+  /** Expansion min-progress filter — hide expand targets where no power has reached N % */
+  expandMinProgress: number;
   /** Contested gap filter — hide contested systems where top power leads next by > N % */
   contestedMaxGap: number;
 }
@@ -27,7 +27,7 @@ export interface FilterSettings {
 // ── Defaults (used when no cookie present) ────────────────────────────────
 
 export const FILTER_DEFAULTS: FilterSettings = {
-  expandMinMerits: 0,
+  expandMinProgress: 0,   // 0 = show all
   contestedMaxGap: 100,   // 100 = effectively "show all"
 };
 
