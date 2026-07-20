@@ -39,9 +39,20 @@ export function formatDataAge(spansh_updated_at: string | null): string {
   return `${m}m ago`;
 }
 
-/** Returns true if data is older than maxHours */
-export function isStale(spansh_updated_at: string | null, maxHours = 24): boolean {
-  if (!spansh_updated_at) return false; // null = pre-migration row, keep it
+/**
+ * Returns true if data is older than maxHours.
+ *
+ * @param nullIsStale - Controls how a null timestamp is treated.
+ *   true  (default / spec-correct): NULL timestamp → unknown age → treat as stale.
+ *   false (legacy / test mode):     NULL timestamp → keep the row (pre-migration behaviour).
+ *   Matches the 'contested_null_ts_is_stale' admin setting.
+ */
+export function isStale(
+  spansh_updated_at: string | null,
+  maxHours = 24,
+  nullIsStale = true,
+): boolean {
+  if (!spansh_updated_at) return nullIsStale;
   const ms = Date.now() - new Date(spansh_updated_at + "Z").getTime();
   return ms > maxHours * 3_600_000;
 }

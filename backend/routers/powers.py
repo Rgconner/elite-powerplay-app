@@ -1,5 +1,6 @@
 """Powers router — read-only public endpoints for Power Play data."""
 
+import json as _json
 import math
 from typing import Optional
 
@@ -203,22 +204,39 @@ def get_contested_systems(
     db: Session = Depends(get_db),
 ) -> list[ContestedSystemInfo]:
     """Return all systems currently in Contested state that are relevant to
-    the given power.
+    the given power (both cases: we are attacking, or we are being attacked).
 
-    A system is returned when its latest snapshot has power_state = 'Contested'
-    AND it is controlled by any power (including the selected power itself —
-    it may be one of ours being contested by others, or one of theirs we are
-    contesting).
+    Spec:
+      1. power_state = 'Contested'
+      2. The selected power appears in powers_list AND has progress > 0 in
+         conflict_progress (i.e. has actually earned merits there).
+      3. Data is not stale (spansh_updated_at within 24 h, or within 48 h
+         via snapshot_time when spansh_updated_at IS NULL — controlled by the
+         'contested_null_ts_is_stale' admin setting).
 
-    The Spansh API emits power_state='Contested' directly when two or more
-    powers are fighting over a system.  We surface ALL such systems near the
-    selected power's territory, sorted by distance.
+    The staleness clause for NULL timestamps is built dynamically based on the
+    admin setting so it can be toggled without redeployment.
     """
+    # Read the null-timestamp staleness setting
+    null_ts_row = db.execute(
+        text("SELECT value FROM admin_settings WHERE key = 'contested_null_ts_is_stale' LIMIT 1")
+    ).fetchone()
+    null_ts_is_stale = (null_ts_row is None) or (null_ts_row[0].lower() not in ("false", "0", "no"))
+
+    if null_ts_is_stale:
+        # NULL timestamp → treat as stale: require spansh_updated_at to be present and fresh
+        stale_clause = "AND spansh_updated_at > NOW() - INTERVAL '24 hours'"
+    else:
+        # NULL timestamp → keep (legacy pre-migration rows)
+        stale_clause = _STALE_FILTER
+
     # Get the latest snapshot for every Contested system where the selected
-    # power appears in powers_list (meaning it is one of the contesting powers).
-    # power_state='Contested' is our internal label set during the Unoccupied pass.
-    # Stale filter: exclude systems Spansh hasn't refreshed in >24 hours — these
-    # may no longer be contested (e.g. HUMA resolved but old snapshot persists).
+    # power appears in powers_list AND has earned merits (progress > 0 in
+    # conflict_progress JSON).  This covers both directions:
+    #   - Our power is attacking an enemy-controlled Contested system
+    #   - An enemy is attacking one of our Contested systems
+    # The conflict_progress filter is applied in Python after the DB fetch
+    # because conflict_progress is a JSON string, not a SQL-queryable column.
     contested_rows = db.execute(text(f"""
         SELECT DISTINCT ON (system_id)
                system_id, power, power_state,
@@ -227,7 +245,7 @@ def get_contested_systems(
         FROM pp_system_snapshots
         WHERE power_state = 'Contested'
           AND powers_list ILIKE :power_pattern
-          {_STALE_FILTER}
+          {stale_clause}
         ORDER BY system_id, snapshot_time DESC
     """), {"power_pattern": f"%{name}%"}).mappings().all()
 
@@ -264,6 +282,23 @@ def get_contested_systems(
     for sid, snap in contested_snaps.items():
         system = sys_by_id.get(sid)
         if system is None:
+            continue
+
+        # ── Condition 2b: selected power must have progress > 0 ──────────────
+        # Parse conflict_progress JSON and verify the power has merits there.
+        cp_str = snap["conflict_progress"] or ""
+        power_has_merits = False
+        if cp_str:
+            try:
+                cp_entries = _json.loads(cp_str)
+                for entry in cp_entries:
+                    if isinstance(entry, dict) and entry.get("power") == name:
+                        if (entry.get("progress") or 0) > 0:
+                            power_has_merits = True
+                        break
+            except Exception:
+                pass
+        if not power_has_merits:
             continue
 
         sx, sy, sz = system.x or 0.0, system.y or 0.0, system.z or 0.0
@@ -418,18 +453,61 @@ def target_analysis(
         ORDER BY system_id, snapshot_time DESC
     """), {"powers": targets}).mappings().all()
 
-    # ── 2b. Contested systems — identified from undermining data ──────────────
-    # "Contested" means: a system controlled by a target power where undermining
-    # is actively beating reinforcement (net_u > 0), AND the system is within
-    # proximity of the attacker's territory.
+    # ── 2b. Contested systems — spec-correct query ────────────────────────────
+    # A system is a Contested Target when ALL THREE conditions hold:
+    #   1. power_state = 'Contested'  (not Acquisition or any other state)
+    #   2. The attacker power is in powers_list AND has progress > 0
+    #      in conflict_progress  (has actually earned merits there)
+    #   3. Data is fresh (spansh_updated_at within 24 h, or within 48 h via
+    #      snapshot_time when spansh_updated_at IS NULL per admin setting)
     #
-    # NOTE: pp_system_snapshots.power is the CONTROLLING power, not the underminer.
-    # There is no "who is undermining me" field in Spansh data — only the totals.
-    # So we cannot filter by "attacker has a row there". Instead we mark as
-    # contested any system where undermining > reinforcement in the latest snapshot,
-    # indicating active net pressure — regardless of who is applying it.
-    # These are the highest-priority undermine targets for *any* power's campaign.
-    contested_sys_ids: set[int] = set()   # populated below after snap_by_id is built
+    # Contested rows have power = NULL (set by ingestion), so they are NOT
+    # returned by the target_snap_rows query above.  We fetch them separately
+    # and merge them into snap_by_id so they participate in scoring.
+    #
+    # Both directions are surfaced:
+    #   - Our power attacking an enemy-held Contested system (common)
+    #   - Enemy attacking one of our Contested systems (defensive alert)
+
+    null_ts_row = db.execute(
+        text("SELECT value FROM admin_settings WHERE key = 'contested_null_ts_is_stale' LIMIT 1")
+    ).fetchone()
+    null_ts_is_stale = (null_ts_row is None) or (null_ts_row[0].lower() not in ("false", "0", "no"))
+    contested_stale_clause = (
+        "AND spansh_updated_at > NOW() - INTERVAL '24 hours'"
+        if null_ts_is_stale else _STALE_FILTER
+    )
+
+    contested_snap_rows = db.execute(text(f"""
+        SELECT DISTINCT ON (system_id)
+               system_id, power, power_state,
+               reinforcement, undermining, control_progress,
+               powers_list, conflict_progress
+        FROM pp_system_snapshots
+        WHERE power_state = 'Contested'
+          AND powers_list ILIKE :attacker_pattern
+          {contested_stale_clause}
+        ORDER BY system_id, snapshot_time DESC
+    """), {"attacker_pattern": f"%{attacker}%"}).mappings().all()
+
+    # Filter in Python: attacker must have progress > 0 in conflict_progress
+    contested_sys_ids: set[int] = set()
+    contested_extra_snaps: dict[int, object] = {}
+    for row in contested_snap_rows:
+        cp_str = row["conflict_progress"] or ""
+        has_merits = False
+        if cp_str:
+            try:
+                for entry in _json.loads(cp_str):
+                    if isinstance(entry, dict) and entry.get("power") == attacker:
+                        if (entry.get("progress") or 0) > 0:
+                            has_merits = True
+                        break
+            except Exception:
+                pass
+        if has_merits:
+            contested_sys_ids.add(row["system_id"])
+            contested_extra_snaps[row["system_id"]] = row
 
     if not target_snap_rows:
         return TargetAnalysisResponse(
@@ -438,11 +516,19 @@ def target_analysis(
         )
 
     target_sys_ids = [r["system_id"] for r in target_snap_rows]
+    # Merge Contested system IDs — these have power=NULL so they won't clash
+    # with target_snap_rows (which only fetches power = ANY(:powers) rows)
+    all_fetch_ids = list(set(target_sys_ids) | set(contested_extra_snaps.keys()))
     target_systems_orm = db.query(PPSystem).filter(
-        PPSystem.id.in_(target_sys_ids)
+        PPSystem.id.in_(all_fetch_ids)
     ).all()
     sys_by_id = {s.id: s for s in target_systems_orm}
-    snap_by_id = {r["system_id"]: r for r in target_snap_rows}
+    snap_by_id: dict = {r["system_id"]: r for r in target_snap_rows}
+    # Add Contested rows; if a system appears in both lists the target-power row
+    # takes precedence (it has richer data), otherwise add the Contested row.
+    for sid, crow in contested_extra_snaps.items():
+        if sid not in snap_by_id:
+            snap_by_id[sid] = crow
 
     # ── 3. Get progress trends for all target systems ─────────────────────────
     trend_rows = db.execute(text("""
@@ -478,13 +564,6 @@ def target_analysis(
         if p_new > p_old + 0.01:
             return "improving"
         return "stable"
-
-    # ── 3b. Build contested_sys_ids from snap data (U > R = actively pressured) ─
-    for sid, snap in snap_by_id.items():
-        r_val = snap["reinforcement"] or 0
-        u_val = snap["undermining"]   or 0
-        if u_val > r_val and u_val > 0:
-            contested_sys_ids.add(sid)
 
     # ── 4. Score each target system ───────────────────────────────────────────
     items: list[TargetAnalysisItem] = []

@@ -133,6 +133,13 @@ DEFAULTS: dict[str, float] = {
     "target_progress_high":        0.25,  # ≤ this % → HIGH vulnerability
     "target_progress_medium":      0.50,  # ≤ this % → MEDIUM vulnerability
     # (above target_progress_medium → LOW)
+
+    # ── Staleness — NULL spansh_updated_at behaviour ──────────────────────────
+    # When "true" (default): rows where spansh_updated_at IS NULL are treated
+    # as stale and excluded from Contested queries (strictest / spec-correct).
+    # Set to "false" to keep pre-migration rows (legacy behaviour for testing).
+    # Toggled via the Admin panel checkbox — stored as "true" / "false" string.
+    "contested_null_ts_is_stale": 1.0,   # 1 = true, 0 = false (stored as string in DB)
 }
 
 # ──────────────────────────────────────────────────────────────────────────────

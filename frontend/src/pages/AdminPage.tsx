@@ -178,6 +178,8 @@ export default function AdminPage({ onClose }: Props) {
   const [thresholds,        setThresholds]        = useState<Record<string, number>>({ ...DEFAULT_THRESHOLDS });
   const [targetWeights,     setTargetWeights]     = useState<Record<string, number>>({ ...DEFAULT_TARGET_WEIGHTS });
   const [targetThresholds,  setTargetThresholds]  = useState<Record<string, number>>({ ...DEFAULT_TARGET_THRESHOLDS });
+  // Boolean admin setting: treat NULL spansh_updated_at as stale for Contested queries
+  const [nullTsIsStale,     setNullTsIsStale]     = useState<boolean>(true);
   const [settingsSaved, setSettingsSaved] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -211,16 +213,21 @@ export default function AdminPage({ onClose }: Props) {
         const t:  Record<string, number> = { ...DEFAULT_THRESHOLDS };
         const tw: Record<string, number> = { ...DEFAULT_TARGET_WEIGHTS };
         const tt: Record<string, number> = { ...DEFAULT_TARGET_THRESHOLDS };
+        let nullStale = true; // default: spec-correct (strict) behaviour
         sets.forEach((s) => {
           if (s.key in w)  w[s.key]  = parseFloat(s.value);
           if (s.key in t)  t[s.key]  = parseFloat(s.value);
           if (s.key in tw) tw[s.key] = parseFloat(s.value);
           if (s.key in tt) tt[s.key] = parseFloat(s.value);
+          if (s.key === "contested_null_ts_is_stale") {
+            nullStale = s.value.toLowerCase() !== "false" && s.value !== "0";
+          }
         });
         setSettings(w);
         setThresholds(t);
         setTargetWeights(tw);
         setTargetThresholds(tt);
+        setNullTsIsStale(nullStale);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -272,6 +279,7 @@ export default function AdminPage({ onClose }: Props) {
         ...Object.entries(thresholds),
         ...Object.entries(targetWeights),
         ...Object.entries(targetThresholds),
+        { key: "contested_null_ts_is_stale", value: nullTsIsStale ? "true" : "false" },
       ].map(([key, value]) => ({ key, value: String(value) }));
       await apiPatch("/api/admin/settings", payload);
       setSettingsSaved(true);
@@ -486,6 +494,43 @@ export default function AdminPage({ onClose }: Props) {
           </div>
         ) : (
           !loading && <p style={{ fontSize: 13, color: "#57606a", margin: 0 }}>No ingestion runs yet.</p>
+        )}
+      </div>
+
+      {/* Staleness Settings */}
+      <div style={cardStyle}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Staleness Settings</h3>
+          <span style={{ fontSize: 11, color: "#57606a" }}>Saved with "Save All Settings" in Scoring Weights</span>
+        </div>
+        <p style={{ fontSize: 12, color: "#57606a", margin: "0 0 14px" }}>
+          Controls how the Contested Target queries handle systems whose Spansh timestamp is <code>NULL</code>
+          (rows ingested before the <code>spansh_updated_at</code> column was added).
+        </p>
+        <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
+          <input
+            type="checkbox"
+            checked={nullTsIsStale}
+            onChange={e => setNullTsIsStale(e.target.checked)}
+            style={{ marginTop: 2, width: 16, height: 16, accentColor: "#3b82d4", cursor: "pointer", flexShrink: 0 }}
+          />
+          <span style={{ fontSize: 13, color: "#1f2328", lineHeight: 1.5 }}>
+            <strong>Treat NULL <code>spansh_updated_at</code> as stale</strong>
+            <span style={{ display: "block", fontSize: 12, color: "#57606a", marginTop: 2 }}>
+              When checked (default / spec-correct): systems with no Spansh timestamp are
+              excluded from Contested Target results — unknown data age is treated as stale.
+              <br />
+              When unchecked (test / legacy mode): those rows are kept, matching the original
+              behaviour before the <code>spansh_updated_at</code> column was introduced.
+              Useful for testing with pre-migration data.
+            </span>
+          </span>
+        </label>
+        {nullTsIsStale !== true && (
+          <div style={{ marginTop: 10, padding: "8px 12px", background: "#fffbeb", border: "1px solid #f59e0b", borderRadius: 5, fontSize: 12, color: "#92400e" }}>
+            ⚠ Legacy mode active — NULL-timestamp Contested rows are included. Results may
+            contain outdated data. Re-enable to restore spec-correct behaviour.
+          </div>
         )}
       </div>
 
