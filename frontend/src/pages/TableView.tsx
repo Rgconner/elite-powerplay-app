@@ -298,7 +298,7 @@ export default function TableView() {
 
   // Centralised filter settings with optional cookie persistence
   const { settings, saveEnabled, setSaveEnabled, set: setFilter } = useFilterSettings();
-  const { expandMinMerits, contestedMaxGap, contestedMinProgress } = settings;
+  const { expandMinMerits, contestedMaxGap } = settings;
 
   // Spansh ingest status (public endpoint, no auth)
   const [ingestStatus,      setIngestStatus]      = useState<IngestStatus | null>(null);
@@ -429,13 +429,19 @@ export default function TableView() {
     return contestedSystems.filter(item => {
       const entries = parseConflictProgress(item);
 
-      // ── Min-progress filter: at least one power must have reached N % ──
-      // progress is normalised 0–1+ where 1.0 = 120k merits (100 %)
-      if (contestedMinProgress > 0) {
-        const maxProgress = entries.length > 0
-          ? Math.max(...entries.map(e => e.progress))
-          : (item.control_progress ?? 0);
-        if (maxProgress * 100 < contestedMinProgress) return false;
+      // ── Acquisition gate: at least one power must be at ≥ 100% (≥ 120k merits) ──
+      // progress is normalised 0–1+ where 1.0 = 120k acquisition threshold.
+      // Systems where nobody has crossed the line yet are noise — hide them.
+      const maxProgress = entries.length > 0
+        ? Math.max(...entries.map(e => e.progress))
+        : (item.control_progress ?? 0);
+      if (maxProgress < 1.0) return false;
+
+      // ── Selected-power gate: our power must be present in conflict_progress ──
+      // powerName is the currently selected power; if not set, keep all.
+      if (powerName) {
+        const present = entries.some(e => e.power === powerName);
+        if (!present) return false;
       }
 
       // ── Max-gap filter: top power must not lead next by more than N % ──
@@ -448,7 +454,7 @@ export default function TableView() {
 
       return true;
     });
-  }, [contestedSystems, contestedMaxGap, contestedMinProgress]);
+  }, [contestedSystems, contestedMaxGap, powerName]);
 
   return (
     <div style={{
@@ -542,39 +548,6 @@ export default function TableView() {
           <span style={{ color: "#FF8C00", fontWeight: 700, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", flexShrink: 0 }}>
             Contested Filters
           </span>
-
-          {/* Min-progress slider: hide systems where no power has reached N% */}
-          <label style={{ display: "flex", alignItems: "center", gap: 8, color: "#8b949e" }}>
-            <span
-              style={{ color: "#FF8C00", fontWeight: 600, whiteSpace: "nowrap", cursor: "help", borderBottom: "1px dashed #FF8C0066" }}
-              title={
-                "Hides contested systems where no power has yet reached N% of the 120,000-merit acquisition threshold.\n" +
-                "Example: setting 25% shows only systems where at least one power has ≥ 30,000 merits delivered.\n" +
-                "Raise this to focus on contests that are already well under way.\n" +
-                "0% = show all contested systems regardless of progress."
-              }
-            >
-              ⚑ Min power progress ≥
-            </span>
-            <input
-              type="range" min={0} max={100} step={5}
-              value={contestedMinProgress}
-              onChange={e => setFilter("contestedMinProgress", Number(e.target.value))}
-              style={{ accentColor: "#FF8C00", width: 120 }}
-            />
-            <input
-              type="number" min={0} max={100} step={1}
-              value={contestedMinProgress}
-              onChange={e => setFilter("contestedMinProgress", Math.max(0, Math.min(100, Number(e.target.value))))}
-              style={{
-                width: 48, background: "#161b22", border: "1px solid #30363d", borderRadius: 4,
-                color: "#e6edf3", fontSize: 12, padding: "2px 5px", fontVariantNumeric: "tabular-nums",
-              }}
-            />
-            <span style={{ color: contestedMinProgress === 0 ? "#57606a" : "#FF8C00", fontWeight: 700 }}>
-              {contestedMinProgress === 0 ? "ALL" : `≥ ${contestedMinProgress}%`}
-            </span>
-          </label>
 
           {/* Max gap slider */}
           <label style={{ display: "flex", alignItems: "center", gap: 8, color: "#8b949e" }}>

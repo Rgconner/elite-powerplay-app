@@ -22,8 +22,6 @@ export interface FilterSettings {
   expandMinMerits: number;
   /** Contested gap filter — hide contested systems where top power leads next by > N % */
   contestedMaxGap: number;
-  /** Contested min-progress filter — hide contested systems where NO power has reached N % of the 120k acquisition threshold */
-  contestedMinProgress: number;
 }
 
 // ── Defaults (used when no cookie present) ────────────────────────────────
@@ -31,7 +29,6 @@ export interface FilterSettings {
 export const FILTER_DEFAULTS: FilterSettings = {
   expandMinMerits: 0,
   contestedMaxGap: 100,   // 100 = effectively "show all"
-  contestedMinProgress: 0, // 0 = show all (no minimum)
 };
 
 // ── Cookie helpers ─────────────────────────────────────────────────────────
