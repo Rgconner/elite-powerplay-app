@@ -609,6 +609,127 @@ def target_analysis(
 
 
 # ---------------------------------------------------------------------------
+# GET /api/powers/{name}/expand-debug  — diagnostic: show expand candidates
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{name}/expand-debug")
+def expand_debug(
+    name: str,
+    merits_max: int = Query(default=120000, description="Only show systems with ≤ this many merits remaining"),
+    limit: int = Query(default=20, le=100),
+    db: Session = Depends(get_db),
+):
+    """Diagnostic endpoint: return raw expand candidates for a power with full details.
+
+    Returns systems that:
+      1. Have fresh Spansh data (spansh_updated_at < 24h, or snapshot_time < 48h for NULL)
+      2. Are Unoccupied (power_state = 'Unoccupied')
+      3. Are within 20 LY of a Fortified system OR 30 LY of a Stronghold system
+      4. Have merits_remaining <= merits_max (120,000 if unfiltered)
+
+    Sorted by merits_remaining ascending (closest to acquisition first).
+    """
+    from services.scoring import (
+        get_latest_snapshots, load_weights,
+        MERIT_ACQUIRE, DEFAULTS as SC_DEFAULTS, _dist,
+    )
+    from models.models import PPSystem
+
+    weights   = load_weights(db)
+    snapshots = get_latest_snapshots(db)
+
+    fort_max = float(weights.get("expand_fortified_dist_ly",  SC_DEFAULTS["expand_fortified_dist_ly"]))
+    sh_max   = float(weights.get("expand_stronghold_dist_ly", SC_DEFAULTS["expand_stronghold_dist_ly"]))
+
+    # Identify this power's systems and their states
+    power_sys_ids = {sid for sid, s in snapshots.items() if s.get("power") == name}
+    if not power_sys_ids:
+        return {"error": f"No fresh snapshots found for power '{name}'", "systems": []}
+
+    power_systems = db.query(PPSystem).filter(PPSystem.id.in_(power_sys_ids)).all()
+
+    fortified_coords:  list[tuple[float, float, float]] = []
+    stronghold_coords: list[tuple[float, float, float]] = []
+    for s in power_systems:
+        state = snapshots[s.id].get("power_state")
+        coord = (s.x or 0.0, s.y or 0.0, s.z or 0.0)
+        if state == "Fortified":
+            fortified_coords.append(coord)
+        elif state == "Stronghold":
+            stronghold_coords.append(coord)
+
+    power_coords = [(s.x or 0.0, s.y or 0.0, s.z or 0.0) for s in power_systems]
+    all_x = [c[0] for c in power_coords]
+    all_y = [c[1] for c in power_coords]
+    all_z = [c[2] for c in power_coords]
+    bbox_pad = max(fort_max, sh_max)
+
+    candidates = db.query(PPSystem).filter(
+        PPSystem.x.between(min(all_x) - bbox_pad, max(all_x) + bbox_pad),
+        PPSystem.y.between(min(all_y) - bbox_pad, max(all_y) + bbox_pad),
+        PPSystem.z.between(min(all_z) - bbox_pad, max(all_z) + bbox_pad),
+        PPSystem.id.notin_(power_sys_ids),
+    ).all()
+
+    results = []
+    for system in candidates:
+        snap = snapshots.get(system.id)
+        if snap is None:
+            continue  # no fresh data
+        if snap.get("power_state") != "Unoccupied":
+            continue  # must be Unoccupied
+
+        sx, sy, sz = system.x or 0.0, system.y or 0.0, system.z or 0.0
+        dist_fort = min((_dist(sx, sy, sz, cx, cy, cz) for cx, cy, cz in fortified_coords), default=9999.0)
+        dist_sh   = min((_dist(sx, sy, sz, cx, cy, cz) for cx, cy, cz in stronghold_coords), default=9999.0)
+        in_fort   = dist_fort <= fort_max
+        in_sh     = dist_sh   <= sh_max
+
+        if not (in_fort or in_sh):
+            continue
+
+        progress     = float(snap.get("control_progress") or 0.0)
+        merit_pos    = round(progress * MERIT_ACQUIRE)
+        merits_left  = max(0, MERIT_ACQUIRE - merit_pos)
+
+        if merits_left > merits_max:
+            continue
+
+        spansh_ts   = snap.get("spansh_updated_at")
+        snapshot_ts = snap.get("snapshot_time")
+
+        results.append({
+            "system_name":      system.name,
+            "system_id64":      system.system_id64,
+            "power_state":      snap.get("power_state"),
+            "control_progress": round(progress, 4),
+            "merit_position":   merit_pos,
+            "merits_remaining": merits_left,
+            "in_fort_range":    in_fort,
+            "dist_fort_ly":     round(dist_fort, 2) if in_fort else None,
+            "in_sh_range":      in_sh,
+            "dist_sh_ly":       round(dist_sh, 2) if in_sh else None,
+            "anchor_type":      "both" if (in_fort and in_sh) else ("fortified" if in_fort else "stronghold"),
+            "allegiance":       system.allegiance,
+            "spansh_updated_at": str(spansh_ts) if spansh_ts else None,
+            "snapshot_time":     str(snapshot_ts) if snapshot_ts else None,
+        })
+
+    results.sort(key=lambda r: r["merits_remaining"])
+    return {
+        "power": name,
+        "fort_max_ly": fort_max,
+        "sh_max_ly": sh_max,
+        "merits_max_filter": merits_max,
+        "fortified_anchor_count": len(fortified_coords),
+        "stronghold_anchor_count": len(stronghold_coords),
+        "total_candidates_returned": len(results),
+        "systems": results[:limit],
+    }
+
+
+# ---------------------------------------------------------------------------
 # GET /api/systems/search  — system name search (for center system selector)
 # ---------------------------------------------------------------------------
 

@@ -49,7 +49,19 @@ Version history:
                     Filters distance sliders removed from Table page; only the
                     'Within merits of acquire' slider remains with tooltip.
                     expandFortDist/expandShDist removed from FilterSettings.
+   1.6.0  2025-07-12  Expand eligibility refactor:
+                    - Unoccupied gate fixed: was `power_state != "Unoccupied" AND
+                      current_power` (wrong — passed systems with no snapshot).
+                      Now simply `if power_state != "Unoccupied": continue`.
+                    - Stale bypass fixed: `snapshots.get(system.id, {})` returned
+                      empty dict for systems with no fresh data, letting them pass
+                      the Unoccupied check. Now `None` check before any field read.
+                    - Frontend merit filter inverted: was `meritsLeft <= 120k-N`
+                      (showed FAR systems). Fixed to `meritsLeft <= N` (shows
+                      systems with ≤ N merits remaining — closest to acquisition).
+                    - Slider label updated: 'Merits left to acquire ≤'
+                    - Added /api/powers/{name}/expand-debug endpoint for verification.
 """
 
-BACKEND_VERSION      = "1.5.0"
-BACKEND_RELEASE_DATE = "2025-07-12T16:00:00Z"
+BACKEND_VERSION      = "1.6.0"
+BACKEND_RELEASE_DATE = "2025-07-12T20:00:00Z"

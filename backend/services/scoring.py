@@ -742,12 +742,25 @@ def compute_expand_scores(
     for system in candidates:
         sx, sy, sz = system.x or 0.0, system.y or 0.0, system.z or 0.0
 
-        snap             = snapshots.get(system.id, {})
-        power_state      = snap.get("power_state")
-        current_power    = snap.get("power")
+        snap = snapshots.get(system.id)
 
-        # Only Unoccupied systems (no current controlling power) qualify
-        if power_state != "Unoccupied" and current_power:
+        # ── Staleness gate ───────────────────────────────────────────────────
+        # snap is None when get_latest_snapshots() found no fresh (<24h) data
+        # for this system.  Do NOT treat empty-snap as Unoccupied — skip it.
+        if snap is None:
+            continue
+
+        power_state   = snap.get("power_state")
+        current_power = snap.get("power")
+
+        # ── Unoccupied gate — game mechanic requirement ──────────────────────
+        # ONLY Unoccupied systems (power_state == "Unoccupied") qualify as
+        # expansion targets.  Any other state (Exploited, Fortified, etc.) is
+        # already under a Power's control and cannot be acquired via expansion.
+        # Previous code: `if power_state != "Unoccupied" and current_power`
+        # was incorrect — it passed Exploited/Fortified systems when
+        # current_power was None (e.g. stale/missing data).
+        if power_state != "Unoccupied":
             continue
 
         # ── Distance to nearest qualifying anchor ────────────────────────────

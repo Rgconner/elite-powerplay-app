@@ -27,7 +27,10 @@
  *                      All live queries filter spansh_updated_at > 24h old.
  *                      Contested table: Data Age column, ⚠ amber stale warning.
  *                      formatDataAge() / isStale() helpers added to contested.ts.
+ *   1.6.0  2025-07-12  Expand eligibility refactor: correct Unoccupied gate,
+ *                      stale-bypass fix, merit filter direction corrected.
+ *                      Slider relabeled 'Merits left to acquire ≤'.
  */
 
-export const FRONTEND_VERSION      = "1.5.0";
-export const FRONTEND_RELEASE_DATE = "2025-07-12T12:00:00Z";
+export const FRONTEND_VERSION      = "1.6.0";
+export const FRONTEND_RELEASE_DATE = "2025-07-12T20:00:00Z";

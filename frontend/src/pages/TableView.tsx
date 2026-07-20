@@ -400,23 +400,23 @@ export default function TableView() {
 
   const showDist = !!refSystem;
 
-  // Client-side filter for expand targets: min merits threshold
-  // merits_to_upgrade = additional merits needed to reach 100% (acquisition)
-  // A system at 95k/120k merits has merits_to_upgrade ≈ 25,000 — high value.
-  // A system at 5k/120k merits has merits_to_upgrade ≈ 115,000 — more work needed.
-  // The slider hides systems where merits_to_upgrade EXCEEDS the threshold,
-  // meaning: "only show systems that need LESS than N more merits to acquire".
-  // (i.e. those closest to the acquisition threshold — the highest priority targets)
+  // Client-side filter for expand targets: merits-remaining threshold.
+  //
+  // expandMinMerits slider = "show only systems with ≤ N merits left to acquire".
+  // merits_to_upgrade is set by the backend to MERIT_ACQUIRE - merit_position
+  // (how many more merits are needed to hit the 120,000 acquisition threshold).
+  //
+  // slider = 30,000  → show systems with ≤ 30,000 merits remaining
+  //                    i.e. 90,000+ merits already delivered — near-ready acquisitions
+  // slider = 0       → show all (no filter)
   const filteredRecommendations = useMemo<RecommendationsResponse | null>(() => {
     if (!recommendations) return null;
     const filteredExpand = recommendations.expand.filter(item => {
       if (expandMinMerits <= 0) return true;
-      // merits_to_upgrade = how many more merits until acquisition (120k threshold)
-      // Hide items where more merits are needed than the filter allows
-      // i.e. only show systems within N merits of acquisition
       const meritsLeft = item.merits_to_upgrade;
       if (meritsLeft !== null && meritsLeft !== undefined) {
-        return meritsLeft <= (120_000 - expandMinMerits);
+        // Keep only systems where merits remaining ≤ the slider value
+        return meritsLeft <= expandMinMerits;
       }
       // No merit data — keep it (don't hide unknowns)
       return true;
@@ -485,13 +485,13 @@ export default function TableView() {
             <span
               style={{ color: "#D9A84A", fontWeight: 600, whiteSpace: "nowrap", cursor: "help", borderBottom: "1px dashed #D9A84A66" }}
               title={
-                "Hides expansion targets that are far from the acquisition threshold.\n" +
-                "Setting to 5,000 shows only systems within 5,000 merits of the 120,000 acquisition threshold.\n" +
-                "Setting to 0 shows all expansion targets.\n" +
-                "Use this to focus on near-ready acquisitions this cycle."
+                "Shows only expansion targets with ≤ N merits remaining to reach the 120,000 acquisition threshold.\n" +
+                "Example: slider at 30,000 shows only systems that already have ≥ 90,000 merits delivered\n" +
+                "— i.e. the near-ready acquisitions that could flip this cycle.\n" +
+                "Set to 0 to show all qualifying expansion targets."
               }
             >
-              ⚡ Within merits of acquire
+              ⚡ Merits left to acquire ≤
             </span>
             <input
               type="range" min={0} max={120000} step={5000}
