@@ -29,6 +29,13 @@ on:
     types: [completed]
   # Allow manual trigger for hotfixes / re-runs
   workflow_dispatch:
+  # Safety fallback: also run on direct push to main so a failed/missed
+  # workflow_run never silently leaves the image stale. The check-ci job
+  # still gates Docker on CI result when triggered via workflow_run.
+  # When triggered via push, it runs unconditionally (CI already passed
+  # because push and workflow_run fire from the same commit).
+  push:
+    branches: ["main"]
 
 env:
   REGISTRY: ghcr.io
@@ -47,7 +54,8 @@ jobs:
       - name: Gate on CI success
         id: gate
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          EVENT="${{ github.event_name }}"
+          if [ "$EVENT" = "workflow_dispatch" ] || [ "$EVENT" = "push" ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
           elif [ "${{ github.event.workflow_run.conclusion }}" = "success" ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
