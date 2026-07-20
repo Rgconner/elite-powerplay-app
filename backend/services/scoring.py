@@ -694,21 +694,25 @@ def compute_expand_scores(
     db: Session,
     weights: dict[str, float],
 ) -> list[RecommendationItem]:
-    """Score Unoccupied and Expansion systems for expansion priority.
+    """Score Unoccupied systems for expansion priority.
+
+    Spansh ONLY uses power_state='Unoccupied' for ALL expansion-stage systems,
+    including those being actively fought over by multiple powers.  There is no
+    'Expansion' state in the Spansh API.
 
     Eligibility rules:
-      • power_state = 'Unoccupied' — requires proximity to a Fortified/Stronghold anchor
-        (within expand_fortified_dist_ly / expand_stronghold_dist_ly respectively).
-      • power_state = 'Expansion'  — anchor check is skipped; being in Expansion already
-        implies the power has a foothold there.
+      • power_state = 'Unoccupied' with 1 power in powers_list (solo push):
+          requires proximity to a Fortified/Stronghold anchor
+          (within expand_fortified_dist_ly / expand_stronghold_dist_ly).
+      • power_state = 'Unoccupied' with 2+ powers in powers_list (contested expansion):
+          anchor proximity check is skipped — already has multi-power activity.
+          The selected power must appear in powers_list.
 
     Primary ranking: closeness to the 120,000-merit acquisition threshold.
-      merit_position   = control_progress × MERIT_ACQUIRE   (0.0–1.0 scale, same for both states)
-      merits_remaining = MERIT_ACQUIRE − merit_position
+      merit_position   = control_progress × MERIT_ACQUIRE
       score (0–100)    = merit_position / MERIT_ACQUIRE × 100
-      → a system 95% of the way to acquisition scores 95.
 
-    Secondary tiebreak: allegiance match adds a small bonus (Unoccupied only).
+    Secondary tiebreak: allegiance match adds a small bonus.
     """
     if not power_systems:
         return []
@@ -723,7 +727,7 @@ def compute_expand_scores(
             fortified_coords.append(coord)
         elif state == "Stronghold":
             stronghold_coords.append(coord)
-    # All controlled coords for the bounding-box query
+
     power_coords     = [(s.x or 0.0, s.y or 0.0, s.z or 0.0) for s in power_systems]
     power_system_ids = {s.id for s in power_systems}
     power_allegiance = POWER_ALLEGIANCE.get(power_name)
@@ -733,66 +737,74 @@ def compute_expand_scores(
                                   DEFAULTS["expand_fortified_dist_ly"]))
     sh_max   = float(weights.get("expand_stronghold_dist_ly",
                                   DEFAULTS["expand_stronghold_dist_ly"]))
-    bbox_pad = max(fort_max, sh_max)   # dynamic bounding box padding
+    bbox_pad = max(fort_max, sh_max)
 
-    # ── Fetch Expansion systems directly ─────────────────────────────────────
-    # Expansion systems are stored with their controlling/leading power in the
-    # snapshot's `power` field (set by the main ingest loop).  They may NOT be
-    # in power_system_ids (if a different power is listed as controller), and the
-    # bounding-box query below explicitly excludes power_system_ids, so Expansion
-    # systems would be silently dropped.  Fetch them with a dedicated query that
-    # looks for the power in powers_list (which holds ALL contesting powers).
-    _EXPANSION_STALE = """
+    # ── Fetch all Unoccupied systems where selected power appears ─────────────
+    # Two categories in one query:
+    #   a) systems where power matches directly (solo push, power = power_name)
+    #   b) systems where power appears in powers_list with 2+ powers (contested push)
+    # We fetch both via powers_list ILIKE and let the anchor gate below decide.
+    # The bounding-box on pp_systems is used for (a); for (b) we do a direct DB
+    # query because the system may not be near the selected power's territory.
+    _STALE = """
         AND (
             spansh_updated_at > NOW() - INTERVAL '24 hours'
             OR (spansh_updated_at IS NULL AND snapshot_time > NOW() - INTERVAL '48 hours')
         )
     """
-    exp_rows = db.execute(text(f"""
+
+    # Contested-expansion: Unoccupied + 2 or more powers + selected power present.
+    # Stored during ingest with power_state='Contested' (our internal label) and
+    # powers_list = comma-separated list of all contesting powers.
+    contested_exp_rows = db.execute(text(f"""
         SELECT DISTINCT ON (system_id)
                system_id, power, power_state,
                reinforcement, undermining, control_progress,
-               snapshot_time, spansh_updated_at, conflict_progress
+               snapshot_time, spansh_updated_at, conflict_progress,
+               powers_list
         FROM pp_system_snapshots
-        WHERE power_state = 'Expansion'
+        WHERE power_state = 'Contested'
           AND powers_list ILIKE :pattern
-          {_EXPANSION_STALE}
+          {_STALE}
         ORDER BY system_id, snapshot_time DESC
     """), {"pattern": f"%{power_name}%"}).mappings().all()
 
-    exp_sys_ids   = [r["system_id"] for r in exp_rows]
-    exp_snaps     = {r["system_id"]: dict(r) for r in exp_rows}
-    exp_sys_objs  = {s.id: s for s in (
-        db.query(PPSystem).filter(PPSystem.id.in_(exp_sys_ids)).all()
-        if exp_sys_ids else []
+    contested_exp_sys_ids = [r["system_id"] for r in contested_exp_rows]
+    contested_exp_snaps   = {r["system_id"]: dict(r) for r in contested_exp_rows}
+    contested_exp_objs    = {s.id: s for s in (
+        db.query(PPSystem).filter(PPSystem.id.in_(contested_exp_sys_ids)).all()
+        if contested_exp_sys_ids else []
     )}
 
-    # ── DB candidate query (indexed bounding box) — Unoccupied only ──────────
+    # Solo-expansion: bounding-box candidates where snapshot power = power_name
+    # and power_state = 'Unoccupied' (single power pushing).
     all_x = [c[0] for c in power_coords]
     all_y = [c[1] for c in power_coords]
     all_z = [c[2] for c in power_coords]
-    candidates: list[PPSystem] = db.query(PPSystem).filter(
+    solo_candidates: list[PPSystem] = db.query(PPSystem).filter(
         PPSystem.x.between(min(all_x) - bbox_pad, max(all_x) + bbox_pad),
         PPSystem.y.between(min(all_y) - bbox_pad, max(all_y) + bbox_pad),
         PPSystem.z.between(min(all_z) - bbox_pad, max(all_z) + bbox_pad),
         PPSystem.id.notin_(power_system_ids),
+        PPSystem.id.notin_(contested_exp_sys_ids),  # don't double-count
     ).all()
 
-    # ── Build unified candidate list: (system, snap, is_expansion) ───────────
-    # Expansion systems come from their dedicated query; Unoccupied come from
-    # the bounding-box query. Both feed the same scoring block below.
+    # ── Build unified (system, snap, is_contested_expansion) list ────────────
     scored_candidates: list[tuple[PPSystem, dict, bool]] = []
 
-    for sid, snap in exp_snaps.items():
-        system = exp_sys_objs.get(sid)
+    for sid, snap in contested_exp_snaps.items():
+        system = contested_exp_objs.get(sid)
         if system is not None:
             scored_candidates.append((system, snap, True))
 
-    for system in candidates:
+    for system in solo_candidates:
         snap = snapshots.get(system.id)
         if snap is None:
             continue
         if snap.get("power_state") != "Unoccupied":
+            continue
+        # Must be this power's solo push
+        if snap.get("power") != power_name:
             continue
         sx, sy, sz = system.x or 0.0, system.y or 0.0, system.z or 0.0
         dist_fort = min(
@@ -808,11 +820,11 @@ def compute_expand_scores(
 
     items: list[RecommendationItem] = []
 
-    for system, snap, is_expansion in scored_candidates:
-        sx, sy, sz = system.x or 0.0, system.y or 0.0, system.z or 0.0
-        power_state = snap.get("power_state", "Expansion" if is_expansion else "Unoccupied")
+    for system, snap, is_contested_exp in scored_candidates:
+        sx, sy, sz  = system.x or 0.0, system.y or 0.0, system.z or 0.0
+        power_state = snap.get("power_state", "Unoccupied")
 
-        if is_expansion:
+        if is_contested_exp:
             in_fort_range = False
             in_sh_range   = False
             dist_fort     = 9_999.0
@@ -833,9 +845,7 @@ def compute_expand_scores(
         progress    = float(snap.get("control_progress") or 0.0)
         merit_pos   = round(progress * MERIT_ACQUIRE)
         merits_left = max(0, MERIT_ACQUIRE - merit_pos)
-
-        # Score = how far along to acquisition (higher = less work remaining)
-        score = round((merit_pos / MERIT_ACQUIRE) * 100.0, 2)
+        score       = round((merit_pos / MERIT_ACQUIRE) * 100.0, 2)
 
         # ── Allegiance tiebreak ──────────────────────────────────────────────
         if power_allegiance and system.allegiance == power_allegiance:
@@ -855,10 +865,10 @@ def compute_expand_scores(
             )
             reasons.append(f"Merits still needed: {merits_left:,}")
 
-        # Determine anchor_type label for UI badge
-        if is_expansion:
+        # ── Anchor / contested-expansion badge ──────────────────────────────
+        if is_contested_exp:
             anchor_type = "expansion"
-            reasons.append("In Expansion — power already has a foothold here")
+            reasons.append("Multi-power contested expansion — anchor check skipped")
         else:
             anchor_parts: list[str] = []
             if in_fort_range:
@@ -874,7 +884,10 @@ def compute_expand_scores(
                 anchor_type = "stronghold"
 
         if power_allegiance and system.allegiance == power_allegiance:
-            reasons.append(f"{system.allegiance} allegiance matches power (+{weights.get('expand_allegiance_match', DEFAULTS['expand_allegiance_match']):.0f} pts)")
+            reasons.append(
+                f"{system.allegiance} allegiance matches power "
+                f"(+{weights.get('expand_allegiance_match', DEFAULTS['expand_allegiance_match']):.0f} pts)"
+            )
 
         # ── Distance from reference system ───────────────────────────────────
         distance_from_center: Optional[float] = None
@@ -892,14 +905,11 @@ def compute_expand_scores(
             control_progress=progress,
             distance_from_center=distance_from_center,
             threat_trend="unknown",
-            # Populate merit fields so the MeritBar can render for expand items
             merit_position=merit_pos,
-            buffer_merits=merit_pos,             # for Unoccupied: buffer = position
-            merits_to_safety=None,               # not applicable for Unoccupied
-            merits_to_upgrade=merits_left,       # merits remaining to acquire
+            buffer_merits=merit_pos,
+            merits_to_safety=None,
+            merits_to_upgrade=merits_left,
             anchor_type=anchor_type,
-            # Per-power conflict progress — mirrors ContestedSystemInfo.conflict_progress
-            # Lets the UI render per-power bars and a combined ranking score
             conflict_progress=snap.get("conflict_progress"),
         ))
 

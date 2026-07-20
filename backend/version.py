@@ -80,5 +80,5 @@ Version history:
                      - Admin settings TypeScript type fix in saveSettings payload.
 """
 
-BACKEND_VERSION      = "1.7.1"
-BACKEND_RELEASE_DATE = "2026-06-27T12:00:00Z"
+BACKEND_VERSION      = "1.7.2"
+BACKEND_RELEASE_DATE = "2026-06-27T14:00:00Z"
