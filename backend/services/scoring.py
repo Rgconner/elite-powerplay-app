@@ -308,7 +308,8 @@ def get_latest_snapshots(db: Session) -> dict[int, dict]:
         SELECT DISTINCT ON (system_id)
                system_id, power, power_state,
                reinforcement, undermining, control_progress,
-               snapshot_time, spansh_updated_at
+               snapshot_time, spansh_updated_at,
+               conflict_progress
         FROM pp_system_snapshots
         WHERE (
             spansh_updated_at > NOW() - INTERVAL '24 hours'
@@ -734,7 +735,39 @@ def compute_expand_scores(
                                   DEFAULTS["expand_stronghold_dist_ly"]))
     bbox_pad = max(fort_max, sh_max)   # dynamic bounding box padding
 
-    # ── DB candidate query (indexed bounding box) ────────────────────────────
+    # ── Fetch Expansion systems directly ─────────────────────────────────────
+    # Expansion systems are stored with their controlling/leading power in the
+    # snapshot's `power` field (set by the main ingest loop).  They may NOT be
+    # in power_system_ids (if a different power is listed as controller), and the
+    # bounding-box query below explicitly excludes power_system_ids, so Expansion
+    # systems would be silently dropped.  Fetch them with a dedicated query that
+    # looks for the power in powers_list (which holds ALL contesting powers).
+    _EXPANSION_STALE = """
+        AND (
+            spansh_updated_at > NOW() - INTERVAL '24 hours'
+            OR (spansh_updated_at IS NULL AND snapshot_time > NOW() - INTERVAL '48 hours')
+        )
+    """
+    exp_rows = db.execute(text(f"""
+        SELECT DISTINCT ON (system_id)
+               system_id, power, power_state,
+               reinforcement, undermining, control_progress,
+               snapshot_time, spansh_updated_at, conflict_progress
+        FROM pp_system_snapshots
+        WHERE power_state = 'Expansion'
+          AND powers_list ILIKE :pattern
+          {_EXPANSION_STALE}
+        ORDER BY system_id, snapshot_time DESC
+    """), {"pattern": f"%{power_name}%"}).mappings().all()
+
+    exp_sys_ids   = [r["system_id"] for r in exp_rows]
+    exp_snaps     = {r["system_id"]: dict(r) for r in exp_rows}
+    exp_sys_objs  = {s.id: s for s in (
+        db.query(PPSystem).filter(PPSystem.id.in_(exp_sys_ids)).all()
+        if exp_sys_ids else []
+    )}
+
+    # ── DB candidate query (indexed bounding box) — Unoccupied only ──────────
     all_x = [c[0] for c in power_coords]
     all_y = [c[1] for c in power_coords]
     all_z = [c[2] for c in power_coords]
@@ -745,32 +778,23 @@ def compute_expand_scores(
         PPSystem.id.notin_(power_system_ids),
     ).all()
 
-    items: list[RecommendationItem] = []
+    # ── Build unified candidate list: (system, snap, is_expansion) ───────────
+    # Expansion systems come from their dedicated query; Unoccupied come from
+    # the bounding-box query. Both feed the same scoring block below.
+    scored_candidates: list[tuple[PPSystem, dict, bool]] = []
+
+    for sid, snap in exp_snaps.items():
+        system = exp_sys_objs.get(sid)
+        if system is not None:
+            scored_candidates.append((system, snap, True))
 
     for system in candidates:
-        sx, sy, sz = system.x or 0.0, system.y or 0.0, system.z or 0.0
-
         snap = snapshots.get(system.id)
-
-        # ── Staleness gate ───────────────────────────────────────────────────
-        # snap is None when get_latest_snapshots() found no fresh (<24h) data
-        # for this system.  Do NOT treat empty-snap as Unoccupied — skip it.
         if snap is None:
             continue
-
-        power_state   = snap.get("power_state")
-        current_power = snap.get("power")
-
-        # ── State gate ───────────────────────────────────────────────────────
-        # 'Unoccupied'  — needs merits to acquire; anchor proximity required.
-        # 'Expansion'   — power already has a foothold; skip the anchor check.
-        # All other states (Exploited, Fortified, Stronghold, etc.) are already
-        # controlled and cannot be acquired via expansion.
-        is_expansion = power_state == "Expansion"
-        if power_state != "Unoccupied" and not is_expansion:
+        if snap.get("power_state") != "Unoccupied":
             continue
-
-        # ── Distance to nearest qualifying anchor (Unoccupied only) ─────────
+        sx, sy, sz = system.x or 0.0, system.y or 0.0, system.z or 0.0
         dist_fort = min(
             (_dist(sx, sy, sz, cx, cy, cz) for cx, cy, cz in fortified_coords),
             default=9_999.0,
@@ -779,12 +803,31 @@ def compute_expand_scores(
             (_dist(sx, sy, sz, cx, cy, cz) for cx, cy, cz in stronghold_coords),
             default=9_999.0,
         )
+        if dist_fort <= fort_max or dist_sh <= sh_max:
+            scored_candidates.append((system, snap, False))
 
-        in_fort_range = dist_fort <= fort_max
-        in_sh_range   = dist_sh   <= sh_max
+    items: list[RecommendationItem] = []
 
-        if not is_expansion and not (in_fort_range or in_sh_range):
-            continue   # Unoccupied but not reachable from any qualifying anchor
+    for system, snap, is_expansion in scored_candidates:
+        sx, sy, sz = system.x or 0.0, system.y or 0.0, system.z or 0.0
+        power_state = snap.get("power_state", "Expansion" if is_expansion else "Unoccupied")
+
+        if is_expansion:
+            in_fort_range = False
+            in_sh_range   = False
+            dist_fort     = 9_999.0
+            dist_sh       = 9_999.0
+        else:
+            dist_fort = min(
+                (_dist(sx, sy, sz, cx, cy, cz) for cx, cy, cz in fortified_coords),
+                default=9_999.0,
+            )
+            dist_sh = min(
+                (_dist(sx, sy, sz, cx, cy, cz) for cx, cy, cz in stronghold_coords),
+                default=9_999.0,
+            )
+            in_fort_range = dist_fort <= fort_max
+            in_sh_range   = dist_sh   <= sh_max
 
         # ── Merit-proximity score (0–100 scale) ─────────────────────────────
         progress    = float(snap.get("control_progress") or 0.0)

@@ -41,5 +41,5 @@
  *                      power present filter. Admin: Staleness Settings card.
  */
 
-export const FRONTEND_VERSION      = "1.7.0";
-export const FRONTEND_RELEASE_DATE = "2026-06-27T00:00:00Z";
+export const FRONTEND_VERSION      = "1.7.1";
+export const FRONTEND_RELEASE_DATE = "2026-06-27T12:00:00Z";
