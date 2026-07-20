@@ -1,0 +1,317 @@
+{
+  "last_updated": "2026-03-09T16:33:43.478708900+00:00",
+  "segments": [
+    {
+      "audio_end_time": 34.54,
+      "audio_start_time": 6.72,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:04:59",
+      "duration": 27.82,
+      "id": "seg_287",
+      "sequence_id": 287,
+      "text": "as as far as areas where e either you or your peers are having success in the business so we can kinda start poking. So uh Joe, I I I I I I I I I I I know you you're you're retired but we have someone you know kinda helping help report you. Is there anything specific you need help on in the territory? Um Charles is is my backstop for renewals that are direct versus the ones that come to the business partners so"
+    },
+    {
+      "audio_end_time": 43.09,
+      "audio_start_time": 34.38,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:05:06",
+      "duration": 8.71,
+      "id": "seg_288",
+      "sequence_id": 288,
+      "text": "Should we keep until my manager Allen Petters and put somebody new in my place? Okay. Um"
+    },
+    {
+      "audio_end_time": 61.03,
+      "audio_start_time": 43.98,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:05:24",
+      "duration": 17.05,
+      "id": "seg_289",
+      "sequence_id": 289,
+      "text": "focus obviously and we've we we we we we we we we we we've had caller and I have had conversations over the last week or so with everybody on the phone here from this call um talking about the individual accounts and then talking about our multi-bitter services offerings so"
+    },
+    {
+      "audio_end_time": 97.99,
+      "audio_start_time": 60.81,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:06:03",
+      "duration": 37.18,
+      "id": "seg_290",
+      "sequence_id": 290,
+      "text": "We've shared high level one two page kinds of documents with them for our capabilities for Oracle support VMware and Microsoft and Retail Networking and X86. And so I mean the discussions got into okay here's kind of next steps on each each potential client and what areas they may be uh of relevance to them. So those conversations are ongoing. I mean from a high level you know I don't want to speak for Genie and Greg and everybody else on the call, but Mitch, um"
+    },
+    {
+      "audio_end_time": 233.32,
+      "audio_start_time": 98.34,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:08:26",
+      "duration": 134.98,
+      "id": "seg_291",
+      "sequence_id": 291,
+      "text": "The next steps really are to get the audience with the client and to broaden their knowledge, the client's knowledge of our capabilities in MPS, TOS's multi-leader services. Because there is significant savings to be had, especially, for example, on Oracle where we can save them on support costs, relating support costs, and tech support, you know, 50% plus relative to what they're paying today. VMware is a cost of avoidance so they can avoid the 3x to 10x kind of price increases on support. So any clients that have perpetual licenses, whether it's Oracle or VMware, we can greatly help them in that environment, save the 50%, and they can take that money and redeploy it and use it for transitional projects, hopefully with you guys. That's the goal of these one. But whatever whatever they can say can be cloud back into future projects. So that's really the theme of our solutions. We truly can provide better support than they're getting today and lower cost, believe it or not. Because when they're back level on, for example, Oracle or VMware, they're really not getting any support from Oracle or VMware. So that's the theme to all of this. We have the ability as global partners of Cisco, Dell, Lenovo, and others in the networking space to truly do full term key projects and then support the clients over multiple years with our maintenance and support offerings as platform partners, global goal partners, depending on which which uh manufacturer you're talking about. So that's what we've been discussing with everybody here on the call, me and Colin, and going through that play or those plays. And that's where we would love to have held and getting our foot in the door. And we do have subject matter experts beyond me and Colin that can go really deep on these various topics."
+    },
+    {
+      "audio_end_time": 275.23,
+      "audio_start_time": 234.0,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:09:00",
+      "duration": 41.23,
+      "id": "seg_292",
+      "sequence_id": 292,
+      "text": "Are you guys comfortable? And you know the personas that and questions you would need to be asking. I was thinking out loud, you know, where I like this whole new model is I kind of hear about you know initiatives and certain things and I I know Dom for Bungie out here, they're doing a lot of um data center consolidations with their their merger and stuff like that. I would think that would be a a a a a a a a a a a time where you could be asking some of those questions from a support perspective. Um where you where you don't have support or things, you know, gaps we can be filling in. That they probably don't even know about. So I don't know."
+    },
+    {
+      "audio_end_time": 305.38,
+      "audio_start_time": 275.1,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:09:29",
+      "duration": 30.28,
+      "id": "seg_293",
+      "sequence_id": 293,
+      "text": "Everybody have a good handle on this, or do you have any questions for Colin and Eugene and Joe? Sarvik and I got together with uh Colin and Joe and talk quite qu quite a bit about this. One thing that we one thing we took out of the discussion, at least it was one of the takeaways that I I had, which is you know you're really not you're not uh inferring with a client that they take on uh or buy a problem."
+    },
+    {
+      "audio_end_time": 416.92,
+      "audio_start_time": 305.67,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:11:27",
+      "duration": 111.25,
+      "id": "seg_294",
+      "sequence_id": 294,
+      "text": "There's already a budget line item associated with just about everything you're talking about when it comes to GOS and third party maintenance specifically. So our thought coming out of it was it's an easy discussion to have because they're already spending in most cases a lot more. And then there's a slide that Colin that you and Joe both have that gives estimates of the savings based on the actual offering that I'm gonna print out in our copy and just lead with lead with the financial side. Just start the discussion. If they're interested, you'll wind up talking about IBM support, which is again a very easy thing to do. There's not many customers out there that have not used IBM support for many, many years. I I find it very natural. So that's that's what we got out of the jet. Yeah, and just to add to that, um usually when we when you hear about a customer um you know signing a deal with with one of our competitors or someone else uh in in in the field, you know, it's it's not the best thing to hear, but from a TLS perspective, it's it's even more of a value add, right? And specific to or writing, you know, we've heard about this big Fortnite uh Cisco takeout that they did, and it that gives us kind of something to talk about that A, you know, across uh with Fortinet and um with some crossing data-based solutions, you know, what are you doing for maintenance when you do it for support? How would you like to have a kind of single thread for all of those uh for all that entire footprint when it comes to support, right? So it gives us a good talking point."
+    },
+    {
+      "audio_end_time": 424.12,
+      "audio_start_time": 416.82,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:11:27",
+      "duration": 7.3,
+      "id": "seg_295",
+      "sequence_id": 295,
+      "text": "So yeah, that's that's what I got. Especially the lower like they probably already still have uh you know."
+    },
+    {
+      "audio_end_time": 486.19,
+      "audio_start_time": 423.99,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:12:32",
+      "duration": 62.2,
+      "id": "seg_296",
+      "sequence_id": 296,
+      "text": "support for all the Cisco stuff over a certain amount of time we can lower that right that's just money in our in our in their pocket right so they roll out the new stuff which they've already committed to so I think I think they still need to keep their network up right so that makes that makes sense to me. Any other hot use cases out there on your hearing I think uh you know I like everyone to say we we we had some pretty good conversations on all the accounts in the pod um um there were some specific accounts that they had some uh higher potential than others and so I think you know the conversation that we had I think uh we all kind of agree that we we we we we we we we we we we need to just uh start with what makes the most sense for each account um we had talked about some network uh solutions for like O'Reilly um we talked about some potential uh asset recovery disposal solutions um"
+    },
+    {
+      "audio_end_time": 504.76,
+      "audio_start_time": 486.12,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:12:48",
+      "duration": 18.64,
+      "id": "seg_297",
+      "sequence_id": 297,
+      "text": "As well as being where or some of the specific accounts I think now that we kind of have that had that general uh initial conversation it's now about like driving these conversations with the specific uh solutions that we discussed um where where where where it makes the most sense."
+    },
+    {
+      "audio_end_time": 626.98,
+      "audio_start_time": 505.02,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:14:58",
+      "duration": 121.96,
+      "id": "seg_298",
+      "sequence_id": 298,
+      "text": "Okay, well let's make sure we're having specific account conversations and getting opportunities and the system so we can grow you know grow the base, right? And the ideas that we have to go after. Um the other accounts team where you think there's some problems here. Yeah. Yeah, this is this this is for us. So just thinking about um in specifically uh uh bungi, you know, they're undergoing a huge transformation, consolidation of their data centers. Um they've got lots of if you will, legacy what will become legacy apps and legacy tool sets from that they've acquired through the the the recent merger between them and Vitera. And so there's and and one of their guys actually said to me, you know, their their upper management, their C level is saying, where can we throw money at the problem to make it go faster? And so I think there's a real you know if we can get in deeper with these guys a real opportunity for us to maybe be the support for some of these some of the stuff that they want to get rid of so they can focus on what they need to do. Right? And then there's yeah, sorry, Ross. Who would be Eugene and Colin and Joe. What what what are the personas where you've done deals where you've got who are the people in the organization that kind of care about this stuff. Just just so the team knows how we're be thinking about going on. Say vice president director level of infrastructure, uh, yeah, uh, it's also potentially at the procurement level at a high level with the procurement uh or the CFO kind of office or expensive savings, saving costs on the"
+    },
+    {
+      "audio_end_time": 652.45,
+      "audio_start_time": 627.09,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:15:16",
+      "duration": 25.36,
+      "id": "seg_299",
+      "sequence_id": 299,
+      "text": "for vendors is is is of importance and I know especially if they have level management um because like I said on the work to 50% plus savings and then and the folks that are first line second line managers and IT that are responsible for the workable space may be thinking hey I don't want any control stuff so it may be a hard or so"
+    },
+    {
+      "audio_end_time": 735.28,
+      "audio_start_time": 652.5,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:16:42",
+      "duration": 82.78,
+      "id": "seg_300",
+      "sequence_id": 300,
+      "text": "So we're gonna put the door in my opinion, I think we also need somebody who's gonna recognize the cost of these we need to at least learn about this and understand uh strengths and weaknesses of the IGO three so that we can know whether or not it's something that we're willing to do. So that point that's you guys are both right, right? Because at the end of the day, if you're talking the size of the deal, the infrastructure, the data set, it does require what um Colin mentioned, but I'll give you an example uh of what Joe is describing. We have a situation where we have a high level camera person at Academy, right? And his job is to provide the C Suite with where they can save money, right? And so we honed in on that. And as a result, we're working with him to do a uh uh uh uh uh uh uh uh uh uh paper consolidation where we're gonna work on getting their Microsoft support, their Oracle support, and even bring in some of their older legacy um non-beam equipment that they sent to a TPM to uh cover. But he is our advocate and he's pushing it to say, hey C Suite, um check this out. Remember that oracle?"
+    },
+    {
+      "audio_end_time": 737.38,
+      "audio_start_time": 735.84,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:16:42",
+      "duration": 1.54,
+      "id": "seg_301",
+      "sequence_id": 301,
+      "text": "We're paying three million dollars a year."
+    },
+    {
+      "audio_end_time": 757.0300000000001,
+      "audio_start_time": 738.09,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:16:59",
+      "duration": 18.94,
+      "id": "seg_302",
+      "sequence_id": 302,
+      "text": "I am saying we can do 1.8. You guys talked about this other project in one we can use that savings to fund this project. So he is kind of pushing that because not only does it make him look good, that he's out finding ways to save the company money, right? Um, but it's also making his life easier."
+    },
+    {
+      "audio_end_time": 784.72,
+      "audio_start_time": 758.76,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:17:27",
+      "duration": 25.96,
+      "id": "seg_303",
+      "sequence_id": 303,
+      "text": "So that's just a like a high level example of what we did. But the C suite is very, very important because they make the ultimate decision, but that high level procurement person, their job is to find ways to save money. Right? And if we can help them do that, they'll be an advocate. You know, on the high levels. And what I'm hearing is you gotta have a both, right? We do have to have both."
+    },
+    {
+      "audio_end_time": 792.0400000000001,
+      "audio_start_time": 789.21,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:17:33",
+      "duration": 2.83,
+      "id": "seg_304",
+      "sequence_id": 304,
+      "text": "They're not talking about that."
+    },
+    {
+      "audio_end_time": 799.6,
+      "audio_start_time": 791.97,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:17:41",
+      "duration": 7.63,
+      "id": "seg_305",
+      "sequence_id": 305,
+      "text": "That conversation's happening. They're talking about where we can save money, so they kind of do a combination of both."
+    },
+    {
+      "audio_end_time": 824.53,
+      "audio_start_time": 800.31,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:18:07",
+      "duration": 24.22,
+      "id": "seg_306",
+      "sequence_id": 306,
+      "text": "Yeah, I think definitely team just if you're with that procurement type of person and you have one pager that says well this is all the support that you know we can do. Yeah, and uh I I think it's it's a good way to work both sides, especially if you're gonna end up doing a deal with them for our stuff, other stuff later, right? So you're just trying to bring some creative ideas. Um"
+    },
+    {
+      "audio_end_time": 854.5,
+      "audio_start_time": 825.57,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:18:37",
+      "duration": 28.93,
+      "id": "seg_307",
+      "sequence_id": 307,
+      "text": "Any any any any any any any any any any any top tracks yet on on on on on on on on on on on VMware as far as because you know uh obviously I think we have a tremendous opportunity to take VMware out on a lot of our accounts with uh Red Hat virtualization and or or or or or or or or or or or uh OpenShift. Um I would think we could you know really help them with their VMware and support if they're on perpetual. Sounds like they have to be on perpetual. Is there any opportunities there that's come up from the team as far as that that that that that that that that that that that type of emotion"
+    },
+    {
+      "audio_end_time": 860.53,
+      "audio_start_time": 856.86,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:18:41",
+      "duration": 3.67,
+      "id": "seg_308",
+      "sequence_id": 308,
+      "text": "I did talk to Mitch and Jessica about um"
+    },
+    {
+      "audio_end_time": 899.2299999999999,
+      "audio_start_time": 860.43,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:19:21",
+      "duration": 38.8,
+      "id": "seg_309",
+      "sequence_id": 309,
+      "text": "be more for Tyson and Hobby Lobby. I know that that's something that I believe you guys are saying that they um I I can't have it in my nose again but I think that they are either locked into something for maybe like the next two years but they are um you know wanting to see what they can do when that time does come so I mean you know uh that that that that that that that that that that that's an opportunity where I think we can kind of start that conversation and try to you know supplement their cost as they figure out what it is to you know migrate um to outside of that. So um correct me if I'm I'm wrong there um"
+    },
+    {
+      "audio_end_time": 914.86,
+      "audio_start_time": 900.12,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:19:35",
+      "duration": 14.74,
+      "id": "seg_310",
+      "sequence_id": 310,
+      "text": "Yeah, there's there's a lot of information we don't know. We do know that rock pop prices are going up at both accounts. They're frustrated at both accounts. Do they really want to look for alternatives?"
+    },
+    {
+      "audio_end_time": 916.78,
+      "audio_start_time": 915.69,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:19:36",
+      "duration": 1.09,
+      "id": "seg_311",
+      "sequence_id": 311,
+      "text": "Um"
+    },
+    {
+      "audio_end_time": 927.07,
+      "audio_start_time": 921.36,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:19:47",
+      "duration": 5.71,
+      "id": "seg_312",
+      "sequence_id": 312,
+      "text": "Right. So we just want to make them aware, right? And and then they might start asking some questions."
+    },
+    {
+      "audio_end_time": 982.69,
+      "audio_start_time": 927.27,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:20:45",
+      "duration": 55.42,
+      "id": "seg_313",
+      "sequence_id": 313,
+      "text": "Thinking thinking out loud as far as just you know budget dollars already there, we can take some of the budget dollars and flying somewhere else, um and then having them say money, I think it's wrong. So all right, well I think everybody kind of has the adjust to this. Um I just want to keep the conversations going. Um let's continue to drive, you know, more pipeline. Um I'm just gonna move this call out, probably, you know, three weeks plus, just so we kinda have another touch point to see kind of where we're going. We'd love to hear you know some more specific situations where we have new opportunities, but it looks like you know the last three weeks we have moved more into the outside, so I haven't looked at the specifics and buy account, etc. But I just want to make sure everybody is is is collaborating and and trying to find new opportunities. So if if if if if if if if if if if anybody does anybody have any other comments or thoughts or questions for leave that's all comments too. Um"
+    },
+    {
+      "audio_end_time": 998.38,
+      "audio_start_time": 982.41,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:20:58",
+      "duration": 15.97,
+      "id": "seg_314",
+      "sequence_id": 314,
+      "text": "Something over to you. I'm I'm pretty sure you can push that over to the team, but the the comment, thank you for that, the talking points, the questions, things to listen for, and you just lob stuff out, and you would be surprised what they come back with."
+    },
+    {
+      "audio_end_time": 1021.3,
+      "audio_start_time": 999.66,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:21:21",
+      "duration": 21.64,
+      "id": "seg_315",
+      "sequence_id": 315,
+      "text": "Every time I've set with a customer and I threw out just some very, very simple questions. They're I don't know. They basically wanted to explore. Now it's kind of like sticking your toe in the water to test it. They're kind of apprehensive, of course, but they're they're talking."
+    },
+    {
+      "audio_end_time": 1029.76,
+      "audio_start_time": 1021.29,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:21:29",
+      "duration": 8.47,
+      "id": "seg_316",
+      "sequence_id": 316,
+      "text": "Right. So just know that when we get in front of the customer, they are going to inquire once you ask them the simple questions."
+    },
+    {
+      "audio_end_time": 1057.06,
+      "audio_start_time": 1031.85,
+      "confidence": 0.8500000238418579,
+      "display_time": "16:21:57",
+      "duration": 25.21,
+      "id": "seg_317",
+      "sequence_id": 317,
+      "text": "Yeah, team, I'll send out these questions and um take another look at them over email. And then I'll put a summary in our calendar by kind of where we are the last couple times on the pipeline and let's um grow it some more. I'm gonna give everybody nine minutes back to think about where you can go make a TLS call. Thanks everybody for your time. Thank you, Share. See y'all. Thank you."
+    }
+  ],
+  "total_segments": 31,
+  "version": "1.0"
+}
