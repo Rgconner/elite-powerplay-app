@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { RecommendationsResponse, RecommendationItem } from "../api/recommendations";
 import { ContestedSystemInfo, parseConflictProgress } from "../api/contested";
-import { ppStateColor, PP_STATE_LABELS } from "../constants/ppColors";
+import { ppStateColor, PP_STATE_LABELS, powerColor } from "../constants/ppColors";
 
 interface Props {
   recommendations: RecommendationsResponse | null;
@@ -111,9 +111,9 @@ function ExpandConflictBars({ item }: { item: RecommendationItem }) {
         </span>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        {sorted.map((entry, idx) => {
+        {sorted.map((entry) => {
           const pct     = Math.min(100, Math.max(0, entry.progress * 100));
-          const color   = CONTEST_COLORS[idx % CONTEST_COLORS.length];
+          const color   = powerColor(entry.power);
           const acquired = entry.progress >= 1.0;
           return (
             <div key={entry.power}>
@@ -319,9 +319,6 @@ function Section({ title, items, color }: { title: string; items: Recommendation
 
 // ── Contested Systems section ──────────────────────────────────────────────
 
-// Power colours for contest progress bars
-const CONTEST_COLORS = ["#4A90D9", "#D94A4A", "#4AD94A", "#D9A84A", "#9A4AD9", "#4AD9D9"];
-
 function ContestedRow({ item }: { item: ContestedSystemInfo }) {
   const conflictEntries = parseConflictProgress(item);
   // progress is normalised 0–1+ where 1.0 = acquisition threshold (120,000 merits)
@@ -365,7 +362,7 @@ function ContestedRow({ item }: { item: ContestedSystemInfo }) {
             .map((entry, idx) => {
               // progress is already normalised 0–1+ where 1.0 = 120k merits acquired
               const normPct = Math.min(100, Math.max(0, entry.progress * 100));
-              const color = CONTEST_COLORS[idx % CONTEST_COLORS.length];
+              const color = powerColor(entry.power);
               const acquired = entry.progress >= 1.0;
               return (
                 <div key={entry.power}>

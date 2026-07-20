@@ -45,3 +45,28 @@ export const PP_STATE_LABELS: Record<string, string> = {
 export const PP_STATES_ORDERED = [
   "Stronghold", "Fortified", "Exploited", "Unoccupied",
 ] as const;
+
+// ── Per-power brand colors ───────────────────────────────────────────────────
+// Source: canonical Elite Dangerous lore / community design guides.
+
+export const POWER_COLORS: Record<string, string> = {
+  "Arissa Lavigny-Duval": "#9B59B6",  // Purple  (Empire)
+  "Zemina Torval":        "#3498DB",  // Blue    (Empire)
+  "Aisling Duval":        "#00BCD4",  // Cyan    (Empire)
+  "Denton Patreus":       "#BB8FCE",  // Light Purple (Empire)
+  "Felicia Winters":      "#F1C40F",  // Gold    (Federation)
+  "Edmund Mahon":         "#27AE60",  // Green   (Alliance)
+  "Li Yong-Rui":          "#82E0AA",  // Light Green (Independent)
+  "Archon Delaine":       "#E74C3C",  // Red     (Independent)
+  "Pranav Antal":         "#F39C12",  // Yellow  (Independent)
+  "Yuri Grom":            "#E67E22",  // Orange  (Independent)
+};
+
+/**
+ * Return the brand color for a named power, with a neutral fallback
+ * for any power not in the table (forward-compat for future additions).
+ */
+export function powerColor(name: string | null | undefined): string {
+  if (!name) return "#8b949e";
+  return POWER_COLORS[name] ?? "#8b949e";
+}

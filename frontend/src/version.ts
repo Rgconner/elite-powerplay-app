@@ -39,7 +39,13 @@
  *                      sumProgress. Expand filter changed to 'Min lead progress %'.
  *                      Contested list: acquisition gate (max>=100%) + selected
  *                      power present filter. Admin: Staleness Settings card.
+ *   1.8.0  2026-06-27  Per-power brand colors: canonical POWER_COLORS map and
+ *                      powerColor() helper added to ppColors.ts.
+ *                      PowerSelector: color swatch dot + colored text when selected.
+ *                      PowerMultiSelect (TargetAnalysis): pill color matches power brand.
+ *                      Contest/expand progress bars: bars & labels use power brand color
+ *                      instead of generic rotation palette.
  */
 
-export const FRONTEND_VERSION      = "1.7.2";
-export const FRONTEND_RELEASE_DATE = "2026-06-27T14:00:00Z";
+export const FRONTEND_VERSION      = "1.8.0";
+export const FRONTEND_RELEASE_DATE = "2026-06-27T15:00:00Z";

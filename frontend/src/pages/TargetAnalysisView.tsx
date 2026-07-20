@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, type CSSProperties } from "react";
 import { getTargetAnalysis, TargetAnalysisItem } from "../api/targeting";
 import { listPowers } from "../api/powers";
-import { ppStateColor, PP_STATE_LABELS } from "../constants/ppColors";
+import { ppStateColor, PP_STATE_LABELS, powerColor } from "../constants/ppColors";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -178,15 +178,16 @@ function PowerMultiSelect({
       <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
         {available.map(p => {
           const sel = value.includes(p);
+          const pc  = powerColor(p);
           return (
             <button
               key={p}
               onClick={() => toggle(p)}
               style={{
                 padding: "3px 10px", fontSize: 12, borderRadius: 4, cursor: "pointer",
-                border: sel ? "1px solid #D94A4A" : "1px solid #30363d",
-                background: sel ? "#3d0000" : "#161b22",
-                color: sel ? "#FF8C00" : "#8b949e",
+                border: sel ? `1px solid ${pc}` : "1px solid #30363d",
+                background: sel ? `${pc}22` : "#161b22",
+                color: sel ? pc : "#8b949e",
                 fontWeight: sel ? 700 : 400,
                 transition: "all 0.1s",
               }}
