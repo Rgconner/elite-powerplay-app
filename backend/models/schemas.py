@@ -63,6 +63,9 @@ class PPSystemEntry(BaseModel):
     control_progress: Optional[float] = None
     snapshot_time: Optional[datetime] = None
 
+    # When Spansh last received game data for this system (authoritative data age)
+    spansh_updated_at: Optional[datetime] = None
+
     # Computed
     distance_from_center: Optional[float] = None
     # Derived ratio 0.0–1.0 (undermining / reinforcement); None if no data
@@ -229,3 +232,5 @@ class ContestedSystemInfo(BaseModel):
     powers_list: Optional[str] = None
     # JSON string: [{power: str, progress: float}, ...]
     conflict_progress: Optional[str] = None
+    # When Spansh last received game data for this system
+    spansh_updated_at: Optional[datetime] = None

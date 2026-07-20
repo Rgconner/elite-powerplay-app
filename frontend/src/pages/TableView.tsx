@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { getPowerSystems, PPSystemEntry } from "../api/powers";
 import { getRecommendations, RecommendationsResponse, RecommendationItem } from "../api/recommendations";
-import { getContestedSystems, ContestedSystemInfo, parseConflictProgress } from "../api/contested";
+import { getContestedSystems, ContestedSystemInfo, parseConflictProgress, formatDataAge, isStale } from "../api/contested";
 import { useSelectionState } from "../hooks/useSelectionState";
 import { ppStateColor, PP_STATE_LABELS } from "../constants/ppColors";
 import PowerSelector from "../components/PowerSelector";
@@ -790,7 +790,7 @@ export default function TableView() {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr>
-                    {["System", "Owner", "State", "Progress", "Reinf.", "Underm.", "Net R–U", "Dist LY"].map(h => (
+                    {["System", "Owner", "State", "Progress", "Reinf.", "Underm.", "Net R–U", "Dist LY", "Data Age"].map(h => (
                       <th key={h} style={{
                         padding: "8px 10px", textAlign: "left", fontSize: 11, fontWeight: 700,
                         color: "#FF8C00", textTransform: "uppercase", letterSpacing: "0.05em",
@@ -807,7 +807,10 @@ export default function TableView() {
                     const r   = item.reinforcement ?? 0;
                     const u   = item.undermining   ?? 0;
                     const net = r - u;
-                    const rowBg = i % 2 === 0 ? "#120d00" : "#1a1200";
+                    const stale = isStale(item.spansh_updated_at);
+                    const rowBg = stale
+                      ? (i % 2 === 0 ? "#1a1200" : "#201500")   // amber tint for stale
+                      : (i % 2 === 0 ? "#120d00" : "#1a1200");
                     return (
                       <tr key={item.system_id64} style={{ background: rowBg }}>
                         {/* System name */}
@@ -862,6 +865,13 @@ export default function TableView() {
                         {/* Distance */}
                         <td style={{ padding: "7px 10px", textAlign: "right", color: item.distance_from_power != null && item.distance_from_power <= 10 ? "#FF8C00" : "#8b949e" }}>
                           {item.distance_from_power != null ? `${item.distance_from_power.toFixed(1)}` : "—"}
+                        </td>
+                        {/* Data age — stale = amber warning */}
+                        <td style={{ padding: "7px 10px", textAlign: "right", whiteSpace: "nowrap" }}
+                            title={item.spansh_updated_at ? `Spansh last updated: ${item.spansh_updated_at} UTC` : "No update timestamp"}>
+                          {stale
+                            ? <span style={{ color: "#D9A84A", fontWeight: 700 }}>⚠ {formatDataAge(item.spansh_updated_at)}</span>
+                            : <span style={{ color: "#57606a" }}>{formatDataAge(item.spansh_updated_at)}</span>}
                         </td>
                       </tr>
                     );

@@ -7,6 +7,18 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+# Snapshots older than this (by Spansh's own updated_at field) are considered
+# stale and excluded from all live queries.  Historical endpoints (e.g. /history)
+# are NOT filtered — they should return all data for trend analysis.
+# NULL spansh_updated_at (rows ingested before this column was added) are kept
+# so the app degrades gracefully on first deploy after the schema migration.
+_STALE_FILTER = """
+    AND (
+        spansh_updated_at IS NULL
+        OR spansh_updated_at > NOW() - INTERVAL '24 hours'
+    )
+"""
+
 from db.session import get_db
 from models.models import PPSystem, PPSystemSnapshot
 from models.schemas import (
@@ -88,13 +100,15 @@ def get_power_systems(
     # Accept either ref_id or legacy center_id
     resolved_ref_id = ref_id if ref_id is not None else center_id
 
-    # Latest snapshot per system
-    latest_sql = text("""
+    # Latest snapshot per system — exclude stale Spansh data
+    latest_sql = text(f"""
         SELECT DISTINCT ON (system_id)
                system_id, power, power_state,
-               reinforcement, undermining, control_progress, snapshot_time
+               reinforcement, undermining, control_progress,
+               snapshot_time, spansh_updated_at
         FROM pp_system_snapshots
         WHERE power = :power
+        {_STALE_FILTER}
         ORDER BY system_id, snapshot_time DESC
     """)
     snap_rows = db.execute(latest_sql, {"power": name}).mappings().all()
@@ -149,6 +163,7 @@ def get_power_systems(
             undermining=under,
             control_progress=snap["control_progress"],
             snapshot_time=snap["snapshot_time"],
+            spansh_updated_at=snap["spansh_updated_at"],
             distance_from_center=distance,
             undermine_ratio=undermine_ratio,
         ))
@@ -199,14 +214,17 @@ def get_contested_systems(
     # Get the latest snapshot for every Contested system where the selected
     # power appears in powers_list (meaning it is one of the contesting powers).
     # power_state='Contested' is our internal label set during the Unoccupied pass.
-    contested_rows = db.execute(text("""
+    # Stale filter: exclude systems Spansh hasn't refreshed in >24 hours — these
+    # may no longer be contested (e.g. HUMA resolved but old snapshot persists).
+    contested_rows = db.execute(text(f"""
         SELECT DISTINCT ON (system_id)
                system_id, power, power_state,
                control_progress, reinforcement, undermining,
-               powers_list, conflict_progress
+               powers_list, conflict_progress, spansh_updated_at
         FROM pp_system_snapshots
         WHERE power_state = 'Contested'
           AND powers_list ILIKE :power_pattern
+          {_STALE_FILTER}
         ORDER BY system_id, snapshot_time DESC
     """), {"power_pattern": f"%{name}%"}).mappings().all()
 
@@ -222,7 +240,8 @@ def get_contested_systems(
     ).all()
     sys_by_id = {s.id: s for s in contested_systems}
 
-    # Get coords for the selected power's systems to compute distance
+    # Get coords for the selected power's systems to compute distance (no stale filter
+    # here — we want all territory coords even if data is slightly old)
     power_snap_rows = db.execute(text("""
         SELECT DISTINCT ON (system_id) system_id
         FROM pp_system_snapshots
@@ -270,6 +289,7 @@ def get_contested_systems(
             x=sx, y=sy, z=sz,
             powers_list=snap["powers_list"],
             conflict_progress=snap["conflict_progress"],
+            spansh_updated_at=snap["spansh_updated_at"],
         ))
 
     # Sort by distance to the selected power's territory
@@ -361,11 +381,12 @@ def target_analysis(
     targets  = body.target_powers
 
     # ── 1. Get attacker's system coords ──────────────────────────────────────
-    attacker_snap_rows = db.execute(text("""
+    attacker_snap_rows = db.execute(text(f"""
         SELECT DISTINCT ON (system_id)
                system_id, power
         FROM pp_system_snapshots
         WHERE power = :power
+        {_STALE_FILTER}
         ORDER BY system_id, snapshot_time DESC
     """), {"power": attacker}).mappings().all()
 
@@ -384,12 +405,13 @@ def target_analysis(
             progress_thresholds={"critical": prog_critical, "high": prog_high, "medium": prog_medium},
         )
 
-    target_snap_rows = db.execute(text("""
+    target_snap_rows = db.execute(text(f"""
         SELECT DISTINCT ON (system_id)
                system_id, power, power_state,
                reinforcement, undermining, control_progress
         FROM pp_system_snapshots
         WHERE power = ANY(:powers)
+        {_STALE_FILTER}
         ORDER BY system_id, snapshot_time DESC
     """), {"powers": targets}).mappings().all()
 

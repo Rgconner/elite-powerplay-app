@@ -286,6 +286,17 @@ def run_spansh_ingest(db: Session) -> IngestionRun:
                 undermining: Optional[int]   = system_obj.get("power_state_undermining")
                 powers_list, conflict_progress = _extract_powers_fields(system_obj)
 
+                # Parse Spansh's updated_at (e.g. "2026-07-17 18:46:04+00")
+                spansh_updated_at: Optional[datetime] = None
+                raw_updated = system_obj.get("updated_at")
+                if raw_updated:
+                    try:
+                        spansh_updated_at = datetime.fromisoformat(
+                            str(raw_updated).replace("+00", "+00:00")
+                        ).replace(tzinfo=None)  # store as naive UTC
+                    except Exception:
+                        pass
+
                 # Upsert the system record
                 sys_result = db.execute(
                     text("""
@@ -313,26 +324,29 @@ def run_spansh_ingest(db: Session) -> IngestionRun:
                     text("""
                         INSERT INTO pp_system_snapshots
                             (system_id, ingestion_run_id, snapshot_time,
+                             spansh_updated_at,
                              power, power_state, control_progress,
                              reinforcement, undermining,
                              powers_list, conflict_progress)
                         VALUES
                             (:system_id, :run_id, :now,
+                             :spansh_updated_at,
                              :power, :power_state, :control_progress,
                              :reinforcement, :undermining,
                              :powers_list, :conflict_progress)
                     """),
                     {
-                        "system_id":        system_db_id,
-                        "run_id":           run_id,
-                        "now":              datetime.utcnow(),
-                        "power":            power,
-                        "power_state":      power_state,
-                        "control_progress": control_progress,
-                        "reinforcement":    reinforcement,
-                        "undermining":      undermining,
-                        "powers_list":      powers_list,
-                        "conflict_progress": conflict_progress,
+                        "system_id":          system_db_id,
+                        "run_id":             run_id,
+                        "now":                datetime.utcnow(),
+                        "spansh_updated_at":  spansh_updated_at,
+                        "power":              power,
+                        "power_state":        power_state,
+                        "control_progress":   control_progress,
+                        "reinforcement":      reinforcement,
+                        "undermining":        undermining,
+                        "powers_list":        powers_list,
+                        "conflict_progress":  conflict_progress,
                     },
                 )
 
@@ -376,6 +390,17 @@ def run_spansh_ingest(db: Session) -> IngestionRun:
             undermining_c      = system_obj.get("power_state_undermining")
             powers_list_c, conflict_progress_c = _extract_powers_fields(system_obj)
 
+            # Parse Spansh's updated_at
+            spansh_updated_at_c: Optional[datetime] = None
+            raw_updated_c = system_obj.get("updated_at")
+            if raw_updated_c:
+                try:
+                    spansh_updated_at_c = datetime.fromisoformat(
+                        str(raw_updated_c).replace("+00", "+00:00")
+                    ).replace(tzinfo=None)
+                except Exception:
+                    pass
+
             # Use None for controlling power — no single owner in contested state
             # power_state stored as 'Contested' (our internal label)
             sys_result_c = db.execute(
@@ -403,26 +428,29 @@ def run_spansh_ingest(db: Session) -> IngestionRun:
                 text("""
                     INSERT INTO pp_system_snapshots
                         (system_id, ingestion_run_id, snapshot_time,
+                         spansh_updated_at,
                          power, power_state, control_progress,
                          reinforcement, undermining,
                          powers_list, conflict_progress)
                     VALUES
                         (:system_id, :run_id, :now,
+                         :spansh_updated_at,
                          :power, :power_state, :control_progress,
                          :reinforcement, :undermining,
                          :powers_list, :conflict_progress)
                 """),
                 {
-                    "system_id":        system_db_id_c,
-                    "run_id":           run_id,
-                    "now":              datetime.utcnow(),
-                    "power":            None,           # no single controller
-                    "power_state":      "Contested",    # our internal label
-                    "control_progress": control_progress_c,
-                    "reinforcement":    reinforcement_c,
-                    "undermining":      undermining_c,
-                    "powers_list":      powers_list_c,
-                    "conflict_progress": conflict_progress_c,
+                    "system_id":          system_db_id_c,
+                    "run_id":             run_id,
+                    "now":                datetime.utcnow(),
+                    "spansh_updated_at":  spansh_updated_at_c,
+                    "power":              None,           # no single controller
+                    "power_state":        "Contested",    # our internal label
+                    "control_progress":   control_progress_c,
+                    "reinforcement":      reinforcement_c,
+                    "undermining":        undermining_c,
+                    "powers_list":        powers_list_c,
+                    "conflict_progress":  conflict_progress_c,
                 },
             )
 

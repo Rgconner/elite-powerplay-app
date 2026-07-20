@@ -23,6 +23,27 @@ export interface ContestedSystemInfo {
   powers_list: string | null;
   /** JSON string: [{power, progress}, ...] from power_conflict_progress */
   conflict_progress: string | null;
+  /** ISO datetime string — when Spansh last received game data for this system */
+  spansh_updated_at: string | null;
+}
+
+/** Returns a human-readable age string e.g. "3h ago", "2d ago" */
+export function formatDataAge(spansh_updated_at: string | null): string {
+  if (!spansh_updated_at) return "unknown age";
+  const ms = Date.now() - new Date(spansh_updated_at + "Z").getTime();
+  const h  = Math.floor(ms / 3_600_000);
+  const d  = Math.floor(h / 24);
+  if (d > 0)  return `${d}d ago`;
+  if (h > 0)  return `${h}h ago`;
+  const m = Math.floor(ms / 60_000);
+  return `${m}m ago`;
+}
+
+/** Returns true if data is older than maxHours */
+export function isStale(spansh_updated_at: string | null, maxHours = 24): boolean {
+  if (!spansh_updated_at) return false; // null = pre-migration row, keep it
+  const ms = Date.now() - new Date(spansh_updated_at + "Z").getTime();
+  return ms > maxHours * 3_600_000;
 }
 
 /** Parse the conflict_progress JSON string safely */

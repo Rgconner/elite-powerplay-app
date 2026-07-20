@@ -80,6 +80,13 @@ class PPSystemSnapshot(Base):
 
     One row is inserted per system per ingestion run — never updated.
     This gives us the full history needed for trend analysis.
+
+    spansh_updated_at — the timestamp Spansh reports for when the game servers
+    last updated this system's PP data.  This is the authoritative data age field.
+    snapshot_time is when WE ingested it; spansh_updated_at is when the GAME last
+    changed it.  Queries should filter spansh_updated_at > NOW()-24h to exclude
+    stale data that Spansh hasn't refreshed yet (e.g. systems where the PP state
+    changed in-game but EDDN/Spansh hasn't received a new journal entry).
     """
 
     __tablename__ = "pp_system_snapshots"
@@ -88,6 +95,11 @@ class PPSystemSnapshot(Base):
     system_id = Column(Integer, ForeignKey("pp_systems.id"), nullable=False, index=True)
     ingestion_run_id = Column(Integer, ForeignKey("ingestion_runs.id"), nullable=False, index=True)
     snapshot_time = Column(DateTime, default=func.now(), nullable=False, index=True)
+
+    # When Spansh last received a game-data update for this system.
+    # Sourced from the "updated_at" field in the Spansh search API response.
+    # NULL for rows ingested before this column was added.
+    spansh_updated_at = Column(DateTime, nullable=True, index=True)
 
     # Power Play fields from Spansh dump
     power = Column(String(128), nullable=True, index=True)   # controlling power (single)

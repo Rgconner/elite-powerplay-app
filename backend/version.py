@@ -31,7 +31,15 @@ Version history:
                     'Contested' label with full power list and conflict progress JSON.
                     /contested endpoint filters by powers_list ILIKE. Frontend
                     ContestedRow displays per-power progress bars with colour coding.
+  1.4.0  2025-07-12  Stale data fix: store spansh_updated_at from Spansh API
+                    updated_at field. All live queries now filter out snapshots
+                    where spansh_updated_at > 24h old — prevents resolved systems
+                    like HUMA from appearing as contested. NULL spansh_updated_at
+                    (pre-migration rows) pass through for graceful degradation.
+                    Added index on spansh_updated_at. Data Age column added to
+                    contested table with amber ⚠ warning for stale rows.
+                    formatDataAge() / isStale() helpers added to contested.ts.
 """
 
-BACKEND_VERSION      = "1.3.0"
-BACKEND_RELEASE_DATE = "2025-07-12T00:00:00Z"
+BACKEND_VERSION      = "1.4.0"
+BACKEND_RELEASE_DATE = "2025-07-12T12:00:00Z"

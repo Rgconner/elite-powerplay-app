@@ -32,6 +32,15 @@ with engine.connect() as _conn:
         "ALTER TABLE pp_system_snapshots "
         "ADD COLUMN IF NOT EXISTS conflict_progress VARCHAR(2048)"
     ))
+    _conn.execute(_text(
+        "ALTER TABLE pp_system_snapshots "
+        "ADD COLUMN IF NOT EXISTS spansh_updated_at TIMESTAMP"
+    ))
+    # Index for fast staleness filtering (WHERE spansh_updated_at > NOW()-24h)
+    _conn.execute(_text(
+        "CREATE INDEX IF NOT EXISTS ix_pp_system_snapshots_spansh_updated_at "
+        "ON pp_system_snapshots (spansh_updated_at)"
+    ))
     _conn.commit()
 
 from routers import auth, admin  # noqa: E402
