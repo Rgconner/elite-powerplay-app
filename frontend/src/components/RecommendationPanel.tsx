@@ -230,6 +230,11 @@ function ItemRow({ item }: { item: RecommendationItem }) {
       {item.type === "expand" && (
         <div style={{ display: "flex", gap: 16, fontSize: 11, color: "#8b949e", marginTop: 5, flexWrap: "wrap" }}>
           {/* Anchor type badge */}
+          {item.anchor_type === "expansion" && (
+            <span style={{ background: "#2a1a3a", color: "#D94AD9", border: "1px solid #D94AD944", borderRadius: 3, padding: "1px 6px", fontSize: 10, fontWeight: 700 }}>
+              ⚑ In Expansion
+            </span>
+          )}
           {item.anchor_type === "fortified" && (
             <span style={{ background: "#1a3a1a", color: "#4AD94A", border: "1px solid #4AD94A44", borderRadius: 3, padding: "1px 6px", fontSize: 10, fontWeight: 700 }}>
               ⬡ Fortified anchor

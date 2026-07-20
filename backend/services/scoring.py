@@ -693,20 +693,21 @@ def compute_expand_scores(
     db: Session,
     weights: dict[str, float],
 ) -> list[RecommendationItem]:
-    """Score Unoccupied systems near Fortified/Stronghold anchors for expansion.
+    """Score Unoccupied and Expansion systems for expansion priority.
 
-    Eligibility rules (game mechanics):
-      • Within expand_fortified_dist_ly  (default 20 LY) of a Fortified system, OR
-      • Within expand_stronghold_dist_ly (default 30 LY) of a Stronghold system.
-    Exploited systems do NOT qualify as anchors.
+    Eligibility rules:
+      • power_state = 'Unoccupied' — requires proximity to a Fortified/Stronghold anchor
+        (within expand_fortified_dist_ly / expand_stronghold_dist_ly respectively).
+      • power_state = 'Expansion'  — anchor check is skipped; being in Expansion already
+        implies the power has a foothold there.
 
     Primary ranking: closeness to the 120,000-merit acquisition threshold.
-      merit_position   = control_progress × MERIT_ACQUIRE
-      merits_remaining = MERIT_ACQUIRE - merit_position
+      merit_position   = control_progress × MERIT_ACQUIRE   (0.0–1.0 scale, same for both states)
+      merits_remaining = MERIT_ACQUIRE − merit_position
       score (0–100)    = merit_position / MERIT_ACQUIRE × 100
       → a system 95% of the way to acquisition scores 95.
 
-    Secondary tiebreak: allegiance match adds a small bonus.
+    Secondary tiebreak: allegiance match adds a small bonus (Unoccupied only).
     """
     if not power_systems:
         return []
@@ -760,17 +761,16 @@ def compute_expand_scores(
         power_state   = snap.get("power_state")
         current_power = snap.get("power")
 
-        # ── Unoccupied gate — game mechanic requirement ──────────────────────
-        # ONLY Unoccupied systems (power_state == "Unoccupied") qualify as
-        # expansion targets.  Any other state (Exploited, Fortified, etc.) is
-        # already under a Power's control and cannot be acquired via expansion.
-        # Previous code: `if power_state != "Unoccupied" and current_power`
-        # was incorrect — it passed Exploited/Fortified systems when
-        # current_power was None (e.g. stale/missing data).
-        if power_state != "Unoccupied":
+        # ── State gate ───────────────────────────────────────────────────────
+        # 'Unoccupied'  — needs merits to acquire; anchor proximity required.
+        # 'Expansion'   — power already has a foothold; skip the anchor check.
+        # All other states (Exploited, Fortified, Stronghold, etc.) are already
+        # controlled and cannot be acquired via expansion.
+        is_expansion = power_state == "Expansion"
+        if power_state != "Unoccupied" and not is_expansion:
             continue
 
-        # ── Distance to nearest qualifying anchor ────────────────────────────
+        # ── Distance to nearest qualifying anchor (Unoccupied only) ─────────
         dist_fort = min(
             (_dist(sx, sy, sz, cx, cy, cz) for cx, cy, cz in fortified_coords),
             default=9_999.0,
@@ -783,8 +783,8 @@ def compute_expand_scores(
         in_fort_range = dist_fort <= fort_max
         in_sh_range   = dist_sh   <= sh_max
 
-        if not (in_fort_range or in_sh_range):
-            continue   # not reachable from any qualifying anchor
+        if not is_expansion and not (in_fort_range or in_sh_range):
+            continue   # Unoccupied but not reachable from any qualifying anchor
 
         # ── Merit-proximity score (0–100 scale) ─────────────────────────────
         progress    = float(snap.get("control_progress") or 0.0)
@@ -812,20 +812,23 @@ def compute_expand_scores(
             )
             reasons.append(f"Merits still needed: {merits_left:,}")
 
-        anchor_parts: list[str] = []
-        if in_fort_range:
-            anchor_parts.append(f"Fortified system {dist_fort:.1f} LY away")
-        if in_sh_range:
-            anchor_parts.append(f"Stronghold system {dist_sh:.1f} LY away")
-        reasons.append("Anchor: " + " · ".join(anchor_parts))
-
         # Determine anchor_type label for UI badge
-        if in_fort_range and in_sh_range:
-            anchor_type = "both"
-        elif in_fort_range:
-            anchor_type = "fortified"
+        if is_expansion:
+            anchor_type = "expansion"
+            reasons.append("In Expansion — power already has a foothold here")
         else:
-            anchor_type = "stronghold"
+            anchor_parts: list[str] = []
+            if in_fort_range:
+                anchor_parts.append(f"Fortified system {dist_fort:.1f} LY away")
+            if in_sh_range:
+                anchor_parts.append(f"Stronghold system {dist_sh:.1f} LY away")
+            reasons.append("Anchor: " + " · ".join(anchor_parts))
+            if in_fort_range and in_sh_range:
+                anchor_type = "both"
+            elif in_fort_range:
+                anchor_type = "fortified"
+            else:
+                anchor_type = "stronghold"
 
         if power_allegiance and system.allegiance == power_allegiance:
             reasons.append(f"{system.allegiance} allegiance matches power (+{weights.get('expand_allegiance_match', DEFAULTS['expand_allegiance_match']):.0f} pts)")
