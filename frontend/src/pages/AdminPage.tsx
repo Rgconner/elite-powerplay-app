@@ -275,12 +275,12 @@ export default function AdminPage({ onClose }: Props) {
     setSettingsSaved(false);
     try {
       const payload = [
-        ...Object.entries(settings),
-        ...Object.entries(thresholds),
-        ...Object.entries(targetWeights),
-        ...Object.entries(targetThresholds),
+        ...Object.entries(settings).map(([key, value]) => ({ key, value: String(value) })),
+        ...Object.entries(thresholds).map(([key, value]) => ({ key, value: String(value) })),
+        ...Object.entries(targetWeights).map(([key, value]) => ({ key, value: String(value) })),
+        ...Object.entries(targetThresholds).map(([key, value]) => ({ key, value: String(value) })),
         { key: "contested_null_ts_is_stale", value: nullTsIsStale ? "true" : "false" },
-      ].map(([key, value]) => ({ key, value: String(value) }));
+      ];
       await apiPatch("/api/admin/settings", payload);
       setSettingsSaved(true);
       setTimeout(() => setSettingsSaved(false), 3000);
