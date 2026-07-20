@@ -359,7 +359,7 @@ function ContestedRow({ item }: { item: ContestedSystemInfo }) {
           {conflictEntries
             .slice()
             .sort((a, b) => b.progress - a.progress)
-            .map((entry, idx) => {
+            .map((entry) => {
               // progress is already normalised 0–1+ where 1.0 = 120k merits acquired
               const normPct = Math.min(100, Math.max(0, entry.progress * 100));
               const color = powerColor(entry.power);
