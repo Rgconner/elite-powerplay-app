@@ -18,7 +18,7 @@ import {
   PlatBadge, BoomBadge,
 } from "../components/SharedCells";
 import { getSpanshEnrichmentBatch, clearEnrichmentCache, SpanshEnrichment } from "../api/spansh";
-import { getAdminToken, getAuthHeader } from "../api/admin";
+import { getAdminToken } from "../api/admin";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
