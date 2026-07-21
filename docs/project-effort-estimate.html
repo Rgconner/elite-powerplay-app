@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elite Power Play Analyzer — Project Effort Estimate</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: #0d1117;
+            color: #e6edf3;
+            padding: 32px;
+            line-height: 1.6;
+        }
+        .container { max-width: 1100px; margin: 0 auto; }
+        h1 {
+            font-size: 28px;
+            font-weight: 800;
+            margin-bottom: 4px;
+            color: #58a6ff;
+        }
+        .subtitle {
+            font-size: 14px;
+            color: #8b949e;
+            margin-bottom: 32px;
+            border-bottom: 1px solid #21262d;
+            padding-bottom: 16px;
+        }
+        h2 {
+            font-size: 18px;
+            font-weight: 700;
+            color: #e6edf3;
+            margin: 32px 0 16px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #21262d;
+        }
+        h3 {
+            font-size: 15px;
+            font-weight: 600;
+            color: #c9d1d9;
+            margin: 20px 0 10px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 12px 0;
+            font-size: 13px;
+        }
+        th {
+            text-align: left;
+            padding: 10px 12px;
+            background: #161b22;
+            color: #8b949e;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 700;
+            border-bottom: 2px solid #30363d;
+        }
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #21262d;
+            color: #c9d1d9;
+        }
+        tr:hover { background: #161b22; }
+        .total-row td {
+            font-weight: 700;
+            color: #e6edf3;
+            border-top: 2px solid #30363d;
+            background: #0d1117;
+        }
+        .highlight { color: #58a6ff; font-weight: 700; }
+        .accent { color: #4AD94A; font-weight: 700; }
+        .warn { color: #D9A84A; font-weight: 700; }
+        .danger { color: #D94A4A; font-weight: 700; }
+        .card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 16px 0;
+        }
+        .card-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin: 16px 0;
+        }
+        .stat-card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 16px 20px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 28px;
+            font-weight: 800;
+            color: #58a6ff;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #8b949e;
+            margin-top: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .phase-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+        }
+        .phase-1 { background: #0d2a4a; color: #4A90D9; }
+        .phase-2 { background: #0d2e17; color: #4AD94A; }
+        .phase-3 { background: #2a2000; color: #D9A84A; }
+        .phase-4 { background: #2a1a3a; color: #D94AD9; }
+        .phase-5 { background: #3d1a00; color: #FF8C00; }
+        .phase-6 { background: #1a1a2e; color: #8899AA; }
+        .phase-7 { background: #3d0000; color: #FF4444; }
+        .phase-8 { background: #0d2a4a; color: #58a6ff; }
+        .phase-9 { background: #161b22; color: #8b949e; }
+        .phase-oh { background: #21262d; color: #c9d1d9; }
+        .tech-tag {
+            display: inline-block;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: 600;
+            margin-right: 4px;
+        }
+        .tag-python { background: #2d3748; color: #63B3ED; }
+        .tag-react { background: #1a3a4a; color: #61DAFB; }
+        .tag-pg { background: #1a2a3a; color: #336791; }
+        .tag-docker { background: #0d2a4a; color: #2496ED; }
+        .tag-ts { background: #1a2a3a; color: #3178C6; }
+        .risk-item {
+            padding: 10px 14px;
+            background: #161b22;
+            border-left: 3px solid #D9A84A;
+            border-radius: 0 4px 4px 0;
+            margin: 8px 0;
+            font-size: 13px;
+        }
+        .risk-item strong { color: #D9A84A; }
+        .cost-table td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+        .cost-table th:last-child { text-align: right; }
+        @media (max-width: 768px) {
+            .card-grid { grid-template-columns: 1fr; }
+            body { padding: 16px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+
+        <h1>🎮 Elite Power Play Analyzer</h1>
+        <div class="subtitle">Full Project Effort Estimate — Team of 4 (2 Juniors, 1 Mid, 1 Senior) · July 2026</div>
+
+        <!-- Summary Stats -->
+        <div class="card-grid" style="grid-template-columns: repeat(4, 1fr);">
+            <div class="stat-card">
+                <div class="stat-value">~64</div>
+                <div class="stat-label">Person-Days</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">~512</div>
+                <div class="stat-label">Person-Hours</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">5–6 wks</div>
+                <div class="stat-label">Calendar Time</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">$41K–$45K</div>
+                <div class="stat-label">Budget (~$80/hr)</div>
+            </div>
+        </div>
+
+        <!-- Phase Breakdown -->
+        <h2>📋 Phase Breakdown</h2>
+
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 28%;">Phase</th>
+                    <th>Description</th>
+                    <th style="width: 60px;">Senior</th>
+                    <th style="width: 60px;">Mid-Tier</th>
+                    <th style="width: 60px;">Jr 1</th>
+                    <th style="width: 60px;">Jr 2</th>
+                    <th style="width: 80px; text-align: right;">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><span class="phase-badge phase-1">Phase 1</span> Architecture & Setup</td>
+                    <td>Project scaffolding, DB schema design, Docker/K8s, CI/CD, API design</td>
+                    <td>2d</td><td>1d</td><td>0.5d</td><td>0.5d</td>
+                    <td style="text-align: right; font-weight: 700;">4d</td>
+                </tr>
+                <tr>
+                    <td><span class="phase-badge phase-2">Phase 2</span> Data Ingestion</td>
+                    <td>Spansh API integration, ingestion pipeline, contested detection, PLAT/BOOM enrichment</td>
+                    <td>1.5d</td><td>4d</td><td>2d</td><td>—</td>
+                    <td style="text-align: right; font-weight: 700;">7.5d</td>
+                </tr>
+                <tr>
+                    <td><span class="phase-badge phase-3">Phase 3</span> Backend API</td>
+                    <td>FastAPI routers, SQL queries, staleness filtering, admin auth/JWT, scoring engine</td>
+                    <td>2d</td><td>4d</td><td>3d</td><td>—</td>
+                    <td style="text-align: right; font-weight: 700;">9d</td>
+                </tr>
+                <tr>
+                    <td><span class="phase-badge phase-4">Phase 4</span> Frontend Core</td>
+                    <td>React/Vite setup, power/ref/system selectors, TableView, API clients, TypeScript types</td>
+                    <td>1d</td><td>2d</td><td>—</td><td>3d</td>
+                    <td style="text-align: right; font-weight: 700;">6d</td>
+                </tr>
+                <tr>
+                    <td><span class="phase-badge phase-5">Phase 5</span> Frontend Views</td>
+                    <td>TargetList, TargetAnalysis, Map2D, Map3D, RecommendationPanel, Contested section</td>
+                    <td>1d</td><td>1.5d</td><td>—</td><td>4d</td>
+                    <td style="text-align: right; font-weight: 700;">6.5d</td>
+                </tr>
+                <tr>
+                    <td><span class="phase-badge phase-6">Phase 6</span> Advanced Features</td>
+                    <td>Filter system with cookie persistence, conflict progress bars, cycle clock, threshold sliders</td>
+                    <td>1d</td><td>1.5d</td><td>—</td><td>2.5d</td>
+                    <td style="text-align: right; font-weight: 700;">5d</td>
+                </tr>
+                <tr>
+                    <td><span class="phase-badge phase-7">Phase 7</span> Merit Decay (CP Decay)</td>
+                    <td>Decay formulas, cycle-based caching, effective undermining, UI across all views</td>
+                    <td>1.5d</td><td>3d</td><td>2d</td><td>2.5d</td>
+                    <td style="text-align: right; font-weight: 700;">9d</td>
+                </tr>
+                <tr>
+                    <td><span class="phase-badge phase-8">Phase 8</span> Testing & QA</td>
+                    <td>API testing, visual regression, edge cases, Spansh data validation</td>
+                    <td>1d</td><td>1d</td><td>1d</td><td>1d</td>
+                    <td style="text-align: right; font-weight: 700;">4d</td>
+                </tr>
+                <tr>
+                    <td><span class="phase-badge phase-9">Phase 9</span> Deployment & Ops</td>
+                    <td>Docker Compose, K8s manifests, Cloudflare tunnel, monitoring, admin panel</td>
+                    <td>1d</td><td>1d</td><td>1d</td><td>0.5d</td>
+                    <td style="text-align: right; font-weight: 700;">3.5d</td>
+                </tr>
+                <tr>
+                    <td><span class="phase-badge phase-oh">Overhead</span> Meetings & Review</td>
+                    <td>Meetings, code reviews, context switching, bug fixes, documentation</td>
+                    <td>2d</td><td>2d</td><td>2d</td><td>2d</td>
+                    <td style="text-align: right; font-weight: 700;">8d</td>
+                </tr>
+                <tr class="total-row">
+                    <td colspan="2" style="font-size: 14px;">TOTAL</td>
+                    <td>14d</td><td>21d</td><td>12.5d</td><td>16d</td>
+                    <td style="text-align: right; font-size: 15px;" class="highlight">63.5d</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Complexity by Area -->
+        <h2>🔧 Complexity by Area</h2>
+
+        <table class="cost-table">
+            <thead>
+                <tr>
+                    <th>Area</th>
+                    <th>Tech Stack</th>
+                    <th style="text-align: right;">~Lines of Code</th>
+                    <th>Complexity</th>
+                    <th>Key Risk</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Spansh ingestion + enrichment</td>
+                    <td>
+                        <span class="tech-tag tag-python">Python</span>
+                        <span class="tech-tag tag-pg">PostgreSQL</span>
+                    </td>
+                    <td style="text-align: right;">~800</td>
+                    <td><span class="warn">Medium</span></td>
+                    <td>API rate limits, data freshness</td>
+                </tr>
+                <tr>
+                    <td>Scoring engine (fortify/expand/target)</td>
+                    <td>
+                        <span class="tech-tag tag-python">Python</span>
+                    </td>
+                    <td style="text-align: right;">~1,000</td>
+                    <td><span class="danger">High</span></td>
+                    <td>Game mechanic accuracy, threshold tuning</td>
+                </tr>
+                <tr>
+                    <td>Merit decay mechanic</td>
+                    <td>
+                        <span class="tech-tag tag-python">Python</span>
+                        <span class="tech-tag tag-ts">TypeScript</span>
+                    </td>
+                    <td style="text-align: right;">~400</td>
+                    <td><span class="danger">High</span></td>
+                    <td>Formula validation against live data</td>
+                </tr>
+                <tr>
+                    <td>Backend API (routers + schemas)</td>
+                    <td>
+                        <span class="tech-tag tag-python">Python</span>
+                        <span class="tech-tag tag-pg">PostgreSQL</span>
+                    </td>
+                    <td style="text-align: right;">~1,200</td>
+                    <td><span class="warn">Medium</span></td>
+                    <td>SQL performance, staleness logic</td>
+                </tr>
+                <tr>
+                    <td>Frontend views (6 pages)</td>
+                    <td>
+                        <span class="tech-tag tag-react">React</span>
+                        <span class="tech-tag tag-ts">TypeScript</span>
+                    </td>
+                    <td style="text-align: right;">~3,500</td>
+                    <td><span class="warn">Medium</span></td>
+                    <td>State management, reactivity</td>
+                </tr>
+                <tr>
+                    <td>Frontend components + utils</td>
+                    <td>
+                        <span class="tech-tag tag-react">React</span>
+                        <span class="tech-tag tag-ts">TypeScript</span>
+                    </td>
+                    <td style="text-align: right;">~1,500</td>
+                    <td><span class="accent">Low–Med</span></td>
+                    <td>Shared component design</td>
+                </tr>
+                <tr>
+                    <td>DB schema + migrations</td>
+                    <td>
+                        <span class="tech-tag tag-pg">PostgreSQL</span>
+                    </td>
+                    <td style="text-align: right;">~200</td>
+                    <td><span class="accent">Low</span></td>
+                    <td>Schema evolution strategy</td>
+                </tr>
+                <tr>
+                    <td>Infrastructure (Docker/K8s)</td>
+                    <td>
+                        <span class="tech-tag tag-docker">Docker</span>
+                        <span class="tech-tag tag-pg">K8s</span>
+                    </td>
+                    <td style="text-align: right;">~400</td>
+                    <td><span class="accent">Low</span></td>
+                    <td>Deployment reliability</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Risk Factors -->
+        <h2>⚠️ Risk Factors</h2>
+
+        <div class="risk-item">
+            <strong>Formula validation:</strong> The decay rates (2.6%→15.6% Stronghold, 0.1%→10.9% Fortified, 0.1%→5.3% Exploited) are estimates from game observations. A senior should verify against live data — could add 0.5–1 day if formulas need tuning.
+        </div>
+        <div class="risk-item">
+            <strong>Cycle caching edge cases:</strong> The "compute once per cycle, reuse" pattern requires careful handling of the Thursday 07:00 UTC boundary. Off-by-one errors are likely — budget 0.5 day for testing.
+        </div>
+        <div class="risk-item">
+            <strong>Frontend regression:</strong> Updating Net calculations across 4 views touches shared display logic. A visual regression pass is needed — budget 0.5 day.
+        </div>
+        <div class="risk-item">
+            <strong>Spansh API stability:</strong> The entire data pipeline depends on Spansh's search API. Rate limits, schema changes, or downtime could delay Phase 2 by 1–2 days.
+        </div>
+        <div class="risk-item">
+            <strong>Game mechanic knowledge:</strong> Team members need to understand PP2.0 mechanics (merit thresholds, state transitions, decay formulas). Domain research is budgeted into Phase 1–2 but could expand if the game updates during development.
+        </div>
+
+        <!-- Critical Path -->
+        <h2>🗺️ Critical Path</h2>
+
+        <div class="card">
+            <ol style="padding-left: 20px; font-size: 13px;">
+                <li style="margin-bottom: 8px;"><strong class="highlight">Spansh API integration</strong> — Unblocks everything. Data must flow first.</li>
+                <li style="margin-bottom: 8px;"><strong class="highlight">Scoring engine</strong> — Core business logic, most complex module.</li>
+                <li style="margin-bottom: 8px;"><strong class="highlight">Merit decay</strong> — Depends on scoring + ingestion being stable.</li>
+                <li style="margin-bottom: 8px;"><strong class="highlight">Frontend views</strong> — Depends on API being stable and tested.</li>
+            </ol>
+        </div>
+
+        <!-- Assumptions -->
+        <h2>📐 Assumptions</h2>
+
+        <div class="card" style="font-size: 13px;">
+            <ul style="padding-left: 20px;">
+                <li>Team has experience with Python/FastAPI, React/TypeScript, PostgreSQL</li>
+                <li>No prior knowledge of Elite Dangerous PP2.0 mechanics (research budgeted)</li>
+                <li>Spansh API is stable and well-documented</li>
+                <li>Single domain expert (product owner) provides game mechanic validation</li>
+                <li>No mobile app requirement</li>
+                <li>No real-time WebSocket updates (polling-based architecture)</li>
+                <li>Blended rate of ~$80/hr (US-heavy team with offshore mix)</li>
+            </ul>
+        </div>
+
+        <!-- Footer -->
+        <div style="margin-top: 40px; padding-top: 16px; border-top: 1px solid #21262d; font-size: 12px; color: #57606a; text-align: center;">
+            Generated July 2026 · Elite Power Play Analyzer · Effort Estimate v1.0
+        </div>
+
+    </div>
+</body>
+</html>
