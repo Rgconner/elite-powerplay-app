@@ -57,12 +57,18 @@ class EnrichStatus(BaseModel):
 
 
 async def _fetch_system(system_id64: int) -> dict | None:
-    """Fetch system data from Spansh API, returns parsed JSON or None."""
+    """Fetch system data from Spansh API, returns parsed JSON or None.
+    
+    The Spansh system API wraps the record in a {"record": {...}} envelope,
+    so we unwrap it before returning.
+    """
     try:
         async with httpx.AsyncClient(timeout=20) as client:
             resp = await client.get(SPANSH_SYSTEM_URL.format(system_id64))
             if resp.status_code == 200:
-                return resp.json()
+                raw = resp.json()
+                # Unwrap the record envelope that Spansh uses
+                return raw.get("record", raw)
             logger.warning("Spansh system %d returned %d", system_id64, resp.status_code)
             return None
     except Exception as e:
@@ -71,12 +77,17 @@ async def _fetch_system(system_id64: int) -> dict | None:
 
 
 async def _fetch_body(body_id64: int) -> dict | None:
-    """Fetch body data from Spansh API, returns parsed JSON or None."""
+    """Fetch body data from Spansh API, returns parsed JSON or None.
+    
+    The Spansh body API also wraps the record in a {"record": {...}} envelope.
+    """
     try:
         async with httpx.AsyncClient(timeout=20) as client:
             resp = await client.get(SPANSH_BODY_URL.format(body_id64))
             if resp.status_code == 200:
-                return resp.json()
+                raw = resp.json()
+                # Unwrap the record envelope that Spansh uses
+                return raw.get("record", raw)
             return None
     except Exception as e:
         logger.error("Error fetching Spansh body %d: %s", body_id64, e)
@@ -85,18 +96,34 @@ async def _fetch_body(body_id64: int) -> dict | None:
 
 def _check_body_for_platinum(body: dict) -> bool:
     """
-    Check a single body response for a Platinum signal.
-    The body JSON typically has a 'signals' array where each entry has
-    a 'signals' array of { name, count } objects.
+    Check a single body (unwrapped) for a Platinum signal or Platinum in ring materials.
+    
+    Platinum is found in:
+      1. signals array — each entry has a 'signals' list of { name, count } objects
+      2. rings array — each ring may have a 'materials' dict or list with material names
     """
     try:
-        # Check top-level signals
+        # Check body signals
         signals = body.get("signals") or []
         for sig_group in signals:
             items = sig_group.get("signals") or []
             for item in items:
                 if isinstance(item, dict) and item.get("name", "").lower() == "platinum":
                     return True
+
+        # Check ring materials (platinum is commonly found in metallic rings)
+        rings = body.get("rings") or []
+        for ring in rings:
+            mat = ring.get("materials", {})
+            if isinstance(mat, dict):
+                for mname in mat:
+                    if "platinum" in mname.lower():
+                        return True
+            elif isinstance(mat, list):
+                for m in mat:
+                    mname = m.get("name", "") if isinstance(m, dict) else str(m)
+                    if "platinum" in mname.lower():
+                        return True
     except Exception:
         pass
     return False
