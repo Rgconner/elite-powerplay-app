@@ -41,10 +41,20 @@ with engine.connect() as _conn:
         "CREATE INDEX IF NOT EXISTS ix_pp_system_snapshots_spansh_updated_at "
         "ON pp_system_snapshots (spansh_updated_at)"
     ))
+    # spansh_enrichment table for cached PLAT/BOOM data (12-hour TTL)
+    _conn.execute(_text(
+        "CREATE TABLE IF NOT EXISTS spansh_enrichment ("
+        "  system_id64 BIGINT PRIMARY KEY,"
+        "  has_platinum BOOLEAN NOT NULL DEFAULT FALSE,"
+        "  has_boom BOOLEAN NOT NULL DEFAULT FALSE,"
+        "  cached_at TIMESTAMP NOT NULL DEFAULT NOW()"
+        ")"
+    ))
     _conn.commit()
 
 from routers import auth, admin  # noqa: E402
 from routers.powers import router as powers_router, systems_router  # noqa: E402
+from routers.spansh import router as spansh_router  # noqa: E402
 from routers.admin import run_spansh_ingest_task  # noqa: E402
 
 logger = logging.getLogger(__name__)
@@ -96,6 +106,7 @@ API_PREFIX = "/api"
 app.include_router(auth.router,     prefix=API_PREFIX)
 app.include_router(powers_router,   prefix=API_PREFIX)
 app.include_router(systems_router,  prefix=API_PREFIX)
+app.include_router(spansh_router,   prefix=API_PREFIX)
 app.include_router(admin.router,    prefix=API_PREFIX)
 
 

@@ -121,6 +121,28 @@ class PPSystemSnapshot(Base):
 
 
 # ---------------------------------------------------------------------------
+# spansh_enrichment — cached PLAT/BOOM data per system (12-hour TTL)
+# ---------------------------------------------------------------------------
+
+
+class SpanshEnrichment(Base):
+    """
+    Cached Spansh body/minor-faction enrichment data for a system.
+
+    has_platinum — true if any planet body in the system has a Platinum signal.
+    has_boom     — true if any minor faction in the system has BOOM as an active state.
+    cached_at    — when this row was last refreshed (used for 12-hour TTL).
+    """
+
+    __tablename__ = "spansh_enrichment"
+
+    system_id64 = Column(BigInteger, primary_key=True, index=True, nullable=False)
+    has_platinum = Column(Boolean, nullable=False, default=False)
+    has_boom = Column(Boolean, nullable=False, default=False)
+    cached_at = Column(DateTime, default=func.now(), nullable=False)
+
+
+# ---------------------------------------------------------------------------
 # admin_settings — scoring weight key/value store
 # ---------------------------------------------------------------------------
 
