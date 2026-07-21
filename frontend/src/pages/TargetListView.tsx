@@ -89,7 +89,6 @@ export default function TargetListView() {
   // Enrichment state: map system_id64 → { has_platinum, has_boom }
   const [enrichment, setEnrichment] = useState<Record<number, SpanshEnrichment>>({});
   const [enriching,  setEnriching]  = useState(false);
-  const [enrichDone, setEnrichDone] = useState(false);
 
   // Fetch systems for the selected power when power or ref changes
   useEffect(() => {
@@ -97,7 +96,6 @@ export default function TargetListView() {
     setLoading(true); setError(null);
     setEnrichment({});
     setEnriching(false);
-    setEnrichDone(false);
     getPowerSystems(powerName, refSystem?.id)
       .then(setAllSystems)
       .catch(e => setError(String(e)))
@@ -141,23 +139,23 @@ export default function TargetListView() {
     });
   }, [displaySystems]);
 
-  // Fetch Spansh enrichment data
+  // Fetch Spansh enrichment data — re-fetches whenever enriched systems change.
   useEffect(() => {
-    if (enriched.length === 0 || enrichDone) return;
+    if (enriched.length === 0) return;
     setEnriching(true);
 
     const ids = enriched.map(r => r.system_id64);
     getSpanshEnrichmentBatch(ids)
       .then(result => {
         setEnrichment(result);
-        setEnrichDone(true);
       })
       .catch(() => {
-        // Silently fail — enrichment is a nice-to-have
-        setEnrichDone(true);
+        // Silently fail — enrichment is a nice-to-have.
+        // Do NOT set enrichDone so that the next render can retry.
+        console.warn("Spansh enrichment fetch failed, will retry on next render");
       })
       .finally(() => setEnriching(false));
-  }, [enriched, enrichDone]);
+  }, [enriched]);
 
   // Sort
   const sorted = useMemo(() => {
@@ -277,7 +275,7 @@ export default function TargetListView() {
               🔍 Spansh…
             </span>
           )}
-          {enrichDone && Object.keys(enrichment).length > 0 && (
+          {!enriching && Object.keys(enrichment).length > 0 && (
             <span style={{ marginLeft: 8, color: "#57606a", fontSize: 11 }}>
               ✓ {Object.values(enrichment).filter(e => e.has_platinum || e.has_boom).length} enriched
             </span>
