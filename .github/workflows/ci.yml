@@ -33,10 +33,10 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Set up Node 20
+      - name: Set up Node 22
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           # NOTE: no cache: here — package-lock.json is not committed, so
           # cache-dependency-path would crash the job. Install is fast enough.
 
@@ -59,10 +59,10 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Set up Node 20
+      - name: Set up Node 22
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           # NOTE: no cache: here — package-lock.json is not committed
 
       - name: Install dependencies

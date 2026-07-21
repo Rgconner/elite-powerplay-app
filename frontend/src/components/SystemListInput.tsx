@@ -8,13 +8,19 @@ interface Props {
 }
 
 // ---------------------------------------------------------------------------
-// Name parser — strips extraneous text, extracts plausible system names.
-// Rules:
-//   • Lines / comma/semicolon-separated tokens
-//   • Token must be at least 3 characters
-//   • Strip leading/trailing punctuation, quotes, brackets
-//   • Strip tokens that look like numbers-only, URLs, common English words
-//   • Deduplicate, preserve order
+// Name parser — extracts plausible system names from free-form text.
+//
+// Strategy: word-by-word analysis with consecutive grouping.
+//
+//   1. Split raw text into segments on newlines, commas, etc.
+//   2. For each segment:
+//      a. Strip leading markers (bullets, dashes, etc.)
+//      b. Unwrap matching quotes / brackets / braces
+//      c. Strip parenthetical annotations like "(undermined)", "(home system)"
+//      d. Split into words and keep only "plausible" words (≥2 chars,
+//         not a URL, not a common English/powerplay word)
+//      e. Group consecutive plausible words into multi-word candidates
+//   3. Deduplicate, preserve order
 // ---------------------------------------------------------------------------
 
 const COMMON_WORDS = new Set([
@@ -29,28 +35,72 @@ const COMMON_WORDS = new Set([
   "merit","merits","reinforce","reinforcement","undermine","undermining",
 ]);
 
+/** Check if a word is a plausible part of a system name. */
+function isPlausibleWord(word: string): boolean {
+  if (word.length < 2) return false;
+  if (/^https?:\/\//i.test(word)) return false;
+  if (COMMON_WORDS.has(word.toLowerCase())) return false;
+  return true;
+}
+
 function parseNames(raw: string): string[] {
-  // Split on newlines, commas, semicolons, pipes, tabs
-  const tokens = raw
-    .split(/[\n,;|\t]+/)
-    .map(t =>
-      t
-        // strip surrounding whitespace and common punctuation/brackets
-        .replace(/^[\s\-•*·>]+|[\s\-•*·.!?]+$/g, "")
-        .replace(/^["'([{]+|["')\]}]+$/g, "")
-        .trim()
-    )
-    .filter(t => {
-      if (t.length < 3) return false;
-      if (/^\d+$/.test(t)) return false;          // pure numbers
-      if (/^https?:\/\//i.test(t)) return false;  // URLs
-      if (COMMON_WORDS.has(t.toLowerCase())) return false;
-      return true;
-    });
+  const segments = raw.split(/[\n,;|\t]+/);
+  const candidates: string[] = [];
+
+  for (let seg of segments) {
+    seg = seg.trim();
+    if (!seg) continue;
+
+    // Strip leading bullets, dashes, dots, asterisks
+    seg = seg.replace(/^[\s\-•*·>]+/, "").trim();
+    if (!seg) continue;
+
+    // Unwrap matching quote/bracket/brace pairs around the whole segment
+    if ((seg.startsWith('"') && seg.endsWith('"')) ||
+        (seg.startsWith("'") && seg.endsWith("'")) ||
+        (seg.startsWith("(") && seg.endsWith(")")) ||
+        (seg.startsWith("[") && seg.endsWith("]")) ||
+        (seg.startsWith("{") && seg.endsWith("}"))) {
+      seg = seg.slice(1, -1).trim();
+      if (!seg) continue;
+    }
+
+    // Strip parenthetical annotations like "(undermined)", "(home system)"
+    seg = seg.replace(/\([^)]*\)/g, "").trim();
+    if (!seg) continue;
+
+    // Skip pure-number or URL leftovers
+    if (/^\d+$/.test(seg)) continue;
+    if (/^https?:\/\//i.test(seg)) continue;
+
+    // Split into words and group consecutive plausible ones
+    const words = seg.split(/\s+/);
+    let group: string[] = [];
+
+    for (const word of words) {
+      const w = word.trim();
+      if (!w) continue;
+
+      if (isPlausibleWord(w)) {
+        group.push(w);
+      } else {
+        // Non-plausible word → flush current group
+        if (group.length > 0) {
+          candidates.push(group.join(" "));
+          group = [];
+        }
+      }
+    }
+
+    // Flush final group
+    if (group.length > 0) {
+      candidates.push(group.join(" "));
+    }
+  }
 
   // Deduplicate preserving order
   const seen = new Set<string>();
-  return tokens.filter(t => {
+  return candidates.filter(t => {
     const key = t.toLowerCase();
     if (seen.has(key)) return false;
     seen.add(key);
