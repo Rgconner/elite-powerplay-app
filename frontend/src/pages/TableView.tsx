@@ -3,8 +3,8 @@ import { getPowerSystems, PPSystemEntry } from "../api/powers";
 import { getRecommendations, RecommendationsResponse, RecommendationItem } from "../api/recommendations";
 import { getContestedSystems, ContestedSystemInfo, parseConflictProgress, formatDataAge, isStale } from "../api/contested";
 import { useSelectionState } from "../hooks/useSelectionState";
-import { ppStateColor, PP_STATE_LABELS, CP_DECAY_COLOR } from "../constants/ppColors";
-import { effectiveUndermining, netValue } from "../utils/decay";
+import { ppStateColor, PP_STATE_LABELS } from "../constants/ppColors";
+import { netValue } from "../utils/decay";
 import PowerSelector from "../components/PowerSelector";
 import RefSystemSelector from "../components/RefSystemSelector";
 import SystemListInput from "../components/SystemListInput";
@@ -705,7 +705,6 @@ export default function TableView() {
                                : null;
                 const r   = sys.reinforcement ?? 0;
                 const u   = sys.undermining   ?? 0;
-                const effU = effectiveUndermining(u, sys.cp_decay);
                 const net = netValue(r, u, sys.cp_decay);
 
                 // Row background: tint critical/urgent rows

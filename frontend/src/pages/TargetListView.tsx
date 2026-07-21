@@ -13,7 +13,7 @@ import PowerSelector from "../components/PowerSelector";
 import RefSystemSelector from "../components/RefSystemSelector";
 import SystemListInput from "../components/SystemListInput";
 import { computeTargetScore, meritsToNextState } from "../utils/scoring";
-import { effectiveUndermining, netValue } from "../utils/decay";
+import { netValue } from "../utils/decay";
 import {
   PPBadge, ProgressBar, TargetScoreBadge, MeritsCell,
   PlatBadge, BoomBadge,
@@ -35,6 +35,7 @@ interface TargetRow {
   control_progress: number | null;
   reinforcement: number | null;
   undermining: number | null;
+  cp_decay: number | null;
   distance_ly: number | null;
   score: number;
   meritsRemaining: number;
@@ -139,6 +140,7 @@ export default function TargetListView() {
         control_progress: sys.control_progress,
         reinforcement: sys.reinforcement,
         undermining: sys.undermining,
+        cp_decay: sys.cp_decay,
         distance_ly: sys.distance_from_center,
         score,
         meritsRemaining,

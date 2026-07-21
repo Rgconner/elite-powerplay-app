@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, type CSSProperties } from "react";
 import { getTargetAnalysis, TargetAnalysisItem } from "../api/targeting";
-import { effectiveUndermining, netValue } from "../utils/decay";
+import { netValue } from "../utils/decay";
 import { listPowers } from "../api/powers";
 import { ppStateColor, PP_STATE_LABELS, powerColor } from "../constants/ppColors";
 
