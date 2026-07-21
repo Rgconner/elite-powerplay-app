@@ -181,7 +181,8 @@ export function Th({ col, label, sortKey, sortDir, onSort, width, title }: {
 
 export function TargetScoreBadge({ score }: { score: number }) {
   let label: string, bg: string, fg: string;
-  if (score >= 80)       { label = "PRIME";       bg = "#3d0000"; fg = "#FF4444"; }
+  if (score >= 100)      { label = "MAX";         bg = "#3d0000"; fg = "#FF4444"; }
+  else if (score >= 80)  { label = "PRIME";       bg = "#3d0000"; fg = "#FF4444"; }
   else if (score >= 60)  { label = "HIGH";        bg = "#3d1a00"; fg = "#FF8C00"; }
   else if (score >= 40)  { label = "MEDIUM";      bg = "#2a2000"; fg = "#D9A84A"; }
   else if (score >= 20)  { label = "LOW";         bg = "#1a1a2e"; fg = "#8899AA"; }

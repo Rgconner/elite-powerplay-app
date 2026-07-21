@@ -116,6 +116,8 @@ export default function TargetListView() {
         control_progress: sys.control_progress,
         power_state: sys.power_state,
         distance_ly: sys.distance_from_center,
+        reinforcement: sys.reinforcement,
+        undermining: sys.undermining,
       });
       const { meritsRemaining, meritsNeeded } = meritsToNextState(
         sys.power_state,
@@ -202,7 +204,7 @@ export default function TargetListView() {
         <p style={{ margin: 0, color: "#8b949e", lineHeight: 1.5 }}>
           Select a Power, optionally set a reference system, then paste or type system names below.
           The score combines control progress (higher = better), distance from reference (closer = better),
-          and merit progression toward the next state. Sort by clicking the column buttons.
+          and undermining threat (higher net undermining = needs more help). Sort by clicking the column buttons.
         </p>
 
         {/* Row 1: Power + Ref */}
@@ -228,8 +230,8 @@ export default function TargetListView() {
             Score Components
           </span>
           <span>📊 Progress: up to 50 pts (higher control = better)</span>
-          <span>📍 Distance: up to 30 pts (≤100 LY = full bonus)</span>
-          <span>🏆 Merits: up to 20 pts (closer to next state = better)</span>
+          <span>📍 Distance: up to 30 pts (30 at 0 LY → 0 at 100 LY)</span>
+          <span>⚔ Threat: up to 20 pts (higher net undermining = needs help)</span>
           <span style={{ marginLeft: "auto", color: "#e6edf3" }}>
             {enriched.length} system{enriched.length !== 1 ? "s" : ""}
             {systemList.length > 0 && ` · ${systemList.length} in list`}
@@ -309,7 +311,8 @@ export default function TargetListView() {
             const net = r - u;
 
             // Background tint by score tier
-            const rowBg = row.score >= 80  ? "#1a0000"
+            const rowBg = row.score >= 100 ? "#2a0000"
+                        : row.score >= 80  ? "#1a0000"
                         : row.score >= 60  ? "#150c00"
                         : "#0d1117";
 
