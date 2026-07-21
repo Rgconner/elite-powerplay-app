@@ -21,6 +21,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from db.session import get_db
+from routers.deps import AdminUserDep
 
 logger = logging.getLogger(__name__)
 
@@ -356,8 +357,11 @@ async def enrich_batch(
 
 
 @router.delete("/enrich/cache")
-def clear_enrich_cache(db: Session = Depends(get_db)) -> dict:
-    """Clear all cached Spansh enrichment data.
+def clear_enrich_cache(
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(AdminUserDep),
+) -> dict:
+    """Clear all cached Spansh enrichment data.  Admin-only.
 
     Use this after deploying platinum-detection fixes to force a fresh
     fetch on the next batch request.

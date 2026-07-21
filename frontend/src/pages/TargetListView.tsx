@@ -17,7 +17,8 @@ import {
   PPBadge, ProgressBar, TargetScoreBadge, MeritsCell,
   PlatBadge, BoomBadge,
 } from "../components/SharedCells";
-import { getSpanshEnrichmentBatch, SpanshEnrichment } from "../api/spansh";
+import { getSpanshEnrichmentBatch, clearEnrichmentCache, SpanshEnrichment } from "../api/spansh";
+import { getAdminToken, getAuthHeader } from "../api/admin";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -89,6 +90,10 @@ export default function TargetListView() {
   // Enrichment state: map system_id64 → { has_platinum, has_boom }
   const [enrichment, setEnrichment] = useState<Record<number, SpanshEnrichment>>({});
   const [enriching,  setEnriching]  = useState(false);
+  const [caching,    setCaching]    = useState(false);
+
+  // Admin state — show cache management buttons only for logged-in admins
+  const isAdmin = getAdminToken() !== null;
 
   // Fetch systems for the selected power when power or ref changes
   useEffect(() => {
@@ -183,6 +188,41 @@ export default function TargetListView() {
   }
 
   const showDist = !!refSystem;
+
+  // ── Admin: cache management ──────────────────────────────────────────────
+
+  async function handleFlushCache() {
+    if (!confirm("Clear ALL enrichment cache? Next page load will re-fetch from Spansh.")) return;
+    setCaching(true);
+    try {
+      await clearEnrichmentCache();
+      setEnrichment({});
+      // Re-trigger enrichment fetch by toggling enriched dependency
+      if (enriched.length > 0) {
+        const ids = enriched.map(r => r.system_id64);
+        const result = await getSpanshEnrichmentBatch(ids, true);
+        setEnrichment(result);
+      }
+    } catch (e) {
+      console.error("Flush cache failed:", e);
+    } finally {
+      setCaching(false);
+    }
+  }
+
+  async function handleRefreshCache() {
+    if (enriched.length === 0) return;
+    setCaching(true);
+    try {
+      const ids = enriched.map(r => r.system_id64);
+      const result = await getSpanshEnrichmentBatch(ids, true);
+      setEnrichment(result);
+    } catch (e) {
+      console.error("Refresh cache failed:", e);
+    } finally {
+      setCaching(false);
+    }
+  }
 
   // ── Render ───────────────────────────────────────────────────────────────
 
@@ -281,6 +321,40 @@ export default function TargetListView() {
             <span style={{ marginLeft: 8, color: "#57606a", fontSize: 11 }}>
               ✓ {Object.values(enrichment).filter(e => e.has_platinum || e.has_boom).length} enriched
             </span>
+          )}
+
+          {/* Admin: cache management buttons */}
+          {isAdmin && (
+            <>
+              <button
+                onClick={handleFlushCache}
+                disabled={caching}
+                style={{
+                  marginLeft: 8, padding: "3px 8px", fontSize: 10, borderRadius: 3,
+                  cursor: caching ? "wait" : "pointer",
+                  border: "1px solid #D94A4A", background: "#2d0000",
+                  color: caching ? "#666" : "#D94A4A",
+                  fontWeight: 600, whiteSpace: "nowrap",
+                }}
+                title="Delete ALL enrichment cache entries — next load re-fetches from Spansh"
+              >
+                🗑 Flush
+              </button>
+              <button
+                onClick={handleRefreshCache}
+                disabled={caching}
+                style={{
+                  padding: "3px 8px", fontSize: 10, borderRadius: 3,
+                  cursor: caching ? "wait" : "pointer",
+                  border: "1px solid #FF8C00", background: "#2d1a00",
+                  color: caching ? "#666" : "#FF8C00",
+                  fontWeight: 600, whiteSpace: "nowrap",
+                }}
+                title="Re-fetch enrichment for visible systems from Spansh (ignore cache)"
+              >
+                🔄 Refresh
+              </button>
+            </>
           )}
         </div>
       )}

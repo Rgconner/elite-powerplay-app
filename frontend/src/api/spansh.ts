@@ -36,11 +36,15 @@ export async function getSpanshEnrichmentBatch(
 }
 
 /**
- * Clear all cached Spansh enrichment data on the server.
+ * Clear all cached Spansh enrichment data on the server.  Admin-only.
  * The next batch request will re-fetch fresh data from Spansh.
  */
 export async function clearEnrichmentCache(): Promise<{ deleted: number }> {
-  const res = await fetch("/api/spansh/enrich/cache", { method: "DELETE" });
+  const { getAuthHeader } = await import("./admin");
+  const res = await fetch("/api/spansh/enrich/cache", {
+    method: "DELETE",
+    headers: getAuthHeader(),
+  });
   if (!res.ok) {
     throw new Error(`Clear enrichment cache failed (${res.status})`);
   }
