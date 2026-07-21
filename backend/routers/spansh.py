@@ -99,34 +99,27 @@ async def _fetch_body(body_id64: int) -> dict | None:
 
 def _check_body_for_platinum(body: dict) -> bool:
     """
-    Check a single body (unwrapped) for a Platinum signal or Platinum in ring materials.
-    
-    Platinum is found in:
-      1. signals array — each entry has a 'signals' list of { name, count } objects
-      2. rings array — each ring may have a 'materials' dict or list with material names
+    Check a single body (unwrapped) for a Platinum signal.
+
+    Platinum is found in the ring signals:
+      rings[].signals[]  →  each entry is a dict with { name: str, count: int }
+
+    Confirmed via Spansh API (July 2026):
+      GET /api/body/{id64}  →  body.rings[].signals[]
+      POST /api/bodies/search  →  result.rings[].signals[]
+
+    Note: body records do NOT have a top-level "signals" field, and ring
+    records store signals in "signals" (not "materials").  The previous
+    code checked body.get("signals") and ring.get("materials") which
+    were both empty — causing all systems to report has_platinum=false.
     """
     try:
-        # Check body signals
-        signals = body.get("signals") or []
-        for sig_group in signals:
-            items = sig_group.get("signals") or []
-            for item in items:
-                if isinstance(item, dict) and item.get("name", "").lower() == "platinum":
-                    return True
-
-        # Check ring materials (platinum is commonly found in metallic rings)
         rings = body.get("rings") or []
         for ring in rings:
-            mat = ring.get("materials", {})
-            if isinstance(mat, dict):
-                for mname in mat:
-                    if "platinum" in mname.lower():
-                        return True
-            elif isinstance(mat, list):
-                for m in mat:
-                    mname = m.get("name", "") if isinstance(m, dict) else str(m)
-                    if "platinum" in mname.lower():
-                        return True
+            ring_signals = ring.get("signals") or []
+            for sig in ring_signals:
+                if isinstance(sig, dict) and sig.get("name", "").lower() == "platinum":
+                    return True
     except Exception:
         pass
     return False
