@@ -15,6 +15,8 @@ export interface TargetAnalysisItem {
   trend: "worsening" | "improving" | "stable" | "unknown";
   /** True when our power already has a foothold in this system */
   contested: boolean;
+  /** Estimated CP merit decay this cycle (merits) */
+  cp_decay: number | null;
 }
 
 export interface TargetAnalysisResponse {

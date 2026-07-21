@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { RecommendationsResponse, RecommendationItem } from "../api/recommendations";
 import { ContestedSystemInfo, parseConflictProgress } from "../api/contested";
-import { ppStateColor, PP_STATE_LABELS, powerColor } from "../constants/ppColors";
+import { ppStateColor, PP_STATE_LABELS, powerColor, CP_DECAY_COLOR } from "../constants/ppColors";
+import { effectiveUndermining, netValue } from "../utils/decay";
 
 interface Props {
   recommendations: RecommendationsResponse | null;
@@ -197,7 +198,8 @@ function ItemRow({ item }: { item: RecommendationItem }) {
   const band = urgencyBand(item);
   const r = item.reinforcement ?? 0;
   const u = item.undermining ?? 0;
-  const net = r - u;
+  const effU = effectiveUndermining(u, item.cp_decay);
+  const net = netValue(r, u, item.cp_decay);
 
   return (
     <div style={{
@@ -242,7 +244,12 @@ function ItemRow({ item }: { item: RecommendationItem }) {
       {item.type === "fortify" && (r > 0 || u > 0) && (
         <div style={{ display: "flex", gap: 16, fontSize: 11, color: "#8b949e", marginTop: 5, flexWrap: "wrap" }}>
           <span>R: <strong style={{ color: "#4AD94A" }}>{r.toLocaleString()}</strong></span>
-          <span>U: <strong style={{ color: u > r ? "#D94A4A" : "#8b949e" }}>{u.toLocaleString()}</strong></span>
+          <span>U: <strong style={{ color: effU > r ? "#D94A4A" : "#8b949e" }}>{u.toLocaleString()}</strong></span>
+          {item.cp_decay != null && item.cp_decay > 0 && (
+            <span style={{ color: CP_DECAY_COLOR }}>
+              Decay: <strong>−{item.cp_decay.toLocaleString()}</strong>
+            </span>
+          )}
           <span style={{ color: net >= 0 ? "#4AD94A" : "#D94A4A" }}>
             Net: <strong>{net >= 0 ? "+" : ""}{net.toLocaleString()}</strong>
           </span>

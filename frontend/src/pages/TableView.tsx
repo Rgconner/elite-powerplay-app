@@ -3,7 +3,8 @@ import { getPowerSystems, PPSystemEntry } from "../api/powers";
 import { getRecommendations, RecommendationsResponse, RecommendationItem } from "../api/recommendations";
 import { getContestedSystems, ContestedSystemInfo, parseConflictProgress, formatDataAge, isStale } from "../api/contested";
 import { useSelectionState } from "../hooks/useSelectionState";
-import { ppStateColor, PP_STATE_LABELS } from "../constants/ppColors";
+import { ppStateColor, PP_STATE_LABELS, CP_DECAY_COLOR } from "../constants/ppColors";
+import { effectiveUndermining, netValue } from "../utils/decay";
 import PowerSelector from "../components/PowerSelector";
 import RefSystemSelector from "../components/RefSystemSelector";
 import SystemListInput from "../components/SystemListInput";
@@ -385,8 +386,8 @@ export default function TableView() {
         return cmp(getRecoType(a.name), getRecoType(b.name), sortDir);
       }
       if (sortKey === "net") {
-        const na = (a.reinforcement ?? 0) - (a.undermining ?? 0);
-        const nb = (b.reinforcement ?? 0) - (b.undermining ?? 0);
+        const na = netValue(a.reinforcement, a.undermining, a.cp_decay);
+        const nb = netValue(b.reinforcement, b.undermining, b.cp_decay);
         return cmp(na, nb, sortDir);
       }
       if (sortKey === "days_to_failure") {
@@ -704,7 +705,8 @@ export default function TableView() {
                                : null;
                 const r   = sys.reinforcement ?? 0;
                 const u   = sys.undermining   ?? 0;
-                const net = r - u;
+                const effU = effectiveUndermining(u, sys.cp_decay);
+                const net = netValue(r, u, sys.cp_decay);
 
                 // Row background: tint critical/urgent rows
                 const rowBg = recoItem && recoItem.score >= 950

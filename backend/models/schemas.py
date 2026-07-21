@@ -70,6 +70,8 @@ class PPSystemEntry(BaseModel):
     distance_from_center: Optional[float] = None
     # Derived ratio 0.0–1.0 (undermining / reinforcement); None if no data
     undermine_ratio: Optional[float] = None
+    # Estimated CP merit decay this cycle (merits), None if not applicable
+    cp_decay: Optional[int] = None
 
 
 # ---------------------------------------------------------------------------
@@ -86,6 +88,8 @@ class SystemHistoryPoint(BaseModel):
     reinforcement: Optional[int] = None
     undermining: Optional[int] = None
     control_progress: Optional[float] = None
+    # Estimated CP merit decay this cycle (merits)
+    cp_decay: Optional[int] = None
 
 
 # ---------------------------------------------------------------------------
@@ -151,6 +155,8 @@ class RecommendationItem(BaseModel):
     # For expand items: JSON string [{power, progress}, ...] from power_conflict_progress.
     # Mirrors the same field on ContestedSystemInfo — enables per-power progress bars in the UI.
     conflict_progress: Optional[str] = None
+    # Estimated CP merit decay this cycle (merits), None if not applicable
+    cp_decay: Optional[int] = None
 
 
 class RecommendationsResponse(BaseModel):
@@ -195,6 +201,8 @@ class TargetAnalysisItem(BaseModel):
     # True when this is a Contested system (our power has merits here but hasn't
     # fully flipped it yet — or enemy is contesting one of ours)
     contested: bool = False
+    # Estimated CP merit decay this cycle (merits), None if not applicable
+    cp_decay: Optional[int] = None
 
 
 class TargetAnalysisRequest(BaseModel):
@@ -237,3 +245,5 @@ class ContestedSystemInfo(BaseModel):
     conflict_progress: Optional[str] = None
     # When Spansh last received game data for this system
     spansh_updated_at: Optional[datetime] = None
+    # Estimated CP merit decay this cycle (merits), None if not applicable
+    cp_decay: Optional[int] = None

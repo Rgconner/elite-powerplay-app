@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, type CSSProperties } from "react";
 import { getTargetAnalysis, TargetAnalysisItem } from "../api/targeting";
+import { effectiveUndermining, netValue } from "../utils/decay";
 import { listPowers } from "../api/powers";
 import { ppStateColor, PP_STATE_LABELS, powerColor } from "../constants/ppColors";
 
@@ -373,8 +374,8 @@ export default function TargetAnalysisView() {
   // Sort
   const sorted = useMemo(() => [...filteredByProgress].sort((a, b) => {
     if (sortKey === "net") {
-      const na = (a.reinforcement ?? 0) - (a.undermining ?? 0);
-      const nb = (b.reinforcement ?? 0) - (b.undermining ?? 0);
+      const na = netValue(a.reinforcement, a.undermining, a.cp_decay);
+      const nb = netValue(b.reinforcement, b.undermining, b.cp_decay);
       return cmp(na, nb, sortDir);
     }
     return cmp(
@@ -678,7 +679,7 @@ export default function TargetAnalysisView() {
               {sorted.map((item, i) => {
                 const r   = item.reinforcement ?? 0;
                 const u   = item.undermining   ?? 0;
-                const net = r - u;
+                const net = netValue(r, u, item.cp_decay);
 
                 // Row tinting: contested = orange glow, highest threat = red glow
                 const rowBg = item.contested    ? "#1a1000"

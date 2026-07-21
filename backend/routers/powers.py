@@ -37,6 +37,7 @@ from models.schemas import (
     TargetAnalysisResponse,
 )
 from services.scoring import compute_recommendations, load_weights, DEFAULTS as SCORING_DEFAULTS
+from services.decay import effective_undermining as _eff_under
 
 router = APIRouter(prefix="/powers", tags=["powers"])
 
@@ -109,7 +110,8 @@ def get_power_systems(
         SELECT DISTINCT ON (system_id)
                system_id, power, power_state,
                reinforcement, undermining, control_progress,
-               snapshot_time, spansh_updated_at
+               snapshot_time, spansh_updated_at,
+               cp_decay
         FROM pp_system_snapshots
         WHERE power = :power
         {_STALE_FILTER}
@@ -151,9 +153,11 @@ def get_power_systems(
 
         rein = snap["reinforcement"]
         under = snap["undermining"]
+        cp_decay_val = snap["cp_decay"]
+        eff_u = _eff_under(under, cp_decay_val)
         undermine_ratio: Optional[float] = None
-        if rein and rein > 0 and under is not None:
-            undermine_ratio = under / rein
+        if rein and rein > 0:
+            undermine_ratio = eff_u / rein
 
         results.append(PPSystemEntry(
             system_id64=system.system_id64,
@@ -170,6 +174,7 @@ def get_power_systems(
             spansh_updated_at=snap["spansh_updated_at"],
             distance_from_center=distance,
             undermine_ratio=undermine_ratio,
+            cp_decay=cp_decay_val,
         ))
 
     return results
@@ -446,7 +451,8 @@ def target_analysis(
     target_snap_rows = db.execute(text(f"""
         SELECT DISTINCT ON (system_id)
                system_id, power, power_state,
-               reinforcement, undermining, control_progress
+               reinforcement, undermining, control_progress,
+               cp_decay
         FROM pp_system_snapshots
         WHERE power = ANY(:powers)
         {_STALE_FILTER}
@@ -482,7 +488,8 @@ def target_analysis(
         SELECT DISTINCT ON (system_id)
                system_id, power, power_state,
                reinforcement, undermining, control_progress,
-               powers_list, conflict_progress
+               powers_list, conflict_progress,
+               cp_decay
         FROM pp_system_snapshots
         WHERE power_state = 'Contested'
           AND powers_list ILIKE :attacker_pattern
@@ -667,6 +674,7 @@ def target_analysis(
             days_to_downgrade=days,
             trend=trend,
             contested=is_contested,
+            cp_decay=snap.get("cp_decay"),
         ))
 
     # Sort by control_progress ascending (lowest = most vulnerable) before
@@ -857,6 +865,7 @@ def get_system_history(
             reinforcement=r.reinforcement,
             undermining=r.undermining,
             control_progress=r.control_progress,
+            cp_decay=r.cp_decay,
         )
         for r in rows
     ]

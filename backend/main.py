@@ -36,6 +36,20 @@ with engine.connect() as _conn:
         "ALTER TABLE pp_system_snapshots "
         "ADD COLUMN IF NOT EXISTS spansh_updated_at TIMESTAMP"
     ))
+
+    # ── Merit decay columns (PP2.0 CP decay mechanic) ──────────────────────
+    _conn.execute(_text(
+        "ALTER TABLE pp_system_snapshots "
+        "ADD COLUMN IF NOT EXISTS cp_decay INTEGER"
+    ))
+    _conn.execute(_text(
+        "ALTER TABLE pp_system_snapshots "
+        "ADD COLUMN IF NOT EXISTS decay_cycle_start TIMESTAMP"
+    ))
+    _conn.execute(_text(
+        "CREATE INDEX IF NOT EXISTS idx_snapshots_decay_cycle "
+        "ON pp_system_snapshots (decay_cycle_start)"
+    ))
     # Index for fast staleness filtering (WHERE spansh_updated_at > NOW()-24h)
     _conn.execute(_text(
         "CREATE INDEX IF NOT EXISTS ix_pp_system_snapshots_spansh_updated_at "

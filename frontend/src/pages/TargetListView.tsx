@@ -13,6 +13,7 @@ import PowerSelector from "../components/PowerSelector";
 import RefSystemSelector from "../components/RefSystemSelector";
 import SystemListInput from "../components/SystemListInput";
 import { computeTargetScore, meritsToNextState } from "../utils/scoring";
+import { effectiveUndermining, netValue } from "../utils/decay";
 import {
   PPBadge, ProgressBar, TargetScoreBadge, MeritsCell,
   PlatBadge, BoomBadge,
@@ -382,7 +383,7 @@ export default function TargetListView() {
           {sorted.map((row) => {
             const r   = row.reinforcement ?? 0;
             const u   = row.undermining   ?? 0;
-            const net = r - u;
+            const net = netValue(r, u, row.cp_decay);
 
             // Background tint by score tier
             const rowBg = row.score >= 100 ? "#2a0000"

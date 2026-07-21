@@ -31,6 +31,8 @@ export interface RecommendationItem {
    *  Same format as ContestedSystemInfo.conflict_progress. Null for Unoccupied systems
    *  with no conflict data. */
   conflict_progress: string | null;
+  /** Estimated CP merit decay this cycle (merits) */
+  cp_decay: number | null;
 }
 
 export interface RecommendationsResponse {

@@ -70,3 +70,7 @@ export function powerColor(name: string | null | undefined): string {
   if (!name) return "#8b949e";
   return POWER_COLORS[name] ?? "#8b949e";
 }
+
+// ── Merit decay color ───────────────────────────────────────────────────────
+/** Distinctive purple for CP Decay display (unique from R=green, U=red). */
+export const CP_DECAY_COLOR = "#B388FF";

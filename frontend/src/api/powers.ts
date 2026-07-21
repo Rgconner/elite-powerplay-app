@@ -17,6 +17,8 @@ export interface PPSystemEntry {
   distance_from_center: number | null;
   /** undermining / reinforcement ratio 0.0–1.0; null if no data */
   undermine_ratio: number | null;
+  /** Estimated CP merit decay this cycle (merits) */
+  cp_decay: number | null;
 }
 
 export async function listPowers(): Promise<string[]> {

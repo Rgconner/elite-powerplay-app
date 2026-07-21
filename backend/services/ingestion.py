@@ -51,6 +51,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from models.models import IngestionRun
+from services.decay import compute_cp_decay, current_cycle_start
 
 
 def _extract_powers_fields(system_obj: dict) -> tuple[Optional[str], Optional[str]]:
@@ -319,6 +320,26 @@ def run_spansh_ingest(db: Session) -> IngestionRun:
                 )
                 system_db_id: int = sys_result.scalar_one()
 
+                # ── Compute CP decay (once per cycle per system) ──────────
+                cycle = current_cycle_start()
+                existing_decay_row = db.execute(
+                    text("""
+                        SELECT cp_decay FROM pp_system_snapshots
+                        WHERE system_id = :sid
+                          AND decay_cycle_start = :cycle
+                          AND cp_decay IS NOT NULL
+                        ORDER BY snapshot_time DESC
+                        LIMIT 1
+                    """),
+                    {"sid": system_db_id, "cycle": cycle},
+                ).fetchone()
+                if existing_decay_row is not None:
+                    cp_decay_val = existing_decay_row[0]
+                else:
+                    cp_decay_val = compute_cp_decay(
+                        power_state, control_progress, undermining
+                    )
+
                 # Insert a fresh snapshot row (insert-only for history)
                 db.execute(
                     text("""
@@ -327,13 +348,15 @@ def run_spansh_ingest(db: Session) -> IngestionRun:
                              spansh_updated_at,
                              power, power_state, control_progress,
                              reinforcement, undermining,
-                             powers_list, conflict_progress)
+                             powers_list, conflict_progress,
+                             cp_decay, decay_cycle_start)
                         VALUES
                             (:system_id, :run_id, :now,
                              :spansh_updated_at,
                              :power, :power_state, :control_progress,
                              :reinforcement, :undermining,
-                             :powers_list, :conflict_progress)
+                             :powers_list, :conflict_progress,
+                             :cp_decay, :decay_cycle_start)
                     """),
                     {
                         "system_id":          system_db_id,
@@ -347,6 +370,8 @@ def run_spansh_ingest(db: Session) -> IngestionRun:
                         "undermining":        undermining,
                         "powers_list":        powers_list,
                         "conflict_progress":  conflict_progress,
+                        "cp_decay":           cp_decay_val,
+                        "decay_cycle_start":  cycle,
                     },
                 )
 

@@ -309,7 +309,8 @@ def get_latest_snapshots(db: Session) -> dict[int, dict]:
                system_id, power, power_state,
                reinforcement, undermining, control_progress,
                snapshot_time, spansh_updated_at,
-               conflict_progress
+               conflict_progress,
+               cp_decay
         FROM pp_system_snapshots
         WHERE (
             spansh_updated_at > NOW() - INTERVAL '24 hours'
@@ -626,6 +627,7 @@ def compute_fortify_scores(
         undermining       = snap.get("undermining")
         control_progress  = snap.get("control_progress")
         snapshot_time     = snap.get("snapshot_time")   # datetime of the snapshot
+        cp_decay_val      = snap.get("cp_decay")
 
         trend, daily_delta = get_progress_trend(system.id, db)
 
@@ -649,9 +651,11 @@ def compute_fortify_scores(
                 score += weights["fortify_near_center"]
                 reasons.append(f"Close to center system ({distance_from_center:.1f} LY)")
 
+        from services.decay import effective_undermining as _eff_u
         r = reinforcement or 0
         u = undermining   or 0
-        undermine_ratio: Optional[float] = (u / r) if r > 0 else None
+        eff_u = _eff_u(u, cp_decay_val)
+        undermine_ratio: Optional[float] = (eff_u / r) if r > 0 else None
 
         # Absolute merit context
         p_val = control_progress if control_progress is not None else 0.5
@@ -675,6 +679,7 @@ def compute_fortify_scores(
             buffer_merits=mf["buffer_merits"],
             merits_to_safety=mf["merits_to_safety"],
             merits_to_upgrade=mf["merits_to_upgrade"],
+            cp_decay=cp_decay_val,
         ))
 
     items.sort(key=lambda x: x.score, reverse=True)

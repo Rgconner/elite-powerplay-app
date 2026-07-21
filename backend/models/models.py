@@ -116,6 +116,13 @@ class PPSystemSnapshot(Base):
     # e.g. '[{"power":"A. Lavigny-Duval","progress":1.46},...]'
     conflict_progress = Column(String(2048), nullable=True)
 
+    # ── Merit decay (PP2.0 mechanic) ────────────────────────────────────────
+    # Estimated CP merit decay computed once per cycle per system.
+    # Only computed for Stronghold/Fortified/Exploited states.
+    cp_decay = Column(Integer, nullable=True)
+    # The cycle start (Thursday 07:00 UTC) this cp_decay was computed for.
+    decay_cycle_start = Column(DateTime, nullable=True, index=True)
+
     system = relationship("PPSystem", back_populates="snapshots")
     ingestion_run = relationship("IngestionRun", back_populates="snapshots")
 

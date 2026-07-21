@@ -4,3 +4,11 @@
 - When making changes to the codebase, always update the `.version` file.
 - Increment `FRONTEND_VERSION` for frontend changes, `BACKEND_VERSION` for backend changes.
 - Follow semantic versioning: bump the patch version (e.g., 1.8.1 → 1.8.2) for bug fixes and minor improvements.
+
+## Data hygine
+- When making changes to variables or data structures, do a second sweep to ensure a variable or data structure is not unused. 
+- Correct any unused variables or data structures issues.
+
+## Code Hygine
+
+- When replacing code, ensure that code has not been "orphaned" because it cannot be called by the program. 
