@@ -339,7 +339,7 @@ function ContestedRow({ item }: { item: ContestedSystemInfo }) {
         </span>
         <span style={{ fontWeight: 700, fontSize: 13, flex: 1 }}>
           <a
-            href={`https://www.edsm.net/en/system/id/-/name/${encodeURIComponent(item.system_name)}`}
+            href={`https://inara.cz/elite/star/?search=${encodeURIComponent(item.system_name)}`}
             target="_blank" rel="noreferrer"
             style={{ color: "#FF8C00", textDecoration: "none" }}
           >

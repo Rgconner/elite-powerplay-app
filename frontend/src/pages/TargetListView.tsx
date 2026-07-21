@@ -229,7 +229,7 @@ export default function TargetListView() {
                     {/* System name → EDSM */}
                     <td style={{ padding: "8px 10px", fontWeight: 500, whiteSpace: "nowrap" }}>
                       <a
-                        href={`https://www.edsm.net/en/system/id/-/name/${encodeURIComponent(row.name)}`}
+                        href={`https://inara.cz/elite/star/?search=${encodeURIComponent(row.name)}`}
                         target="_blank" rel="noreferrer"
                         style={{ color: "#58a6ff", textDecoration: "none" }}
                       >

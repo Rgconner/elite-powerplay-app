@@ -33,11 +33,13 @@ const COMMON_WORDS = new Set([
   "per","via","etc","system","systems","power","powers","state","status",
   "fortify","fortified","exploit","exploited","stronghold","unoccupied",
   "merit","merits","reinforce","reinforcement","undermine","undermining",
+  "upgrade","upgraded",
+  "a","i",
 ]);
 
 /** Check if a word is a plausible part of a system name. */
 function isPlausibleWord(word: string): boolean {
-  if (word.length < 2) return false;
+  if (word.length < 1) return false;
   if (/^https?:\/\//i.test(word)) return false;
   if (COMMON_WORDS.has(word.toLowerCase())) return false;
   return true;

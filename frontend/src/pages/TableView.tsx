@@ -715,10 +715,10 @@ export default function TableView() {
 
                 return (
                   <tr key={sys.system_id64} style={{ background: rowBg }}>
-                    {/* System name → EDSM link */}
+                    {/* System name → Inara link */}
                     <td style={{ padding: "8px 10px", fontWeight: 500, whiteSpace: "nowrap" }}>
                       <a
-                        href={`https://www.edsm.net/en/system/id/-/name/${encodeURIComponent(sys.name)}`}
+                        href={`https://inara.cz/elite/star/?search=${encodeURIComponent(sys.name)}`}
                         target="_blank" rel="noreferrer"
                         style={{ color: "#58a6ff", textDecoration: "none" }}
                       >
@@ -838,7 +838,7 @@ export default function TableView() {
                         {/* System name */}
                         <td style={{ padding: "7px 10px", whiteSpace: "nowrap" }}>
                           <a
-                            href={`https://www.edsm.net/en/system/id/-/name/${encodeURIComponent(item.system_name)}`}
+                            href={`https://inara.cz/elite/star/?search=${encodeURIComponent(item.system_name)}`}
                             target="_blank" rel="noreferrer"
                             style={{ color: "#FF8C00", textDecoration: "none", fontWeight: 500 }}
                           >

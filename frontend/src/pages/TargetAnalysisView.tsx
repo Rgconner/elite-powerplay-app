@@ -702,7 +702,7 @@ export default function TargetAnalysisView() {
                     <td style={{ padding: "8px 10px", whiteSpace: "nowrap" }}>
                       <div>
                         <a
-                          href={`https://www.edsm.net/en/system/id/-/name/${encodeURIComponent(item.system_name)}`}
+                          href={`https://inara.cz/elite/star/?search=${encodeURIComponent(item.system_name)}`}
                           target="_blank" rel="noreferrer"
                           style={{ color: "#58a6ff", textDecoration: "none", fontWeight: 500 }}
                         >
