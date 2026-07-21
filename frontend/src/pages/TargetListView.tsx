@@ -14,6 +14,7 @@ import RefSystemSelector from "../components/RefSystemSelector";
 import SystemListInput from "../components/SystemListInput";
 import { computeTargetScore, meritsToNextState } from "../utils/scoring";
 import { netValue } from "../utils/decay";
+import { CP_DECAY_COLOR } from "../constants/ppColors";
 import {
   PPBadge, ProgressBar, TargetScoreBadge, MeritsCell,
   PlatBadge, BoomBadge,
@@ -453,6 +454,11 @@ export default function TargetListView() {
                       {u > 0 ? u.toLocaleString() : "—"}
                     </strong>
                   </span>
+                  {row.cp_decay != null && row.cp_decay > 0 && (
+                    <span style={{ color: CP_DECAY_COLOR }}>
+                      Decay: <strong>−{row.cp_decay.toLocaleString()}</strong>
+                    </span>
+                  )}
                   {(r > 0 || u > 0) && (
                     <span>
                       Net: <strong style={{ color: net >= 0 ? "#4AD94A" : "#D94A4A" }}>
