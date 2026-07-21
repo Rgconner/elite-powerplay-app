@@ -6,7 +6,7 @@ import AdminPage from "./pages/AdminPage";
 type Tab = "table" | "targets";
 
 const TAB_LABELS: Record<Tab, string> = {
-  table:   "📋 Table",
+  table:   "📋 Overview",
   targets: "⚔ Target Analysis",
 };
 
