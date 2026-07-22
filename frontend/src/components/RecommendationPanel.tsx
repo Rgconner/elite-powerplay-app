@@ -215,7 +215,13 @@ function ItemRow({ item }: { item: RecommendationItem }) {
         }}>
           {band.label}
         </span>
-        <span style={{ fontWeight: 700, fontSize: 13, color: "#e6edf3", flex: 1 }}>{item.system_name}</span>
+        <a
+          href={`https://inara.cz/elite/starsystem/?search=${encodeURIComponent(item.system_name)}`}
+          target="_blank" rel="noreferrer"
+          style={{ fontWeight: 700, fontSize: 13, color: "#58a6ff", textDecoration: "none", flex: 1 }}
+        >
+          {item.system_name}
+        </a>
         {item.power_state && (
           <span style={{
             background: ppStateColor(item.power_state), color: "#fff",
