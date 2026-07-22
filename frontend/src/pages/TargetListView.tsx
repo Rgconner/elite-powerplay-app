@@ -413,7 +413,7 @@ export default function TargetListView() {
 
                   {/* System name → Inara */}
                   <a
-                    href={`https://inara.cz/elite/star/?search=${encodeURIComponent(row.name)}`}
+href={`https://inara.cz/elite/starsystem/?search=${encodeURIComponent(row.name)}`}
                     target="_blank" rel="noreferrer"
                     style={{ color: "#58a6ff", textDecoration: "none", fontWeight: 600, fontSize: 13, flex: 1 }}
                   >
