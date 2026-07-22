@@ -1,0 +1,16 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# image-updater requirements
+#
+# Pinned exact versions (==) for byte-for-byte reproducibility — see
+# docs/VERSIONING.md for the project's N-1 pinning policy.
+#
+# httpx       — HTTP client for the ghcr.io registry API.
+#               0.27.x is the safe pick (0.28 changed multipart handling).
+# kubernetes  — Official Python client for the k8s API.  32.x is the
+#               stable release track used by the rest of the project.
+# urllib3     — Pinned because kubernetes client pulls it transitively and
+#               some 2.x versions emit noisy InsecureRequestWarning.
+# ─────────────────────────────────────────────────────────────────────────────
+httpx==0.27.2
+kubernetes==32.0.1
+urllib3==2.2.3

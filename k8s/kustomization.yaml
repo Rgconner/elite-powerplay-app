@@ -19,9 +19,11 @@ namespace: elite-powerplay
 resources:
   - namespace.yaml
   - configmap.yaml
+  - postgres-config.yaml   # Tier 4 — custom postgresql.conf for the QueuePool fix
   - postgres.yaml
   - backend.yaml
   - frontend.yaml
+  - image-updater.yaml
   # ── Choose ONE ingress method ─────────────────────────────────────────────
   # Option A: Cloudflare Tunnel (recommended — no LoadBalancer / open ports)
   - cloudflare-tunnel.yaml
@@ -42,4 +44,8 @@ images:
   - name: ghcr.io/rgconner/elite-powerplay-backend
     newTag: latest
   - name: ghcr.io/rgconner/elite-powerplay-frontend
+    newTag: latest
+  # image-updater pulls its own image from the registry at runtime — no
+  # override needed; the controller itself owns its update cycle.
+  - name: ghcr.io/rgconner/elite-powerplay-image-updater
     newTag: latest

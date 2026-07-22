@@ -4,6 +4,12 @@
 # Uses a PersistentVolumeClaim for durable data storage.
 # The postgres-password is injected from the Secret; the database name and
 # user are pulled from the ConfigMap.
+#
+# Tier 4 of the QueuePool fix: a custom postgresql.conf (from
+# postgres-config.yaml) is mounted and selected via
+# `args: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]`.
+# This gives us statement_timeout, idle_in_transaction_session_timeout, and
+# max_connections=200 — none of which the upstream alpine image sets.
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ── Persistent storage ────────────────────────────────────────────────────────
@@ -77,9 +83,22 @@ spec:
                   name: elite-powerplay-secrets
                   key: postgres-password
 
+          # Override the entrypoint to load our custom postgresql.conf.
+          # Without this, postgres reads the upstream alpine image's
+          # stock config (max_connections=100, no timeouts, etc.).
+          args:
+            - postgres
+            - -c
+            - config_file=/etc/postgresql/postgresql.conf
+
           volumeMounts:
             - name: postgres-data
               mountPath: /var/lib/postgresql/data
+            # Custom config file (mounted read-only via subPath)
+            - name: postgres-config
+              mountPath: /etc/postgresql/postgresql.conf
+              subPath: postgresql.conf
+              readOnly: true
 
           resources:
             requests:
@@ -115,6 +134,13 @@ spec:
         - name: postgres-data
           persistentVolumeClaim:
             claimName: postgres-data
+        # Custom postgresql.conf (see postgres-config.yaml)
+        - name: postgres-config
+          configMap:
+            name: postgres-config
+            items:
+              - key: postgresql.conf
+                path: postgresql.conf
 
 ---
 

@@ -7,7 +7,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request,
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
-from db.session import SessionLocal
+from db.session import IngestSessionLocal
 from models.models import AdminSetting, AdminUser, IngestionRun
 from models.schemas import AdminSettingSchema, IngestionRunSchema
 from routers.auth import hash_password, verify_password
@@ -70,8 +70,14 @@ def get_ingest_status(request: Request, db: Session = Depends(get_db)) -> dict:
 
 
 def run_spansh_ingest_task() -> None:
-    """Wrapper used by both BackgroundTasks and APScheduler."""
-    db = SessionLocal()
+    """Wrapper used by both BackgroundTasks and APScheduler.
+
+    Uses the dedicated `IngestSessionLocal` (backed by `ingest_engine`) so
+    the long-running Spansh ingest cannot starve the FastAPI request pool.
+    The ingest holds a single connection for 5-10 minutes - a separate
+    pool with pool_size=2, max_overflow=0 keeps web traffic insulated.
+    """
+    db = IngestSessionLocal()
     try:
         run_spansh_ingest(db)
     except Exception:

@@ -1,0 +1,105 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# postgres-config.yaml  —  ConfigMap with the custom postgresql.conf
+#
+# Mounted into the postgres container at
+#   /etc/postgresql/postgresql.conf
+# and selected with `args: ["-c", "config_file=…"]` in postgres.yaml.
+#
+# Why we need this
+# ─────────────────
+# The default `postgres:16-alpine` image ships with a small-footprint
+# postgresql.conf that:
+#   • caps `max_connections` at 100 (too low for multiple backend replicas
+#     × 30 each)
+#   • has NO `statement_timeout` (a runaway SELECT can hold a connection
+#     indefinitely)
+#   • has NO `idle_in_transaction_session_timeout` (a forgotten psql
+#     session holds a connection forever)
+#
+# These three settings are the most impactful for the QueuePool exhaustion
+# class of bug — even with a bigger app-side pool, a single bad query or
+# zombie transaction on the server side will eventually drain any pool.
+#
+# Memory & WAL settings
+# ─────────────────────
+# Tuned for the 512 Mi memory limit on the postgres container in
+# postgres.yaml.  Conservative — leave 50 % of the container free for
+# shared_buffers + cache + work_mem growth.
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  namespace: elite-powerplay
+  labels:
+    app.kubernetes.io/name: elite-powerplay
+    app.kubernetes.io/component: database
+data:
+  # ────────────────────────────────────────────────────────────────────────────
+  # postgresql.conf  — mounted at /etc/postgresql/postgresql.conf
+  # ────────────────────────────────────────────────────────────────────────────
+  postgresql.conf: |
+    # ── Connection settings ───────────────────────────────────────────
+    listen_addresses = '*'
+    port = 5432
+    max_connections = 200
+    # Superuser/DB-owner connection reservations (room for ops, pgbouncer, etc.)
+    superuser_reserved_connections = 3
+
+    # ── Memory (512 Mi container limit) ───────────────────────────────
+    shared_buffers = 128MB
+    effective_cache_size = 384MB
+    work_mem = 4MB
+    maintenance_work_mem = 64MB
+    huge_pages = off
+
+    # ── WAL ───────────────────────────────────────────────────────────
+    wal_level = replica
+    wal_buffers = 16MB
+    min_wal_size = 512MB
+    max_wal_size = 2GB
+    checkpoint_completion_target = 0.9
+    max_wal_senders = 3
+
+    # ── Query planner ─────────────────────────────────────────────────
+    random_page_cost = 1.1                # SSD-friendly
+    effective_io_concurrency = 200        # SSD-friendly
+    default_statistics_target = 100
+
+    # ── Statement / transaction timeouts  (KEY FOR QueuePool FIX) ────
+    # These are the most important settings in this file.  They ensure
+    # a bad query or a zombie transaction cannot hold a connection
+    # forever and exhaust the app-side pool.
+    statement_timeout = 30s               # kill any query > 30 s
+    idle_in_transaction_session_timeout = 60s   # kill idle-in-tx > 60 s
+    idle_session_timeout = 0              # don't kill idle sessions (k8s restarts handle that)
+    lock_timeout = 10s                    # fail fast on lock waits
+
+    # ── Logging ───────────────────────────────────────────────────────
+    logging_collector = on
+    log_destination = 'stderr'
+    log_min_duration_statement = 500ms    # log slow queries (set to 0 to log all)
+    log_checkpoints = on
+    log_connections = off
+    log_disconnections = off
+    log_lock_waits = on                   # detect lock contention early
+    log_temp_files = 0
+    log_autovacuum_min_duration = 0
+    log_line_prefix = '%m [%p] %q%u@%d from=%h '
+
+    # ── Autovacuum (aggressive — pp_system_snapshots is insert-heavy) ─
+    autovacuum = on
+    autovacuum_max_workers = 2
+    autovacuum_naptime = 30s
+    autovacuum_vacuum_scale_factor = 0.05
+    autovacuum_analyze_scale_factor = 0.025
+    autovacuum_vacuum_cost_limit = 1000
+
+    # ── Locale ────────────────────────────────────────────────────────
+    datestyle = 'iso, mdy'
+    timezone = 'UTC'
+    lc_messages = 'C'
+    lc_monetary = 'C'
+    lc_numeric = 'C'
+    lc_time = 'C'
+    default_text_search_config = 'pg_catalog.english'

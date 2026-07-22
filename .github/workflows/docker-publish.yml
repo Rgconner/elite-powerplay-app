@@ -2,21 +2,26 @@
 # Build & publish Docker images to GitHub Container Registry (ghcr.io)
 #
 # Images produced:
-#   ghcr.io/<owner>/elite-powerplay-backend:latest  (FastAPI / uvicorn)
-#   ghcr.io/<owner>/elite-powerplay-frontend:latest (Vite + Nginx)
+#   ghcr.io/<owner>/elite-powerplay-backend:latest        (FastAPI / uvicorn)
+#   ghcr.io/<owner>/elite-powerplay-frontend:latest       (Vite + Nginx)
+#   ghcr.io/<owner>/elite-powerplay-image-updater:latest  (in-cluster controller)
 #
 # Triggered on:
 #   • workflow_run: only fires after the "CI" workflow completes successfully
 #     on main — this prevents Docker builds from racing ahead of tsc / lint.
 #   • Manual workflow_dispatch (bypasses the gate for hotfixes)
+#   • push to main as a safety fallback (same trigger as workflow_run).
+#
+# Version labels
+# ──────────────
+# Each image is built with OCI labels carrying the BACKEND_VERSION
+# (from backend/version.py) and FRONTEND_VERSION (from .version at the repo
+# root).  The in-cluster image-updater reads these labels from the
+# ghcr.io manifest to gate frontend rollouts on the backend reporting
+# the matching BACKEND_VERSION over its /api/admin/version endpoint.
 #
 # Required secrets  (Settings → Secrets → Actions):
 #   None — uses the built-in GITHUB_TOKEN for ghcr.io access.
-#
-# Optional secrets  (add these to enable runtime features in the container):
-#   SECRET_KEY            — JWT signing secret  (openssl rand -hex 32)
-#   POSTGRES_PASSWORD     — DB password
-#   AI_API_KEY            — OpenAI / LLM key
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: Build & Publish Docker Images
@@ -30,18 +35,17 @@ on:
   # Allow manual trigger for hotfixes / re-runs
   workflow_dispatch:
   # Safety fallback: also run on direct push to main so a failed/missed
-  # workflow_run never silently leaves the image stale. The check-ci job
-  # still gates Docker on CI result when triggered via workflow_run.
-  # When triggered via push, it runs unconditionally (CI already passed
-  # because push and workflow_run fire from the same commit).
+  # workflow_run never silently leaves the image stale.
   push:
     branches: ["main"]
 
 env:
   REGISTRY: ghcr.io
   # Image names are lowercased automatically by the login-action
-  BACKEND_IMAGE:  ghcr.io/${{ github.repository_owner }}/elite-powerplay-backend
-  FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/elite-powerplay-frontend
+  BACKEND_IMAGE:       ghcr.io/${{ github.repository_owner }}/elite-powerplay-backend
+  FRONTEND_IMAGE:      ghcr.io/${{ github.repository_owner }}/elite-powerplay-frontend
+  IMAGE_UPDATER_IMAGE: ghcr.io/${{ github.repository_owner }}/elite-powerplay-image-updater
+  BUILD_DATE:          ${{ github.event.repository.updated_at || github.event.head_commit.timestamp }}
 
 jobs:
   # ── Guard: abort if CI failed (workflow_run only) ─────────────────────────
@@ -49,7 +53,11 @@ jobs:
     name: Check CI result
     runs-on: ubuntu-latest
     outputs:
-      should_run: ${{ steps.gate.outputs.should_run }}
+      should_run:        ${{ steps.gate.outputs.should_run }}
+      backend_version:   ${{ steps.versions.outputs.backend_version }}
+      backend_release:   ${{ steps.versions.outputs.backend_release }}
+      frontend_version:  ${{ steps.versions.outputs.frontend_version }}
+      vcs_ref:           ${{ steps.versions.outputs.vcs_ref }}
     steps:
       - name: Gate on CI success
         id: gate
@@ -63,6 +71,33 @@ jobs:
             echo "CI did not pass (conclusion: ${{ github.event.workflow_run.conclusion }}) — skipping Docker build."
             echo "should_run=false" >> "$GITHUB_OUTPUT"
           fi
+
+      # ── Extract versions for OCI image labels ─────────────────────────
+      # These become build-args for the Dockerfile LABEL instructions.
+      # The in-cluster image-updater reads `org.opencontainers.image.version`
+      # from the new backend image and uses it to gate the frontend rollout
+      # on the backend's /api/admin/version returning the same value.
+      - name: Extract version metadata
+        id: versions
+        if: steps.gate.outputs.should_run == 'true'
+        run: |
+          # workflow_run gives us the SHA that triggered CI, not the merge SHA
+          REF="${{ github.event.workflow_run.head_sha || github.sha }}"
+
+          # BACKEND_VERSION / BACKEND_RELEASE_DATE from backend/version.py
+          BV=$(grep -E '^BACKEND_VERSION\s*=' backend/version.py \
+                 | sed -E 's/.*"([^"]+)".*/\1/')
+          BR=$(grep -E '^BACKEND_RELEASE_DATE\s*=' backend/version.py \
+                 | sed -E 's/.*"([^"]+)".*/\1/')
+
+          # FRONTEND_VERSION from the .version file at the repo root
+          FV=$(grep -E '^FRONTEND_VERSION=' .version \
+                 | sed -E 's/.*=([0-9A-Za-z.+-]+).*/\1/')
+
+          echo "backend_version=${BV:-unknown}"  >> "$GITHUB_OUTPUT"
+          echo "backend_release=${BR:-unknown}"  >> "$GITHUB_OUTPUT"
+          echo "frontend_version=${FV:-unknown}" >> "$GITHUB_OUTPUT"
+          echo "vcs_ref=${REF}"                  >> "$GITHUB_OUTPUT"
 
   # ── Build & push backend ──────────────────────────────────────────────────
   build-backend:
@@ -78,7 +113,6 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v5
         with:
-          # workflow_run gives us the SHA that triggered CI, not the merge SHA
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Set up Docker Buildx
@@ -109,6 +143,10 @@ jobs:
           push: true
           tags: ${{ steps.meta-backend.outputs.tags }}
           labels: ${{ steps.meta-backend.outputs.labels }}
+          build-args: |
+            BACKEND_VERSION=${{ needs.check-ci.outputs.backend_version }}
+            BACKEND_RELEASE_DATE=${{ needs.check-ci.outputs.backend_release }}
+            VCS_REF=${{ needs.check-ci.outputs.vcs_ref }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -156,5 +194,61 @@ jobs:
           push: true
           tags: ${{ steps.meta-frontend.outputs.tags }}
           labels: ${{ steps.meta-frontend.outputs.labels }}
+          build-args: |
+            FRONTEND_VERSION=${{ needs.check-ci.outputs.frontend_version }}
+            FRONTEND_BUILD_DATE=${{ env.BUILD_DATE }}
+            VCS_REF=${{ needs.check-ci.outputs.vcs_ref }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ── Build & push image-updater ───────────────────────────────────────────
+  # The in-cluster controller that watches ghcr.io and rolls the two app
+  # deployments forward.  See image-updater/main.py for behaviour and
+  # k8s/image-updater.yaml for the cluster-side resources.
+  build-image-updater:
+    name: Image-updater (auto-roll controller)
+    needs: check-ci
+    if: needs.check-ci.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags & labels)
+        id: meta-image-updater
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_UPDATER_IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix=sha-,format=short
+            type=raw,value=latest
+
+      - name: Build and push image-updater
+        uses: docker/build-push-action@v6
+        with:
+          context: ./image-updater
+          file: ./image-updater/Dockerfile
+          push: true
+          tags: ${{ steps.meta-image-updater.outputs.tags }}
+          labels: ${{ steps.meta-image-updater.outputs.labels }}
+          build-args: |
+            VCS_REF=${{ needs.check-ci.outputs.vcs_ref }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

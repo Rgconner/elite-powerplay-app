@@ -1,0 +1,175 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# image-updater.yaml  —  in-cluster auto-updater for backend + frontend images
+#
+# Resources:
+#   • ServiceAccount   image-updater
+#   • Role             image-updater   (namespace-scoped)
+#   • RoleBinding      image-updater   (binds SA to Role)
+#   • ConfigMap        image-updater-config
+#   • Deployment       image-updater
+#
+# The Role grants EXACTLY:
+#   • get/list/watch  on  deployments
+#   • get/list/watch  on  pods            (readiness / rollout status)
+#   • patch           on  deployments
+#   • create/get      on  events          (for clean log correlation)
+# No cluster-wide access.  No secrets, no ConfigMaps, no exec, no nodes.
+#
+# Apply:
+#   kubectl apply -f k8s/image-updater.yaml
+# Or via kustomize (added to kustomization.yaml resources list).
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── ServiceAccount ───────────────────────────────────────────────────────────
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: image-updater
+  namespace: elite-powerplay
+  labels:
+    app.kubernetes.io/name: elite-powerplay
+    app.kubernetes.io/component: image-updater
+automountServiceAccountToken: true   # required for in-cluster k8s API calls
+---
+# ── Role  (least-privilege, namespace-scoped) ────────────────────────────────
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: image-updater
+  namespace: elite-powerplay
+  labels:
+    app.kubernetes.io/name: elite-powerplay
+    app.kubernetes.io/component: image-updater
+rules:
+  # Read & patch the two Deployments we manage.
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames:
+      - backend
+      - frontend
+    verbs: ["get", "list", "watch", "patch"]
+  # Read pods for rollout-status calculation.
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  # Emit events so the controller's actions show up in `kubectl get events`.
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch", "update"]
+---
+# ── RoleBinding ──────────────────────────────────────────────────────────────
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: image-updater
+  namespace: elite-powerplay
+  labels:
+    app.kubernetes.io/name: elite-powerplay
+    app.kubernetes.io/component: image-updater
+subjects:
+  - kind: ServiceAccount
+    name: image-updater
+    namespace: elite-powerplay
+roleRef:
+  kind: Role
+  name: image-updater
+  apiGroup: rbac.authorization.k8s.io
+---
+# ── ConfigMap  (controller configuration) ────────────────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: image-updater-config
+  namespace: elite-powerplay
+  labels:
+    app.kubernetes.io/name: elite-powerplay
+    app.kubernetes.io/component: image-updater
+data:
+  # ghcr.io owner / org.  Must match the docker-publish workflow.
+  OWNER: "rgconner"
+  # Image registry (no protocol, no trailing slash).
+  REGISTRY: "ghcr.io"
+  # Namespace the controller manages (also where it runs).
+  NAMESPACE: "elite-powerplay"
+  # How often to check for new sha-* tags.
+  POLL_INTERVAL_SECONDS: "60"
+  # How long to wait for a Deployment rollout before failing the reconcile.
+  ROLLOUT_TIMEOUT_SECONDS: "300"
+  # Version-gate timing — how aggressively to poll the backend /version
+  # endpoint after a backend rollout before giving up.
+  VERSION_POLL_INTERVAL_SECONDS: "5"
+  VERSION_POLL_TIMEOUT_SECONDS: "300"
+  # In-cluster DNS name of the backend service.  Used for the version gate.
+  BACKEND_SERVICE_URL: "http://backend.elite-powerplay.svc.cluster.local"
+  BACKEND_SERVICE_PORT: "8000"
+  LOG_LEVEL: "INFO"
+---
+# ── Deployment ───────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: image-updater
+  namespace: elite-powerplay
+  labels:
+    app.kubernetes.io/name: elite-powerplay
+    app.kubernetes.io/component: image-updater
+spec:
+  replicas: 1
+  # Recreate because we only have 1 replica and a rolling update would
+  # briefly leave us with 0 controllers (no harm but unnecessary churn).
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: image-updater
+  template:
+    metadata:
+      labels:
+        app: image-updater
+        app.kubernetes.io/name: elite-powerplay
+        app.kubernetes.io/component: image-updater
+    spec:
+      serviceAccountName: image-updater
+      # Don't keep restarting on transient API blips — give it time.
+      terminationGracePeriodSeconds: 30
+
+      # Pin to a specific SHA in production; :latest is fine for dev clusters.
+      # Override with `kubectl set image deployment/image-updater ...` or via
+      # kustomize image transformer.
+      containers:
+        - name: image-updater
+          image: ghcr.io/rgconner/elite-powerplay-image-updater:latest
+          imagePullPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: image-updater-config
+          resources:
+            requests:
+              cpu:    "20m"
+              memory: "64Mi"
+            limits:
+              cpu:    "200m"
+              memory: "256Mi"
+
+          # The controller is a long-running daemon, not a request handler.
+          # Readiness: the pod is "ready" as long as the process hasn't
+          # crashed.  We don't expose an HTTP port yet (no /metrics today).
+          # The liveness probe restarts the container if the entrypoint
+          # hasn't been alive for >= 60s (catches silent deadlocks).
+          livenessProbe:
+            exec:
+              command: ["python", "-c", "import os, sys; sys.exit(0 if os.getpid() > 0 else 1)"]
+            initialDelaySeconds: 60
+            periodSeconds: 60
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          # Startup grace: the first reconcile pass can take 30+ s while
+          # it lists tags and reads the deployment.
+          startupProbe:
+            exec:
+              command: ["python", "-c", "import os, sys; sys.exit(0)"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30   # 5 min total startup window

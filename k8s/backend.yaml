@@ -102,6 +102,35 @@ spec:
                   name: elite-powerplay-config
                   key: EDSM_SYNC_INTERVAL_HOURS
 
+            # ── DB pool tuning (Tier 1+2 of the QueuePool fix) ────────────────
+            # All values are read by db/session.py; defaults are baked into the
+            # code so this section is optional.  Listed here so the tuning is
+            # explicit and discoverable in `kubectl describe deploy backend`.
+            # See k8s/postgres-config.yaml for the matching Postgres-side
+            # timeouts (statement_timeout, idle_in_transaction_session_timeout).
+            - name: DB_POOL_SIZE
+              value: "10"               # was SQLAlchemy default 5
+            - name: DB_MAX_OVERFLOW
+              value: "20"               # was 10  (total 30 per pod)
+            - name: DB_POOL_TIMEOUT
+              value: "10"               # was 30 (fail fast under burst)
+            - name: DB_POOL_RECYCLE
+              value: "1800"             # NEW  — recycle every 30 min
+            - name: DB_POOL_PRE_PING
+              value: "true"             # NEW  — detect dead conns
+            # Ingest uses a SEPARATE pool (db.session.IngestSessionLocal) so a
+            # 5–10 min Spansh ingest cannot starve the web request pool above.
+            - name: DB_INGEST_POOL_SIZE
+              value: "2"
+            - name: DB_INGEST_MAX_OVERFLOW
+              value: "0"
+            - name: DB_INGEST_POOL_TIMEOUT
+              value: "60"
+            - name: DB_INGEST_POOL_RECYCLE
+              value: "1800"
+            - name: DB_INGEST_POOL_PRE_PING
+              value: "true"
+
           resources:
             requests:
               cpu:    "100m"
