@@ -98,8 +98,8 @@ def cmd_web(args: argparse.Namespace) -> int:
 
 
 def cmd_seed(args: argparse.Namespace) -> int:
-    from scripts.seed_sample_data import seed
     from ..paths import resolve_paths
+    from .seed import seed
     config = load_config()
     paths = resolve_paths(config)
     seed(paths, count=args.count)
