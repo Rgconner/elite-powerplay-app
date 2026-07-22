@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="bx--type-display-01 app-page-title">Triggers</h1>
+<p class="bx--type-body-short-02 app-page-subtitle">Tie an input pin edge to an inspection job.</p>
+
+<section class="bx--tile app-tile app-tile--wide">
+    <h2 class="bx--type-productive-heading-03">New / Edit Trigger</h2>
+    <form id="trigger-form" class="app-form-grid">
+        <div class="bx--form-item">
+            <label for="trig-id" class="bx--label">Trigger ID</label>
+            <input id="trig-id" class="bx--text-input" type="text" placeholder="auto-generated">
+        </div>
+        <div class="bx--form-item">
+            <label for="trig-name" class="bx--label">Name</label>
+            <input id="trig-name" class="bx--text-input" type="text">
+        </div>
+        <div class="bx--form-item">
+            <label for="trig-pin" class="bx--label">Input pin</label>
+            <select id="trig-pin" class="bx--select-input" required></select>
+        </div>
+        <div class="bx--form-item">
+            <label for="trig-job" class="bx--label">Job</label>
+            <select id="trig-job" class="bx--select-input" required></select>
+        </div>
+        <div class="bx--form-item">
+            <label for="trig-edge" class="bx--label">Edge</label>
+            <select id="trig-edge" class="bx--select-input">
+                <option value="falling">falling (default for switches)</option>
+                <option value="rising">rising</option>
+                <option value="both">both</option>
+            </select>
+        </div>
+        <div class="app-form-actions">
+            <button id="save-trigger" class="bx--btn bx--btn--primary" type="submit">Save trigger</button>
+            <button id="fire-trigger" class="bx--btn bx--btn--tertiary" type="button">Fire now</button>
+        </div>
+    </form>
+</section>
+
+<section class="bx--tile app-tile app-tile--wide">
+    <h2 class="bx--type-productive-heading-03">Existing Triggers</h2>
+    <table class="bx--data-table bx--data-table--md" id="triggers-table">
+        <thead>
+            <tr><th>Name</th><th>Pin</th><th>Job</th><th>Edge</th><th>Enabled</th><th></th></tr>
+        </thead>
+        <tbody><tr><td colspan="6" class="bx--type-body-short-01">Loading…</td></tr></tbody>
+    </table>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/triggers.js') }}"></script>
+{% endblock %}

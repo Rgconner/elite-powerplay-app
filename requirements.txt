@@ -1,16 +1,19 @@
-# VisInsp Project Dependencies
+# Visual Inspector — common dependencies
+# Install with: pip install -r requirements.txt
+#
+# For Pi add:    pip install -r requirements-pi.txt
+# For WSL add:   pip install -r requirements-wsl.txt
 
-# Core dependencies for visual inspection
+# Core vision
 opencv-python>=4.8.0
 numpy>=1.24.0
 
-# Raspberry Pi GPIO support
-RPi.GPIO>=0.7.1
+# Web UI (Flask + SocketIO for the Carbon-styled operator interface)
+Flask>=2.3.0
+Flask-SocketIO>=5.3.0
+python-engineio>=4.7.0
+python-socketio>=5.10.0
+simple-websocket>=1.0.0
 
-# Optional: Additional computer vision libraries
-# opencv-contrib-python>=4.8.0
-
-# Development dependencies
-# pytest>=7.0.0
-# black>=22.0.0
-# flake8>=4.0.0
+# Image handling (for sample data generation and bounding-box display)
+Pillow>=10.0.0

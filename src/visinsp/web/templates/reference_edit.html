@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="bx--type-display-01 app-page-title">Edit Reference</h1>
+<p class="bx--type-body-short-02 app-page-subtitle">Draw bounding boxes around the parts of the image to compare. Drag existing boxes to move; drag a corner to resize.</p>
+
+<div class="app-grid app-grid--2 app-grid--editor">
+    <section class="bx--tile app-tile app-tile--wide">
+        <h2 class="bx--type-productive-heading-03">Image</h2>
+        <div id="bbox-editor" class="bbox-editor">
+            <canvas id="bbox-canvas" class="bbox-canvas"></canvas>
+            <div id="bbox-toolbar" class="bbox-toolbar">
+                <button id="bbox-add" class="bx--btn bx--btn--secondary bx--btn--sm" type="button">+ Add box</button>
+                <button id="bbox-delete" class="bx--btn bx--btn--danger--tertiary bx--btn--sm" type="button">Delete selected</button>
+                <span class="bx--type-helper-text-01" id="bbox-hint">Click "+ Add box" then drag on the image to draw a new box.</span>
+            </div>
+        </div>
+    </section>
+
+    <section class="bx--tile app-tile">
+        <h2 class="bx--type-productive-heading-03">Boxes</h2>
+        <div class="bx--form-item">
+            <label for="ref-name" class="bx--label">Reference name</label>
+            <input id="ref-name" class="bx--text-input" type="text">
+        </div>
+        <div class="bx--form-item">
+            <label for="ref-notes" class="bx--label">Notes</label>
+            <textarea id="ref-notes" class="bx--text-area" rows="2"></textarea>
+        </div>
+        <ul id="bbox-list" class="bbox-list"></ul>
+        <div class="bbox-actions">
+            <button id="save-btn" class="bx--btn bx--btn--primary" type="button">Save</button>
+            <a class="bx--btn bx--btn--ghost" href="{{ url_for('pages.references_list') }}">Cancel</a>
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.VISINSP_REF_ID = {{ ref_id|tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/bbox_editor.js') }}"></script>
+{% endblock %}

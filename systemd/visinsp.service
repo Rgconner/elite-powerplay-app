@@ -1,0 +1,32 @@
+[Unit]
+Description=Visual Inspector — manufacturing defect detection
+Documentation=https://github.com/yourusername/visual-inspector
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/opt/visual-inspector
+Environment="PATH=/opt/visual-inspector/.venv/bin"
+Environment="VISINSP_ENV=pi"
+Environment="VISINSP_CONFIG=/opt/visual-inspector/config/config.json"
+ExecStart=/opt/visual-inspector/.venv/bin/python -m visinsp.services.cli run
+Restart=on-failure
+RestartSec=5
+Nice=0
+
+# Hardening (Pi is single-purpose, so be conservative)
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/visual-inspector/data
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=visinsp
+
+[Install]
+WantedBy=multi-user.target

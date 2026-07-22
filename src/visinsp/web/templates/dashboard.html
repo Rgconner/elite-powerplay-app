@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="bx--type-display-01 app-page-title">Dashboard</h1>
+<p class="bx--type-body-short-02 app-page-subtitle">Live state of the inspection station.</p>
+
+<div class="app-grid app-grid--3">
+    <section class="bx--tile app-tile">
+        <h2 class="bx--type-productive-heading-03">Pin State</h2>
+        <p class="bx--type-helper-text-01">Real-time input / output levels.</p>
+        <div id="pin-dashboard" class="pin-dashboard">
+            <p class="bx--type-body-short-01">Loading…</p>
+        </div>
+    </section>
+
+    <section class="bx--tile app-tile">
+        <h2 class="bx--type-productive-heading-03">Recent Alerts</h2>
+        <p class="bx--type-helper-text-01">Last 5 inspections that failed.</p>
+        <ul id="recent-alerts" class="app-list">
+            <li class="bx--type-body-short-01">Loading…</li>
+        </ul>
+        <a class="bx--link" href="{{ url_for('pages.alerts_list') }}">View all alerts →</a>
+    </section>
+
+    <section class="bx--tile app-tile">
+        <h2 class="bx--type-productive-heading-03">System</h2>
+        <dl class="app-kv">
+            <dt>Environment</dt>      <dd id="info-env">—</dd>
+            <dt>GPIO backend</dt>     <dd id="info-gpio">—</dd>
+            <dt>Schema version</dt>   <dd id="info-schema">—</dd>
+            <dt>Config path</dt>      <dd id="info-config">—</dd>
+            <dt>Theme</dt>            <dd id="info-theme">—</dd>
+        </dl>
+        <button class="bx--btn bx--btn--tertiary bx--btn--sm" id="refresh-cameras-btn" type="button">Refresh cameras</button>
+    </section>
+</div>
+
+<section class="bx--tile app-tile app-tile--wide">
+    <h2 class="bx--type-productive-heading-03">Recent Inspections</h2>
+    <table class="bx--data-table bx--data-table--md" id="recent-inspections">
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Job</th>
+                <th>Score</th>
+                <th>Threshold</th>
+                <th>Result</th>
+                <th>Image</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><td colspan="6" class="bx--type-body-short-01">Loading…</td></tr>
+        </tbody>
+    </table>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/pin_dashboard.js') }}"></script>
+<script src="{{ url_for('static', filename='js/alerts.js') }}"></script>
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="bx--type-display-01 app-page-title">Alerts</h1>
+<p class="bx--type-body-short-02 app-page-subtitle">Review and dismiss flagged inspections. Verdict drives the threshold auto-adjust.</p>
+
+<div class="app-toolbar">
+    <div class="bx--form-item">
+        <label for="verdict-filter" class="bx--label">Filter verdict</label>
+        <select id="verdict-filter" class="bx--select-input">
+            <option value="">All</option>
+            <option value="pending">Pending</option>
+            <option value="valid">Valid (true defect)</option>
+            <option value="false_positive">False positive</option>
+            <option value="false_negative">False negative</option>
+        </select>
+    </div>
+    <button id="refresh-alerts" class="bx--btn bx--btn--tertiary" type="button">Refresh</button>
+</div>
+
+<section class="bx--tile app-tile app-tile--wide">
+    <table class="bx--data-table bx--data-table--md" id="alerts-table">
+        <thead>
+            <tr>
+                <th>Raised</th>
+                <th>Job</th>
+                <th>Score</th>
+                <th>Threshold</th>
+                <th>Image</th>
+                <th>Verdict</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody><tr><td colspan="7" class="bx--type-body-short-01">Loading…</td></tr></tbody>
+    </table>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/alerts.js') }}"></script>
+{% endblock %}

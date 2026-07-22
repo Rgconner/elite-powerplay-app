@@ -1,0 +1,84 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "visual-inspector"
+version = "0.1.0"
+description = "Camera-based manufacturing defect detection with GPIO triggers and operator feedback."
+readme = "README.md"
+license = {file = "LICENSE"}
+requires-python = ">=3.9"
+authors = [
+    {name = "Visual Inspector Project"}
+]
+keywords = ["opencv", "raspberry-pi", "manufacturing", "vision", "inspection"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Manufacturing",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+    "Topic :: System :: Hardware :: Hardware Drivers",
+]
+dependencies = [
+    "opencv-python>=4.8.0",
+    "numpy>=1.24.0",
+    "Flask>=2.3.0",
+    "Flask-SocketIO>=5.3.0",
+    "python-engineio>=4.7.0",
+    "python-socketio>=5.10.0",
+    "simple-websocket>=1.0.0",
+    "Pillow>=10.0.0",
+]
+
+[project.optional-dependencies]
+pi = [
+    "RPi.GPIO>=0.7.1",
+]
+wsl = [
+    # Mock mode has no extra deps; placeholder for future tools.
+]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+]
+
+[project.scripts]
+visinsp = "visinsp.services.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/yourusername/visual-inspector"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+visinsp = [
+    "web/templates/*.html",
+    "web/static/css/*.css",
+    "web/static/js/*.js",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.black]
+line-length = 100
+target-version = ["py39", "py310", "py311", "py312"]
+
+[tool.flake8]
+max-line-length = 100
+extend-ignore = ["E203", "W503"]
+exclude = [".git", "__pycache__", "build", "dist", ".venv", "venv"]

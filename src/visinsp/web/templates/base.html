@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en" class="bx--body" data-theme="{{ theme or 'g100' }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ title or 'Visual Inspector' }} - {{ app_name }}</title>
+
+    {# ---- IBM Plex Sans (Carbon's official font) ---- #}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+    {# ---- Carbon themes ---- #}
+    {# Light theme is enabled by default; JS toggles the `disabled` attr to flip. #}
+    <link rel="stylesheet" href="https://1.www.s81c.com/common/carbon/plex/sans.css">
+    <link rel="stylesheet" href="https://1.www.s81c.com/common/carbon/themes/css/white.css" {% if theme != 'white' %}disabled{% endif %}>
+    <link rel="stylesheet" href="https://1.www.s81c.com/common/carbon/themes/css/g100.css" {% if theme == 'g100' or not theme %} {% else %}disabled{% endif %}>
+    <link rel="stylesheet" href="https://1.www.s81c.com/common/carbon/styles.css">
+
+    {# ---- App overrides ---- #}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/bbox-editor.css') }}">
+
+    {# ---- SocketIO client + our app ---- #}
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+</head>
+<body class="bx--body {% if theme == 'white' %}bx--theme--white{% else %}bx--theme--g100{% endif %}">
+
+<header class="bx--header app-header" role="banner">
+    <a class="bx--header__name" href="{{ url_for('pages.dashboard') }}">
+        <span class="bx--header__name--prefix">Visual</span>&nbsp;Inspector
+    </a>
+    <nav class="bx--header__nav" aria-label="Main">
+        <ul class="bx--header__menu-bar" role="menubar">
+            <li><a class="bx--header__menu-item{% if page == 'dashboard' %} bx--header__menu-item--current{% endif %}" href="{{ url_for('pages.dashboard') }}" role="menuitem">Dashboard</a></li>
+            <li><a class="bx--header__menu-item{% if page == 'references' %} bx--header__menu-item--current{% endif %}" href="{{ url_for('pages.references_list') }}" role="menuitem">References</a></li>
+            <li><a class="bx--header__menu-item{% if page == 'jobs' %} bx--header__menu-item--current{% endif %}" href="{{ url_for('pages.jobs_list') }}" role="menuitem">Jobs</a></li>
+            <li><a class="bx--header__menu-item{% if page == 'triggers' %} bx--header__menu-item--current{% endif %}" href="{{ url_for('pages.triggers_list') }}" role="menuitem">Triggers</a></li>
+            <li><a class="bx--header__menu-item{% if page == 'alerts' %} bx--header__menu-item--current{% endif %}" href="{{ url_for('pages.alerts_list') }}" role="menuitem">Alerts</a></li>
+            <li><a class="bx--header__menu-item{% if page == 'settings' %} bx--header__menu-item--current{% endif %}" href="{{ url_for('pages.settings_page') }}" role="menuitem">Settings</a></li>
+        </ul>
+    </nav>
+    <div class="app-header__right">
+        <button id="theme-toggle" class="bx--btn bx--btn--ghost bx--btn--sm" type="button" title="Toggle theme">
+            <span id="theme-toggle-label">Theme</span>
+        </button>
+        <span class="app-header__version">v{{ app_version }}</span>
+    </div>
+</header>
+
+<main class="bx--content app-main" id="main-content" role="main">
+    <div class="app-container">
+        {% block content %}{% endblock %}
+    </div>
+</main>
+
+<div id="visual-flash" class="visual-flash" aria-hidden="true"></div>
+<div id="toast-container" class="app-toasts" aria-live="polite"></div>
+
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+<script src="{{ url_for('static', filename='js/theme.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

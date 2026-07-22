@@ -1,0 +1,12 @@
+# Visual Inspector — Raspberry Pi specific dependencies
+# Install on Pi AFTER requirements.txt:
+#   pip install -r requirements.txt -r requirements-pi.txt
+
+-r requirements.txt
+
+# GPIO access (real Raspberry Pi BCM pin numbering)
+RPi.GPIO>=0.7.1
+
+# Optional: faster GPIO via libgpiod (replaces RPi.GPIO backend in future)
+# gpiozero>=2.0
+# lgpio>=0.2.2.0

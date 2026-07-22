@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "_comment": "Template config. Copy to config/config.json and edit. Each environment (pi, wsl) has its own preset in this folder.",
+
+  "app": {
+    "name": "Visual Inspector",
+    "version": "0.1.0",
+    "environment": "wsl",
+    "debug": false,
+    "host": "0.0.0.0",
+    "port": 5000,
+    "secret_key": "change-me-in-production",
+    "theme": "g100"
+  },
+
+  "paths": {
+    "data_dir": "data",
+    "references_dir": "data/references",
+    "captures_dir": "data/captures",
+    "alerts_dir": "data/alerts",
+    "db_path": "data/visinsp.db",
+    "mock_pins_path": "data/mock_pins.json",
+    "sample_images_dir": "data/samples",
+    "log_file": "data/visinsp.log"
+  },
+
+  "environment": {
+    "name": "wsl",
+    "force_backend": null,
+    "_comment_force_backend": "Set to 'pi' or 'mock' to override auto-detection. null = auto."
+  },
+
+  "logging": {
+    "level": "INFO",
+    "log_to_file": true,
+    "log_to_console": true,
+    "max_bytes": 1048576,
+    "backup_count": 3
+  },
+
+  "gpio": {
+    "mode": "BCM",
+    "default_debounce_ms": 200,
+    "cleanup_on_exit": true
+  },
+
+  "camera": {
+    "probe_max_index": 4,
+    "_comment_probe_max_index": "How many /dev/videoN indices to probe on startup (0..N).",
+    "capture_timeout_s": 5,
+    "wsl_sample_fallback": true,
+    "_comment_wsl_sample_fallback": "If no camera is detected, capture from sample images dir."
+  },
+
+  "inspection": {
+    "match_method": "TM_CCOEFF_NORMED",
+    "secondary_metric": "MSE",
+    "save_captures": true,
+    "save_passed_captures": false,
+    "max_image_dimension": 1280
+  },
+
+  "threshold": {
+    "default": 0.85,
+    "default_step": 0.005,
+    "min": 0.50,
+    "max": 0.99,
+    "history_retention_days": 90
+  },
+
+  "alerts": {
+    "retention_days": 30,
+    "auto_dismiss_after_hours": 0,
+    "_comment_auto_dismiss": "0 = never auto-dismiss. >0 = auto-dismiss after N hours without operator action."
+  },
+
+  "pins": [
+    {
+      "id": "trigger_1",
+      "name": "Trigger 1 (Station A)",
+      "bcm": 17,
+      "direction": "input",
+      "pull": "up",
+      "active_low": true,
+      "debounce_ms": 200,
+      "edge": "falling",
+      "enabled": true
+    },
+    {
+      "id": "alert_lamp",
+      "name": "Alert Lamp",
+      "bcm": 27,
+      "direction": "output",
+      "pull": null,
+      "active_low": false,
+      "debounce_ms": 0,
+      "edge": null,
+      "enabled": true
+    },
+    {
+      "id": "alarm_buzzer",
+      "name": "Alarm Buzzer",
+      "bcm": 22,
+      "direction": "output",
+      "pull": null,
+      "active_low": false,
+      "debounce_ms": 0,
+      "edge": null,
+      "enabled": true
+    }
+  ],
+
+  "cameras": [
+    {
+      "id": "cam_0",
+      "name": "Station A Camera",
+      "device_index": 0
+    }
+  ]
+}

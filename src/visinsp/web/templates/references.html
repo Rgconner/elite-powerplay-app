@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="bx--type-display-01 app-page-title">References</h1>
+<p class="bx--type-body-short-02 app-page-subtitle">Stored "good part" images. Draw bounding boxes to define what to compare.</p>
+
+<div class="app-toolbar">
+    <div class="bx--form-item">
+        <label for="capture-camera" class="bx--label">Capture from camera</label>
+        <select id="capture-camera" class="bx--select-input"></select>
+    </div>
+    <div class="bx--form-item">
+        <label for="capture-name" class="bx--label">Name</label>
+        <input id="capture-name" class="bx--text-input" type="text" placeholder="e.g. Station A good part">
+    </div>
+    <button id="capture-btn" class="bx--btn bx--btn--primary" type="button">Capture & add reference</button>
+    <button id="refresh-btn" class="bx--btn bx--btn--tertiary" type="button">Refresh</button>
+</div>
+
+<div id="reference-list" class="app-grid app-grid--3">
+    <p class="bx--type-body-short-01">Loading…</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/references.js') }}"></script>
+{% endblock %}

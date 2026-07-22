@@ -1,16 +1,15 @@
 """
-VisInsp - Visual Inspection Module
+Visual Inspector — camera-based manufacturing defect detection.
 
-A Python module for visual inspection and analysis tasks.
+Public package surface. Sub-modules are not imported eagerly to keep the
+package importable in very small environments (the Pi Zero 2 W with only
+the inspection engine, for example).
 """
 
+from __future__ import annotations
+
 __version__ = "0.1.0"
-__author__ = "Your Name"
-__email__ = "your.email@example.com"
+__author__ = "Visual Inspector Project"
+__email__ = "noreply@example.com"
 
-# Import main functionality
-from .main import run, hello_visinsp
-
-__all__ = ["run", "hello_visinsp", "__version__"]
-
-# Made with Bob
+__all__ = ["__version__", "__author__", "__email__"]

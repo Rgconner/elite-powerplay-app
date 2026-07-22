@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="bx--type-display-01 app-page-title">Inspection Jobs</h1>
+<p class="bx--type-body-short-02 app-page-subtitle">Define what to compare, against which reference, with what threshold, and which actions to fire.</p>
+
+<section class="bx--tile app-tile app-tile--wide">
+    <h2 class="bx--type-productive-heading-03">New / Edit Job</h2>
+    <form id="job-form" class="app-form-grid">
+        <div class="bx--form-item">
+            <label for="job-id" class="bx--label">Job ID (read-only after create)</label>
+            <input id="job-id" class="bx--text-input" type="text" placeholder="auto-generated">
+        </div>
+        <div class="bx--form-item">
+            <label for="job-name" class="bx--label">Name</label>
+            <input id="job-name" class="bx--text-input" type="text" required>
+        </div>
+        <div class="bx--form-item">
+            <label for="job-reference" class="bx--label">Reference</label>
+            <select id="job-reference" class="bx--select-input" required></select>
+        </div>
+        <div class="bx--form-item">
+            <label for="job-camera" class="bx--label">Camera</label>
+            <select id="job-camera" class="bx--select-input" required></select>
+        </div>
+        <div class="bx--form-item">
+            <label for="job-threshold" class="bx--label">Confidence threshold</label>
+            <input id="job-threshold" class="bx--text-input bx--number" type="number" min="0" max="1" step="0.005" value="0.85">
+        </div>
+        <div class="bx--form-item">
+            <label for="job-threshold-step" class="bx--label">Step (FP/FN feedback)</label>
+            <input id="job-threshold-step" class="bx--text-input bx--number" type="number" min="0.001" max="0.05" step="0.001" value="0.005">
+        </div>
+        <div class="bx--form-item bx--form-item--inline">
+            <input id="job-enabled" class="bx--toggle" type="checkbox" checked>
+            <label for="job-enabled" class="bx--toggle__label">Enabled</label>
+        </div>
+        <div class="bx--form-item app-form-full">
+            <label class="bx--label">Actions on FAIL</label>
+            <div id="actions-fail"></div>
+            <button id="add-action-fail" class="bx--btn bx--btn--tertiary bx--btn--sm" type="button">+ Add fail action</button>
+        </div>
+        <div class="bx--form-item app-form-full">
+            <label class="bx--label">Actions on PASS</label>
+            <div id="actions-pass"></div>
+            <button id="add-action-pass" class="bx--btn bx--btn--tertiary bx--btn--sm" type="button">+ Add pass action</button>
+        </div>
+        <div class="app-form-actions">
+            <button id="save-job" class="bx--btn bx--btn--primary" type="submit">Save job</button>
+            <button id="new-job" class="bx--btn bx--btn--ghost" type="button">New</button>
+            <button id="run-job" class="bx--btn bx--btn--tertiary" type="button">Run once now</button>
+        </div>
+    </form>
+</section>
+
+<section class="bx--tile app-tile app-tile--wide">
+    <h2 class="bx--type-productive-heading-03">Existing Jobs</h2>
+    <table class="bx--data-table bx--data-table--md" id="jobs-table">
+        <thead>
+            <tr>
+                <th>Name</th><th>Reference</th><th>Camera</th>
+                <th>Threshold</th><th>Step</th><th>Enabled</th><th></th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><td colspan="7" class="bx--type-body-short-01">Loading…</td></tr>
+        </tbody>
+    </table>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/jobs.js') }}"></script>
+{% endblock %}

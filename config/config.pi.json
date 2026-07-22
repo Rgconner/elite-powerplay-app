@@ -1,0 +1,142 @@
+{
+  "_comment": "Preset for Raspberry Pi Zero 2 W deployment. Real GPIO + USB cameras. Copy to config/config.json on the Pi.",
+
+  "app": {
+    "name": "Visual Inspector",
+    "version": "0.1.0",
+    "environment": "pi",
+    "debug": false,
+    "host": "0.0.0.0",
+    "port": 5000,
+    "secret_key": "change-me-in-production",
+    "theme": "g100"
+  },
+
+  "paths": {
+    "data_dir": "data",
+    "references_dir": "data/references",
+    "captures_dir": "data/captures",
+    "alerts_dir": "data/alerts",
+    "db_path": "data/visinsp.db",
+    "mock_pins_path": "data/mock_pins.json",
+    "sample_images_dir": "data/samples",
+    "log_file": "data/visinsp.log"
+  },
+
+  "environment": {
+    "name": "pi",
+    "force_backend": null
+  },
+
+  "logging": {
+    "level": "INFO",
+    "log_to_file": true,
+    "log_to_console": true,
+    "max_bytes": 1048576,
+    "backup_count": 3
+  },
+
+  "gpio": {
+    "mode": "BCM",
+    "default_debounce_ms": 200,
+    "cleanup_on_exit": true
+  },
+
+  "camera": {
+    "probe_max_index": 4,
+    "capture_timeout_s": 5,
+    "wsl_sample_fallback": false
+  },
+
+  "inspection": {
+    "match_method": "TM_CCOEFF_NORMED",
+    "secondary_metric": "MSE",
+    "save_captures": true,
+    "save_passed_captures": false,
+    "max_image_dimension": 1280
+  },
+
+  "threshold": {
+    "default": 0.85,
+    "default_step": 0.005,
+    "min": 0.50,
+    "max": 0.99,
+    "history_retention_days": 90
+  },
+
+  "alerts": {
+    "retention_days": 30,
+    "auto_dismiss_after_hours": 0
+  },
+
+  "pins": [
+    {
+      "id": "trigger_1",
+      "name": "Station A Trigger",
+      "bcm": 17,
+      "direction": "input",
+      "pull": "up",
+      "active_low": true,
+      "debounce_ms": 200,
+      "edge": "falling",
+      "enabled": true
+    },
+    {
+      "id": "trigger_2",
+      "name": "Station B Trigger",
+      "bcm": 18,
+      "direction": "input",
+      "pull": "up",
+      "active_low": true,
+      "debounce_ms": 200,
+      "edge": "falling",
+      "enabled": true
+    },
+    {
+      "id": "alert_lamp",
+      "name": "Alert Lamp",
+      "bcm": 27,
+      "direction": "output",
+      "pull": null,
+      "active_low": false,
+      "debounce_ms": 0,
+      "edge": null,
+      "enabled": true
+    },
+    {
+      "id": "alarm_buzzer",
+      "name": "Alarm Buzzer",
+      "bcm": 22,
+      "direction": "output",
+      "pull": null,
+      "active_low": false,
+      "debounce_ms": 0,
+      "edge": null,
+      "enabled": true
+    },
+    {
+      "id": "pass_lamp",
+      "name": "Pass Lamp (Green)",
+      "bcm": 23,
+      "direction": "output",
+      "pull": null,
+      "active_low": false,
+      "debounce_ms": 0,
+      "edge": null,
+      "enabled": true
+    }
+  ],
+
+  "cameras": [
+    {
+      "id": "cam_0",
+      "name": "Station A Camera",
+      "device_index": 0
+    },
+    {
+      "id": "cam_1",
+      "name": "Station B Camera",
+      "device_index": 1
+    }
+  ]
+}

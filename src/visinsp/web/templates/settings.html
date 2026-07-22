@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="bx--type-display-01 app-page-title">Settings</h1>
+<p class="bx--type-body-short-02 app-page-subtitle">Global tunables for threshold defaults, retention, and UI theme.</p>
+
+<section class="bx--tile app-tile app-tile--wide">
+    <form id="settings-form" class="app-form-grid">
+        <div class="bx--form-item">
+            <label for="set-default-threshold" class="bx--label">Default threshold (new jobs)</label>
+            <input id="set-default-threshold" class="bx--text-input bx--number" type="number" min="0" max="1" step="0.005">
+        </div>
+        <div class="bx--form-item">
+            <label for="set-default-step" class="bx--label">Default threshold step</label>
+            <input id="set-default-step" class="bx--text-input bx--number" type="number" min="0.001" max="0.05" step="0.001">
+        </div>
+        <div class="bx--form-item">
+            <label for="set-min" class="bx--label">Min threshold</label>
+            <input id="set-min" class="bx--text-input bx--number" type="number" min="0" max="1" step="0.01">
+        </div>
+        <div class="bx--form-item">
+            <label for="set-max" class="bx--label">Max threshold</label>
+            <input id="set-max" class="bx--text-input bx--number" type="number" min="0" max="1" step="0.01">
+        </div>
+        <div class="bx--form-item">
+            <label for="set-retention" class="bx--label">Alert retention (days)</label>
+            <input id="set-retention" class="bx--text-input bx--number" type="number" min="1" max="365" step="1">
+        </div>
+        <div class="bx--form-item">
+            <label for="set-history-retention" class="bx--label">Threshold history retention (days)</label>
+            <input id="set-history-retention" class="bx--text-input bx--number" type="number" min="1" max="3650" step="1">
+        </div>
+        <div class="bx--form-item">
+            <label for="set-theme" class="bx--label">UI theme</label>
+            <select id="set-theme" class="bx--select-input">
+                <option value="g100">Carbon g100 (dark)</option>
+                <option value="white">Carbon white (light)</option>
+            </select>
+        </div>
+        <div class="app-form-actions">
+            <button id="save-settings" class="bx--btn bx--btn--primary" type="submit">Save</button>
+        </div>
+    </form>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+{% endblock %}

@@ -1,128 +1,100 @@
-# VisInsp
+# Visual Inspector
 
-A Python project for visual inspection and analysis.
+A camera-based manufacturing defect detection system that compares trigger-captured
+images against a stored reference image, with operator-driven feedback to tune
+the detection threshold over time.
 
-## Description
+Designed to run on a **Raspberry Pi Zero 2 W** (1 GHz quad-core, 512 MB RAM), with
+a full **WSL mock mode** for local interface development and testing.
 
-VisInsp is a simple Python module project designed for visual inspection tasks. This project provides a basic structure for building Python applications with proper organization and best practices.
+The UI follows the **IBM Design Language (Carbon Design System)** and is rendered
+in the operator's browser — the Pi only serves a small Flask + SocketIO app.
+
+---
+
+## Features
+
+- GPIO trigger inputs (physical switches, optical sensors, PLC outputs) drive
+  image capture from any attached USB camera.
+- A stored **reference image** per job, with one or more user-drawn
+  **bounding boxes** defining the regions to be compared.
+- Per-bounding-box template matching (OpenCV) aggregated to a single weighted
+  confidence score, compared to a per-job threshold.
+- On failure, configurable **actions** fire: GPIO output, sound, in-browser
+  visual flash, on-screen notification.
+- Operator can dismiss alerts as **Valid (true defect)**, **False Positive**,
+  or **False Negative**; the threshold is auto-tuned up or down by a small,
+  per-job step in response.
+- WSL testing mode: simulate GPIO inputs from the dashboard, see simulated
+  output pin state, feed sample images, no Pi required.
+- Modular monolith architecture: hardware, inspection engine, and web UI are
+  independent modules that can be split into separate processes or hosts
+  later by changing the transport at their boundary.
+
+---
 
 ## Project Structure
 
 ```
-VisInsp/
-├── src/
-│   └── visinsp/
-│       ├── __init__.py
-│       └── main.py
-├── docs/
-├── .gitignore
-├── README.md
-├── requirements.txt
-└── LICENSE
+visual-inspector/
+├── config/                 # environment-specific JSON configs
+├── data/                   # gitignored runtime data (references, captures, db)
+├── docs/                   # architecture, installation, configuration, UI design
+├── scripts/                # install + run scripts per environment
+├── src/visinsp/            # Python package
+│   ├── actions/            # action handlers (GPIO, sound, visual, notification)
+│   ├── api/                # Flask + SocketIO routes
+│   ├── core/               # state store, event bus, inspection, alerts, threshold
+│   ├── hardware/           # GPIO + camera backends (RPi + mock)
+│   ├── models/             # dataclasses for Pin, Trigger, Job, Reference, ...
+│   ├── services/           # runnable entrypoints (daemon, web server, CLI)
+│   └── web/                # Jinja templates + Carbon-styled static assets
+├── systemd/                # optional Pi autostart unit
+└── tests/                  # unit tests + fixtures
 ```
 
-## Prerequisites
+---
 
-- Python 3.7 or higher
-- pip (Python package installer)
+## Quick Start
 
-## Installation
-
-### 1. Clone the Repository
+### On the Raspberry Pi
 
 ```bash
-git clone <repository-url>
-cd VisInsp
+git clone <repo-url> visual-inspector
+cd visual-inspector
+git checkout pi          # thin release branch with Pi-only config + install
+./scripts/install-pi.sh
+cp config/config.pi.json config/config.json
+./scripts/run.sh
+# Open http://<pi-hostname>:5000 in a browser
 ```
 
-### 2. Create a Virtual Environment
-
-Creating a virtual environment is recommended to isolate project dependencies.
-
-**On Windows:**
-```bash
-python -m venv venv
-venv\Scripts\activate
-```
-
-**On macOS/Linux:**
-```bash
-python3 -m venv venv
-source venv/bin/activate
-```
-
-### 3. Install Dependencies
+### On WSL (Windows Subsystem for Linux)
 
 ```bash
-pip install -r requirements.txt
+git clone <repo-url> visual-inspector
+cd visual-inspector
+git checkout wsl
+./scripts/install-wsl.sh
+cp config/config.wsl.json config/config.json
+python -m visinsp.cli seed    # create demo reference image
+./scripts/run.sh
+# Open http://localhost:5000
 ```
 
-## Usage
+---
 
-To run the main script:
+## Documentation
 
-```bash
-python -m src.visinsp.main
-```
+- [`docs/architecture.md`](docs/architecture.md) — module boundaries, data flow, IPC.
+- [`docs/installation.md`](docs/installation.md) — Pi and WSL install steps.
+- [`docs/configuration.md`](docs/configuration.md) — config schema, environment toggles.
+- [`docs/branching.md`](docs/branching.md) — how the `main` / `pi` / `wsl` branches relate.
+- [`docs/wsl-mock-mode.md`](docs/wsl-mock-mode.md) — using the GPIO mock and sample data.
+- [`docs/ui-design.md`](docs/ui-design.md) — IBM Design Language (Carbon) usage notes.
 
-Or import the module in your Python code:
-
-```python
-from src.visinsp import main
-
-# Use the module functions
-main.run()
-```
-
-## Development
-
-### Setting Up Development Environment
-
-1. Follow the installation steps above
-2. Install development dependencies (if any are added to requirements.txt)
-3. Make your changes in the `src/visinsp/` directory
-
-### Project Guidelines
-
-- Keep code organized in the `src/visinsp/` directory
-- Add documentation to the `docs/` directory
-- Follow PEP 8 style guidelines for Python code
-- Update requirements.txt when adding new dependencies
-
-## Adding Dependencies
-
-To add a new package:
-
-```bash
-pip install <package-name>
-pip freeze > requirements.txt
-```
-
-## Deactivating Virtual Environment
-
-When you're done working on the project:
-
-```bash
-deactivate
-```
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+---
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Contact
-
-Project Link: [https://github.com/yourusername/VisInsp](https://github.com/yourusername/VisInsp)
-
-## Acknowledgments
-
-- Thanks to all contributors
-- Inspired by Python best practices and project structure guidelines
+MIT — see [`LICENSE`](LICENSE).
