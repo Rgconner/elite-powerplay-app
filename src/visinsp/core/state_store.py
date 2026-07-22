@@ -211,11 +211,14 @@ class StateStore:
         with self._lock:
             conn = self._connect()
             try:
+                # 1. Create all tables first (IF NOT EXISTS) so the
+                #    schema_version table exists before we query it.
+                for stmt in _SCHEMA:
+                    conn.execute(stmt)
+                # 2. Now schema_version definitely exists — check version.
                 cur = conn.execute("SELECT version FROM schema_version LIMIT 1")
                 row = cur.fetchone()
                 current = int(row["version"]) if row else 0
-                for stmt in _SCHEMA:
-                    conn.execute(stmt)
                 if current == 0:
                     conn.execute("INSERT INTO schema_version(version) VALUES (?)", (SCHEMA_VERSION,))
                 elif current < SCHEMA_VERSION:
