@@ -3,7 +3,7 @@
 export interface TargetAnalysisItem {
   system_id64: number;
   system_name: string;
-  controlling_power: string;
+  controlling_power: string | null;
   power_state: string | null;
   control_progress: number | null;
   reinforcement: number | null;

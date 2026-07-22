@@ -175,7 +175,7 @@ class TargetAnalysisItem(BaseModel):
 
     system_id64: int
     system_name: str
-    controlling_power: str          # which target power controls this
+    controlling_power: Optional[str] = None  # which target power controls this (NULL for Contested)
 
     # PP state
     power_state: Optional[str] = None

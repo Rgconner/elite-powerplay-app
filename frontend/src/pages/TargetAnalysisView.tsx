@@ -353,7 +353,7 @@ export default function TargetAnalysisView() {
 
   // Filter by target power
   const filtered = useMemo(() =>
-    filterPower === "all" ? results : results.filter(r => r.controlling_power === filterPower),
+    filterPower === "all" ? results : results.filter(r => (r.controlling_power ?? "Unknown") === filterPower),
     [results, filterPower]
   );
 
@@ -388,7 +388,10 @@ export default function TargetAnalysisView() {
   // Counts per power for filter tabs
   const countsByPower = useMemo(() => {
     const m: Record<string, number> = {};
-    results.forEach(r => { m[r.controlling_power] = (m[r.controlling_power] ?? 0) + 1; });
+    results.forEach(r => {
+      const key = r.controlling_power ?? "Unknown";
+      m[key] = (m[key] ?? 0) + 1;
+    });
     return m;
   }, [results]);
 
@@ -717,7 +720,7 @@ href={`https://inara.cz/elite/starsystem/?search=${encodeURIComponent(item.syste
 
                     {/* Controlling power */}
                     <td style={{ padding: "8px 10px", color: "#8b949e", fontSize: 12, whiteSpace: "nowrap" }}>
-                      {item.controlling_power}
+                      {item.controlling_power ?? "Unknown"}
                     </td>
 
                     {/* State badge + contested badge */}

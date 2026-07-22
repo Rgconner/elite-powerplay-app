@@ -354,6 +354,7 @@ def _estimate_days_to_downgrade(
     progress: float,
     reinforcement: int,
     undermining: int,
+    power_state: Optional[str] = None,
 ) -> Optional[float]:
     """Estimate days until progress hits 0.0 (state downgrade) at current rate.
 
@@ -367,12 +368,8 @@ def _estimate_days_to_downgrade(
         return None                                 # enemy winning — no downgrade
     elapsed = days_elapsed_in_cycle()
     daily_net_loss = net_loss_cycle / elapsed
-    # Approximate buffer: progress × 1.0 treated as a fraction of a 1-unit band
-    # For relative ranking purposes this is sufficient; the scoring.py version
-    # uses absolute merit bands, but here we keep it dimensionless for simplicity.
-    # We do scale by band width so the days figure is comparable across states.
     from services.scoring import _band_width
-    band = _band_width(None)   # default = exploited band (213k) for normalisation
+    band = _band_width(power_state)
     buffer = progress * band
     daily_scaled = daily_net_loss   # R/U are in raw merits; buffer is in merits too
     if daily_scaled <= 0:
@@ -516,12 +513,6 @@ def target_analysis(
             contested_sys_ids.add(row["system_id"])
             contested_extra_snaps[row["system_id"]] = row
 
-    if not target_snap_rows:
-        return TargetAnalysisResponse(
-            targets=[], attacker_power=attacker, target_powers=targets,
-            progress_thresholds={"critical": prog_critical, "high": prog_high, "medium": prog_medium},
-        )
-
     target_sys_ids = [r["system_id"] for r in target_snap_rows]
     # Merge Contested system IDs — these have power=NULL so they won't clash
     # with target_snap_rows (which only fetches power = ANY(:powers) rows)
@@ -538,6 +529,9 @@ def target_analysis(
             snap_by_id[sid] = crow
 
     # ── 3. Get progress trends for all target systems ─────────────────────────
+    # Include both regular target and contested system IDs so contested
+    # systems also get trend data instead of always showing "unknown".
+    all_trend_ids = list(set(target_sys_ids) | set(contested_extra_snaps.keys()))
     trend_rows = db.execute(text("""
         SELECT system_id,
                control_progress,
@@ -550,7 +544,7 @@ def target_analysis(
         WHERE system_id = ANY(:ids)
           AND control_progress IS NOT NULL
         ORDER BY system_id, snapshot_time DESC
-    """), {"ids": target_sys_ids}).mappings().all()
+    """), {"ids": all_trend_ids}).mappings().all()
 
     # Build dict: system_id -> list of (progress, time) newest-first, max 3
     trend_map: dict[int, list] = {}
@@ -621,8 +615,8 @@ def target_analysis(
 
         score = round(base + progress_bonus + prox_bonus, 1)
 
-        # Days to downgrade estimate
-        days = _estimate_days_to_downgrade(progress, rein, under)
+        # Days to downgrade estimate — use actual state for correct band width
+        days = _estimate_days_to_downgrade(progress, rein, under, power_state)
 
         # Build reason list
         reasons: list[str] = []
@@ -660,10 +654,19 @@ def target_analysis(
                 reasons.append(f"Close to your territory ({dist_from_attacker:.1f} LY)")
 
         trend = _trend(sid)
+
+        # Derive controlling_power: for contested systems power is NULL,
+        # so build a label from powers_list (same as get_contested_systems endpoint).
+        ctrl_power = snap["power"]
+        if ctrl_power is None:
+            pl = (snap["powers_list"] or "") if "powers_list" in snap.keys() else ""
+            powers = [p.strip() for p in pl.split(",") if p.strip()]
+            ctrl_power = "Multiple" if len(powers) > 1 else (powers[0] if powers else "Unknown")
+
         items.append(TargetAnalysisItem(
             system_id64=system.system_id64,
             system_name=system.name,
-            controlling_power=snap["power"],
+            controlling_power=ctrl_power,
             power_state=power_state,
             control_progress=progress,
             reinforcement=rein if rein > 0 else None,
