@@ -35,3 +35,10 @@ k8s/secrets.local.yaml
 # Logs
 *.log
 
+# ── Lockfiles are TRACKED, do NOT ignore ────────────────────────────────────
+# package-lock.json       (frontend, npm)
+# requirements.lock.txt   (backend, pip)
+# These are checked in to guarantee byte-for-byte reproducible builds.
+# Remove this block only if you have a good reason.
+
+

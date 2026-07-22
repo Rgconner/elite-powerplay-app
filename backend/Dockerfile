@@ -9,9 +9,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Install Python dependencies first so this layer is cached on code changes
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Python dependencies first so this layer is cached on code changes.
+# Prefer the lockfile for byte-for-byte reproducibility in CI;
+# fall back to requirements.txt (N-1 exact pins) so the first build
+# doesn't fail before requirements.lock.txt has been generated.
+COPY requirements.txt requirements.lock.txt* ./
+RUN if [ -f requirements.lock.txt ]; then \
+        pip install --no-cache-dir -r requirements.lock.txt; \
+    else \
+        pip install --no-cache-dir -r requirements.txt; \
+    fi
 
 # Copy application source
 COPY . .

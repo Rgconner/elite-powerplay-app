@@ -450,12 +450,27 @@ export default function RecommendationPanel({ recommendations, loading, conteste
 
   return (
     <div style={{ background: "#0d1117", border: "1px solid #30363d", borderRadius: 8, margin: "12px 0", overflow: "hidden" }}>
+      {/* Keyframe for the enrichment-loading pulse */}
+      <style>{`@keyframes rec-enrich-pulse { 0%,100% { opacity: 0.55; } 50% { opacity: 1; } }`}</style>
       {/* Header */}
       <div
         style={{ display: "flex", alignItems: "center", padding: "10px 16px", cursor: "pointer", userSelect: "none", borderBottom: collapsed ? "none" : "1px solid #21262d" }}
         onClick={() => setCollapsed((c) => !c)}
       >
         <span style={{ fontWeight: 700, fontSize: 14, color: "#e6edf3", flex: 1 }}>Recommendations</span>
+        {enriching && (
+          <span
+            title="Fetching Spansh PLAT / BOOM / PRIST badges…"
+            style={{
+              fontSize: 11, color: "#8b949e", marginRight: 12,
+              display: "inline-flex", alignItems: "center", gap: 4,
+              animation: "rec-enrich-pulse 1.4s ease-in-out infinite",
+            }}
+          >
+            <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "#58a6ff" }} />
+            Loading badges…
+          </span>
+        )}
         {loading && <span style={{ fontSize: 12, color: "#57606a", marginRight: 12 }}>Loading…</span>}
         {!loading && recommendations && (
           <div style={{ display: "flex", gap: 8, marginRight: 12, alignItems: "center" }}>

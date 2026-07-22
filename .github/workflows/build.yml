@@ -1,0 +1,85 @@
+name: Build
+
+# Smoke-test build for both halves of the app.
+# Triggered on push to main, on PRs, and on a weekly cron so the N-1 policy
+# catches any upstream breaking change in the wider ecosystem.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Monday 06:00 UTC — runs even on quiet weeks so we notice upstream rot
+    - cron: "0 6 * * 1"
+
+jobs:
+  frontend:
+    name: Frontend (npm)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: elite-powerplay-app/frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: elite-powerplay-app/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Audit dependencies (N-1 check)
+        run: |
+          echo "::group::Outdated packages"
+          npm outdated || true
+          echo "::endgroup::"
+
+  backend:
+    name: Backend (pip)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: elite-powerplay-app/backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+          cache-dependency-path: elite-powerplay-app/backend/requirements.lock.txt
+
+      # If a lockfile exists, install from it (byte-for-byte reproducible).
+      # If not, install from requirements.txt — the first run after this
+      # workflow is added will be the one to generate the lockfile.
+      - name: Install dependencies
+        run: |
+          if [ -f requirements.lock.txt ]; then
+            pip install --no-cache-dir -r requirements.lock.txt
+          else
+            pip install --no-cache-dir -r requirements.txt
+            pip freeze > requirements.lock.txt
+            echo "::warning::Generated requirements.lock.txt from requirements.txt. Commit this file."
+          fi
+
+      - name: Import smoke test
+        run: |
+          # Add the repo root to PYTHONPATH so 'from main import app' works
+          cd ../..
+          PYTHONPATH=. python -c "import sys; sys.path.insert(0, 'elite-powerplay-app/backend'); import main; print('main.py imports OK, app:', main.app)"
+
+      - name: Audit dependencies (N-1 check)
+        run: |
+          echo "::group::Outdated packages"
+          pip list --outdated || true
+          echo "::endgroup::"

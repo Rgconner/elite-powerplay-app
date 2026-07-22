@@ -420,6 +420,8 @@ export default function TargetAnalysisView() {
       padding: "16px 20px", background: "#0d1117", minHeight: "calc(100vh - 44px)",
       fontFamily: '-apple-system,"Segoe UI",system-ui,sans-serif', color: "#e6edf3",
     }}>
+      {/* Keyframe for the enrichment-loading pulse */}
+      <style>{`@keyframes ta-enrich-pulse { 0%,100% { opacity: 0.55; } 50% { opacity: 1; } }`}</style>
 
       {/* ── Top settings bar: Max Targets + Threshold toggle ─────────────── */}
       <div style={{
@@ -612,6 +614,20 @@ export default function TargetAnalysisView() {
           {results.length > 0 && !loading && (
             <span style={{ fontSize: 12, color: "#8b949e" }}>
               {sorted.length} / {results.length} target systems
+              {enriching && (
+                <span
+                  title="Fetching Spansh PLAT / BOOM / PRIST badges…"
+                  style={{
+                    marginLeft: 10,
+                    display: "inline-flex", alignItems: "center", gap: 4,
+                    color: "#58a6ff", fontWeight: 600,
+                    animation: "ta-enrich-pulse 1.4s ease-in-out infinite",
+                  }}
+                >
+                  <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "#58a6ff" }} />
+                  Loading badges…
+                </span>
+              )}
               {primeCount > 0 && (
                 <span style={{ marginLeft: 8, color: "#FF4444", fontWeight: 700 }}>
                   · {primeCount} PRIME

@@ -193,6 +193,15 @@ export default function AdminPage({ onClose }: Props) {
   const [enrichMsg,      setEnrichMsg]      = useState<string | null>(null);
   const [validateStartedAt, setValidateStartedAt] = useState<number | null>(null);
   const [elapsedSec,     setElapsedSec]     = useState(0);
+  // Step 10: timestamp + post-clear visual confirmation
+  const [lastValidatedAt, setLastValidatedAt] = useState<Date | null>(null);
+  const [justCleared,     setJustCleared]     = useState(false);
+  // Re-render every 30s so "Xm ago" stays fresh
+  const [nowTick,         setNowTick]         = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => setNowTick(t => t + 1), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   // ── Change-password form state ──────────────────────────────────────────────
   const [pwCurrent,  setPwCurrent]  = useState("");
@@ -314,6 +323,11 @@ export default function AdminPage({ onClose }: Props) {
 
   async function handleValidateEnrich() {
     if (validating || clearing) return;
+    // Step 10: don't let user kick off a validate against an empty cache
+    if (enrichStatus !== null && enrichStatus.total_cached === 0) {
+      setEnrichMsg("Cache is empty — nothing to validate. Open the front-end on a system to populate the cache first.");
+      return;
+    }
     setEnrichMsg(null);
     setValidating(true);
     setValidateStartedAt(Date.now());
@@ -322,6 +336,7 @@ export default function AdminPage({ onClose }: Props) {
     try {
       const result = await validateEnrichment();
       setLastValidate(result);
+      setLastValidatedAt(new Date());
       if (result.mismatches_found === 0) {
         setEnrichMsg(`✓ All ${result.total_checked} cached systems match live Spansh data — no corrections needed.`);
       } else {
@@ -340,6 +355,11 @@ export default function AdminPage({ onClose }: Props) {
 
   async function handleClearEnrichCache() {
     if (validating || clearing) return;
+    // Step 10: block clearing an already-empty cache (no destructive confirm needed)
+    if (enrichStatus !== null && enrichStatus.total_cached === 0) {
+      setEnrichMsg("Cache is already empty — nothing to clear.");
+      return;
+    }
     if (!window.confirm("Clear ALL enrichment cache? Next page load will re-fetch from Spansh.")) return;
     setEnrichMsg(null);
     setClearing(true);
@@ -347,12 +367,26 @@ export default function AdminPage({ onClose }: Props) {
       const result = await clearEnrichmentCache();
       setEnrichMsg(`✓ Cleared ${result.deleted.toLocaleString()} cached system${result.deleted === 1 ? "" : "s"}. Next page load will re-fetch from Spansh.`);
       setLastValidate(null);
+      setJustCleared(true);
+      setTimeout(() => setJustCleared(false), 5000);
       handleRefreshEnrichStatus();
     } catch (err: unknown) {
       setEnrichMsg(`Clear error: ${err instanceof Error ? err.message : err}`);
     } finally {
       setClearing(false);
     }
+  }
+
+  // Step 10: relative-time helper for "Last validated: 5m ago"
+  function fmtRelative(d: Date | null): string {
+    if (d === null) return "Never";
+    // Touch nowTick to keep the value live as the 30s timer ticks
+    void nowTick;
+    const secs = Math.max(0, Math.floor((Date.now() - d.getTime()) / 1000));
+    if (secs < 60)        return `${secs}s ago`;
+    if (secs < 3600)      return `${Math.floor(secs / 60)}m ago`;
+    if (secs < 86_400)    return `${Math.floor(secs / 3600)}h ago`;
+    return `${Math.floor(secs / 86_400)}d ago`;
   }
 
   // Tick elapsed-seconds counter while a validation is in flight
@@ -592,18 +626,38 @@ export default function AdminPage({ onClose }: Props) {
           populated on first access (no TTL) — data is kept until explicitly cleared.
         </p>
 
-        {/* Status row */}
+        {/* Status row (Step 10: now also shows last-validated time + clear confirmation) */}
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
           background: "#f7f8fa", border: "1px solid #e5e7eb", borderRadius: 6,
           padding: "10px 14px", marginBottom: 12,
         }}>
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: "#57606a", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              Cached systems
+          <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#57606a", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                Cached systems
+              </div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                <span style={{ fontSize: 22, fontWeight: 800, color: "#1f2328", fontVariantNumeric: "tabular-nums" }}>
+                  {enrichStatus ? enrichStatus.total_cached.toLocaleString() : "—"}
+                </span>
+                {justCleared && (
+                  <span
+                    title="Cache was just cleared"
+                    style={{ fontSize: 14, color: "#1a7a2a", fontWeight: 700 }}
+                  >
+                    ✓
+                  </span>
+                )}
+              </div>
             </div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: "#1f2328", fontVariantNumeric: "tabular-nums" }}>
-              {enrichStatus ? enrichStatus.total_cached.toLocaleString() : "—"}
+            <div style={{ borderLeft: "1px solid #e5e7eb", paddingLeft: 18 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#57606a", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                Last validated
+              </div>
+              <div style={{ fontSize: 13, color: "#1f2328", fontWeight: 600 }}>
+                {fmtRelative(lastValidatedAt)}
+              </div>
             </div>
           </div>
           <button
@@ -620,6 +674,18 @@ export default function AdminPage({ onClose }: Props) {
             ↻ Refresh
           </button>
         </div>
+
+        {/* Empty-state hint (Step 10) */}
+        {enrichStatus !== null && enrichStatus.total_cached === 0 && (
+          <div style={{
+            padding: "8px 12px", background: "#fffbeb", border: "1px solid #f59e0b",
+            borderRadius: 5, fontSize: 12, color: "#92400e", marginBottom: 12,
+          }}>
+            <strong>Cache is empty.</strong> Open a system in the front-end to populate the cache
+            (PLAT / BOOM / PRIST data is fetched on first access). Then Validate will re-check
+            every entry against live Spansh.
+          </div>
+        )}
 
         {/* Action buttons */}
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
