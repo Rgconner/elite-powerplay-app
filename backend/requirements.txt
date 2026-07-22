@@ -13,7 +13,7 @@
 # ============================================================
 
 # Core web framework
-fastapi==0.114.6
+fastapi==0.114.2
 uvicorn[standard]==0.30.6
 python-multipart==0.0.20
 

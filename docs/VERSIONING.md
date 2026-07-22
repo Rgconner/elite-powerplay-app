@@ -46,7 +46,7 @@ Three reasons, in order of importance:
 
 | Package | Our pin | Latest (N) | N-1 rationale |
 |---|---|---|---|
-| fastapi | 0.114.6 | 0.115.x | 0.115 changed lifespan event semantics |
+| fastapi | 0.114.2 | 0.115.x | 0.115 changed lifespan event semantics |
 | uvicorn | 0.30.6 | 0.31+ | stays on 0.30 line for fastapi 0.114 |
 | sqlalchemy | 2.0.36 | 2.0.x | stays on 2.0.36 for psycopg 3.2 compat |
 | psycopg | 3.2.3 | 3.2.x | matches sqlalchemy 2.0.36 |
