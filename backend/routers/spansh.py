@@ -3,16 +3,16 @@ Spansh router — proxy and cached enrichment for Spansh system/body data.
 
 Endpoints:
   POST /api/spansh/enrich/batch  — Accept { system_ids: number[], force_refresh? }, returns
-                                   { system_id64: { has_platinum, has_boom } }
-                                   using cached data (12-hour TTL) or fetching
-                                   fresh from Spansh API as needed.
-  DELETE /api/spansh/enrich/cache — Clear all cached enrichment data.
-  GET   /api/spansh/enrich/status — Return cache hit/miss counts.
+                                   { system_id64: { has_platinum, has_boom, has_pristine } }
+                                   using persistent cache (fetch on first access) or
+                                   fetching fresh from Spansh API as needed.
+  DELETE /api/spansh/enrich/cache — Clear all cached enrichment data (admin-only).
+  GET   /api/spansh/enrich/status — Return cache stats.
+  POST  /api/spansh/enrich/validate — Validate cached entries against live Spansh data (admin-only).
 """
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
 
 import httpx
 from fastapi import APIRouter, Depends
@@ -29,11 +29,11 @@ router = APIRouter(prefix="/spansh", tags=["spansh"])
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-SPANSH_SYSTEM_URL       = "https://spansh.co.uk/api/system/{}"
-SPANSH_BODY_URL         = "https://spansh.co.uk/api/body/{}"
+SPANSH_SYSTEM_URL        = "https://spansh.co.uk/api/system/{}"
+SPANSH_SYSTEM_DUMP_URL   = "https://spansh.co.uk/api/dump/{}"
+SPANSH_BODY_URL          = "https://spansh.co.uk/api/body/{}"
 SPANSH_BODIES_SEARCH_URL = "https://spansh.co.uk/api/bodies/search"
-CACHE_TTL_HOURS         = 12
-BATCH_DELAY_MS          = 600   # 600 ms between individual fetch calls (rate limiting)
+BATCH_DELAY_MS           = 600  # 600 ms between individual fetch calls (rate limiting)
 
 # ── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -46,6 +46,7 @@ class BatchEnrichRequest(BaseModel):
 class EnrichResult(BaseModel):
     has_platinum: bool
     has_boom: bool
+    has_pristine: bool
 
 
 class BatchEnrichResponse(BaseModel):
@@ -53,8 +54,21 @@ class BatchEnrichResponse(BaseModel):
 
 
 class EnrichStatus(BaseModel):
-    cached: int
-    expired: int
+    total_cached: int
+
+
+class ValidateMismatch(BaseModel):
+    system_id64: int
+    system_name: str | None = None
+    field: str
+    cached: bool
+    live: bool
+
+
+class ValidateResponse(BaseModel):
+    total_checked: int
+    mismatches_found: int
+    mismatches: list[ValidateMismatch]
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -62,7 +76,7 @@ class EnrichStatus(BaseModel):
 
 async def _fetch_system(system_id64: int) -> dict | None:
     """Fetch system data from Spansh API, returns parsed JSON or None.
-    
+
     The Spansh system API wraps the record in a {"record": {...}} envelope,
     so we unwrap it before returning.
     """
@@ -82,7 +96,7 @@ async def _fetch_system(system_id64: int) -> dict | None:
 
 async def _fetch_body(body_id64: int) -> dict | None:
     """Fetch body data from Spansh API, returns parsed JSON or None.
-    
+
     The Spansh body API also wraps the record in a {"record": {...}} envelope.
     """
     try:
@@ -146,6 +160,37 @@ def _check_system_for_boom(system: dict) -> bool:
     return False
 
 
+def _check_system_for_pristine(system: dict) -> bool:
+    """
+    Check a system dump for Pristine reserve level.
+
+    The Spansh dump API (https://spansh.co.uk/api/dump/{id64}) returns
+    system data with bodies.  Each body may have a 'reserve_level' field
+    (e.g. "Pristine", "Major", "Common", "Low", "Depleted").
+
+    We check both:
+      1. Top-level 'reserve_level' on the system/dump record itself
+      2. 'reserve_level' on individual bodies (rings/belts have their own)
+    """
+    try:
+        # Check top-level reserve_level (some API responses include it)
+        top_reserve = system.get("reserve_level") or system.get("reserve")
+        if isinstance(top_reserve, str) and top_reserve.lower() == "pristine":
+            return True
+
+        # Check per-body reserve_level
+        bodies = system.get("bodies") or []
+        for body in bodies:
+            if not isinstance(body, dict):
+                continue
+            reserve = body.get("reserve_level") or body.get("reserve")
+            if isinstance(reserve, str) and reserve.lower() == "pristine":
+                return True
+    except Exception:
+        pass
+    return False
+
+
 async def _fetch_bodies_by_system_name(system_name: str) -> list[dict] | None:
     """Fetch all bodies for a system via the Spansh bodies/search API.
 
@@ -196,10 +241,10 @@ def _check_bodies_for_platinum(bodies: list[dict]) -> bool:
     return False
 
 
-async def _enrich_system(system_id64: int, system_name: str | None = None) -> tuple[bool, bool]:
+async def _enrich_system(system_id64: int, system_name: str | None = None) -> tuple[bool, bool, bool]:
     """
     Fetch Spansh enrichment data for a single system.
-    Returns (has_platinum, has_boom).
+    Returns (has_platinum, has_boom, has_pristine).
     Rate-limited: caller should wait BATCH_DELAY_MS between calls.
 
     Strategy (primary → fallback):
@@ -210,11 +255,13 @@ async def _enrich_system(system_id64: int, system_name: str | None = None) -> tu
 
     BOOM is always checked from the system/{id} response (minor faction data
     is not available via bodies/search).
+
+    PRISTINE is checked from the system dump API for reserve_level data.
     """
     # Always fetch the system record for BOOM detection
     system = await _fetch_system(system_id64)
     if system is None:
-        return False, False
+        return False, False, False
 
     has_boom = _check_system_for_boom(system)
     has_platinum = False
@@ -225,12 +272,21 @@ async def _enrich_system(system_id64: int, system_name: str | None = None) -> tu
         if bodies is not None:
             has_platinum = _check_bodies_for_platinum(bodies)
             if has_platinum:
-                return has_platinum, has_boom
+                # Still need to check pristine from the dump API
+                pass
             # If bodies/search returned results but no platinum, trust it.
             # Only fall through to the per-body chain if we got no results
             # at all (None = request failed; [] = system has no bodies).
+            if len(bodies) > 0 and has_platinum:
+                # Check pristine from dump, then return early
+                dump_data = await _fetch_system_dump(system_id64)
+                has_pristine = _check_system_for_pristine(dump_data) if dump_data else False
+                return has_platinum, has_boom, has_pristine
             if len(bodies) > 0:
-                return has_platinum, has_boom
+                # No platinum found; check pristine from dump
+                dump_data = await _fetch_system_dump(system_id64)
+                has_pristine = _check_system_for_pristine(dump_data) if dump_data else False
+                return has_platinum, has_boom, has_pristine
             # Empty results — might be a name mismatch; try fallback below.
 
     # ── Fallback: system/{id} → per-body fetch chain ─────────────────────────
@@ -253,7 +309,30 @@ async def _enrich_system(system_id64: int, system_name: str | None = None) -> tu
             has_platinum = True
             break  # found platinum, no need to check more bodies
 
-    return has_platinum, has_boom
+    # ── Check pristine from dump API ─────────────────────────────────────────
+    dump_data = await _fetch_system_dump(system_id64)
+    has_pristine = _check_system_for_pristine(dump_data) if dump_data else False
+
+    return has_platinum, has_boom, has_pristine
+
+
+async def _fetch_system_dump(system_id64: int) -> dict | None:
+    """Fetch system dump data from Spansh dump API for reserve level info.
+
+    The dump endpoint (https://spansh.co.uk/api/dump/{id64}) returns
+    detailed system data including body reserve levels.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            resp = await client.get(SPANSH_SYSTEM_DUMP_URL.format(system_id64))
+            if resp.status_code == 200:
+                raw = resp.json()
+                return raw.get("record", raw)
+            logger.warning("Spansh dump %d returned %d", system_id64, resp.status_code)
+            return None
+    except Exception as e:
+        logger.error("Error fetching Spansh dump %d: %s", system_id64, e)
+        return None
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -265,13 +344,15 @@ async def enrich_batch(
     db: Session = Depends(get_db),
 ) -> BatchEnrichResponse:
     """
-    Return cached PLAT/BOOM enrichment for one or more systems.
-    If cache is missing or stale (>12h), fetch fresh from Spansh.
-    Returns { system_id64: { has_platinum, has_boom } } for each requested ID.
+    Return cached PLAT/BOOM/PRISTINE enrichment for one or more systems.
+    If cache is missing, fetch fresh from Spansh. Existing cache is used
+    as-is (no TTL expiry) — data persists until explicitly cleared.
+    Returns { system_id64: { has_platinum, has_boom, has_pristine } }
+    for each requested ID.
 
     Set force_refresh=true to bypass the cache and re-fetch from Spansh.
-    This is useful after deploying platinum-detection fixes to invalidate
-    stale false-negative cache entries.
+    This is useful after deploying detection fixes to invalidate
+    stale cache entries.
     """
     ids = body.system_ids
     if not ids:
@@ -292,10 +373,9 @@ async def enrich_batch(
     if body.force_refresh:
         need_fetch = unique_ids
     else:
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=CACHE_TTL_HOURS)
         rows = db.execute(
             text("""
-                SELECT system_id64, has_platinum, has_boom, cached_at
+                SELECT system_id64, has_platinum, has_boom, has_pristine
                 FROM spansh_enrichment
                 WHERE system_id64 = ANY(:ids)
             """),
@@ -305,16 +385,17 @@ async def enrich_batch(
         cache_map: dict[int, dict] = {r["system_id64"]: r for r in rows}
         for sid in unique_ids:
             cached = cache_map.get(sid)
-            if cached and cached["cached_at"] and cached["cached_at"].replace(tzinfo=timezone.utc) >= cutoff:
-                # Cache hit — fresh enough
+            if cached is not None:
+                # Cache hit — use persisted data regardless of age
                 results[sid] = EnrichResult(
                     has_platinum=cached["has_platinum"],
                     has_boom=cached["has_boom"],
+                    has_pristine=cached.get("has_pristine", False),
                 )
             else:
                 need_fetch.append(sid)
 
-    # --- Phase 2: Fetch missing/stale from Spansh ---
+    # --- Phase 2: Fetch missing from Spansh (first-access) ---
     if need_fetch:
         logger.info("Fetching Spansh enrichment for %d system(s)", len(need_fetch))
 
@@ -335,23 +416,26 @@ async def enrich_batch(
                 await asyncio.sleep(BATCH_DELAY_MS / 1000.0)  # rate limit
 
             sys_name = name_map.get(sid)
-            has_platinum, has_boom = await _enrich_system(sid, sys_name)
+            has_platinum, has_boom, has_pristine = await _enrich_system(sid, sys_name)
 
-            # Upsert into cache
+            # Upsert into cache (first-access persistence)
             db.execute(
                 text("""
-                    INSERT INTO spansh_enrichment (system_id64, has_platinum, has_boom, cached_at)
-                    VALUES (:sid, :plat, :boom, NOW())
+                    INSERT INTO spansh_enrichment (system_id64, has_platinum, has_boom, has_pristine, cached_at)
+                    VALUES (:sid, :plat, :boom, :prist, NOW())
                     ON CONFLICT (system_id64) DO UPDATE SET
                         has_platinum = EXCLUDED.has_platinum,
                         has_boom = EXCLUDED.has_boom,
+                        has_pristine = EXCLUDED.has_pristine,
                         cached_at = EXCLUDED.cached_at
                 """),
-                {"sid": sid, "plat": has_platinum, "boom": has_boom},
+                {"sid": sid, "plat": has_platinum, "boom": has_boom, "prist": has_pristine},
             )
             db.commit()
 
-            results[sid] = EnrichResult(has_platinum=has_platinum, has_boom=has_boom)
+            results[sid] = EnrichResult(
+                has_platinum=has_platinum, has_boom=has_boom, has_pristine=has_pristine,
+            )
 
     return BatchEnrichResponse(results=results)
 
@@ -363,8 +447,8 @@ def clear_enrich_cache(
 ) -> dict:
     """Clear all cached Spansh enrichment data.  Admin-only.
 
-    Use this after deploying platinum-detection fixes to force a fresh
-    fetch on the next batch request.
+    After clearing, the next batch request will re-fetch fresh data from
+    Spansh on first access for each system.
     """
     result = db.execute(text("DELETE FROM spansh_enrichment"))
     db.commit()
@@ -375,13 +459,95 @@ def clear_enrich_cache(
 
 @router.get("/enrich/status", response_model=EnrichStatus)
 def enrich_status(db: Session = Depends(get_db)) -> EnrichStatus:
-    """Return cache hit/miss counts."""
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=CACHE_TTL_HOURS)
+    """Return total cached enrichment count."""
     total = db.execute(
         text("SELECT COUNT(*) FROM spansh_enrichment")
     ).scalar() or 0
-    fresh = db.execute(
-        text("SELECT COUNT(*) FROM spansh_enrichment WHERE cached_at >= :cutoff"),
-        {"cutoff": cutoff},
-    ).scalar() or 0
-    return EnrichStatus(cached=fresh, expired=total - fresh)
+    return EnrichStatus(total_cached=total)
+
+
+@router.post("/enrich/validate", response_model=ValidateResponse)
+async def validate_enrich_cache(
+    db: Session = Depends(get_db),
+    _admin: dict = Depends(AdminUserDep),
+) -> ValidateResponse:
+    """
+    Validate cached enrichment entries against live Spansh data.
+    For each cached entry, re-fetches from Spansh and compares results.
+    Mismatches are auto-corrected in the database.
+    """
+    rows = db.execute(
+        text("SELECT system_id64, has_platinum, has_boom, has_pristine FROM spansh_enrichment")
+    ).mappings().all()
+
+    mismatches: list[ValidateMismatch] = []
+    total_checked = 0
+
+    # Look up system names for display
+    all_ids = [r["system_id64"] for r in rows]
+    name_map: dict[int, str] = {}
+    if all_ids:
+        name_rows = db.execute(
+            text("SELECT system_id64, name FROM pp_systems WHERE system_id64 = ANY(:ids)"),
+            {"ids": all_ids},
+        ).mappings().all()
+        name_map = {r["system_id64"]: r["name"] for r in name_rows}
+
+    for i, row in enumerate(rows):
+        if i > 0:
+            await asyncio.sleep(BATCH_DELAY_MS / 1000.0)  # rate limit
+
+        sid = row["system_id64"]
+        sys_name = name_map.get(sid)
+        total_checked += 1
+
+        live_plat, live_boom, live_prist = await _enrich_system(sid, sys_name)
+        cached_plat = row["has_platinum"]
+        cached_boom = row["has_boom"]
+        cached_prist = row.get("has_pristine", False)
+
+        has_mismatch = False
+
+        if cached_plat != live_plat:
+            mismatches.append(ValidateMismatch(
+                system_id64=sid, system_name=sys_name,
+                field="has_platinum", cached=cached_plat, live=live_plat,
+            ))
+            has_mismatch = True
+
+        if cached_boom != live_boom:
+            mismatches.append(ValidateMismatch(
+                system_id64=sid, system_name=sys_name,
+                field="has_boom", cached=cached_boom, live=live_boom,
+            ))
+            has_mismatch = True
+
+        if cached_prist != live_prist:
+            mismatches.append(ValidateMismatch(
+                system_id64=sid, system_name=sys_name,
+                field="has_pristine", cached=cached_prist, live=live_prist,
+            ))
+            has_mismatch = True
+
+        # Auto-correct mismatches
+        if has_mismatch:
+            db.execute(
+                text("""
+                    UPDATE spansh_enrichment
+                    SET has_platinum = :plat, has_boom = :boom, has_pristine = :prist, cached_at = NOW()
+                    WHERE system_id64 = :sid
+                """),
+                {"sid": sid, "plat": live_plat, "boom": live_boom, "prist": live_prist},
+            )
+            db.commit()
+            logger.info("Corrected enrichment for system %d (%s)", sid, sys_name)
+
+    logger.info(
+        "Enrichment validation complete: %d checked, %d mismatches found",
+        total_checked, len(mismatches),
+    )
+    return ValidateResponse(
+        total_checked=total_checked,
+        mismatches_found=len(mismatches),
+        mismatches=mismatches,
+    )

@@ -55,14 +55,20 @@ with engine.connect() as _conn:
         "CREATE INDEX IF NOT EXISTS ix_pp_system_snapshots_spansh_updated_at "
         "ON pp_system_snapshots (spansh_updated_at)"
     ))
-    # spansh_enrichment table for cached PLAT/BOOM data (12-hour TTL)
+    # spansh_enrichment table for cached PLAT/BOOM/PRISTINE data (first-access cache)
     _conn.execute(_text(
         "CREATE TABLE IF NOT EXISTS spansh_enrichment ("
         "  system_id64 BIGINT PRIMARY KEY,"
         "  has_platinum BOOLEAN NOT NULL DEFAULT FALSE,"
         "  has_boom BOOLEAN NOT NULL DEFAULT FALSE,"
+        "  has_pristine BOOLEAN NOT NULL DEFAULT FALSE,"
         "  cached_at TIMESTAMP NOT NULL DEFAULT NOW()"
         ")"
+    ))
+    # Add has_pristine column for existing deployments
+    _conn.execute(_text(
+        "ALTER TABLE spansh_enrichment "
+        "ADD COLUMN IF NOT EXISTS has_pristine BOOLEAN NOT NULL DEFAULT FALSE"
     ))
     _conn.commit()
 

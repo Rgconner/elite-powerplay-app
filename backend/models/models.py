@@ -138,7 +138,8 @@ class SpanshEnrichment(Base):
 
     has_platinum — true if any planet body in the system has a Platinum signal.
     has_boom     — true if any minor faction in the system has BOOM as an active state.
-    cached_at    — when this row was last refreshed (used for 12-hour TTL).
+    has_pristine — true if any body in the system has a "Pristine" reserve level.
+    cached_at    — when this row was last fetched (first-access cache).
     """
 
     __tablename__ = "spansh_enrichment"
@@ -146,6 +147,7 @@ class SpanshEnrichment(Base):
     system_id64 = Column(BigInteger, primary_key=True, index=True, nullable=False)
     has_platinum = Column(Boolean, nullable=False, default=False)
     has_boom = Column(Boolean, nullable=False, default=False)
+    has_pristine = Column(Boolean, nullable=False, default=False)
     cached_at = Column(DateTime, default=func.now(), nullable=False)
 
 

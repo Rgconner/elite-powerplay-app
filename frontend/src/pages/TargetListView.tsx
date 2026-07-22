@@ -17,7 +17,7 @@ import { netValue } from "../utils/decay";
 import { CP_DECAY_COLOR } from "../constants/ppColors";
 import {
   PPBadge, ProgressBar, TargetScoreBadge, MeritsCell,
-  PlatBadge, BoomBadge,
+  PlatBadge, BoomBadge, PristBadge,
 } from "../components/SharedCells";
 import { getSpanshEnrichmentBatch, clearEnrichmentCache, SpanshEnrichment } from "../api/spansh";
 import { getAdminToken } from "../api/admin";
@@ -395,8 +395,9 @@ export default function TargetListView() {
                         : "#0d1117";
 
             const enc = enrichment[row.system_id64];
-            const hasPlat = enc?.has_platinum ?? false;
-            const hasBoom = enc?.has_boom ?? false;
+            const hasPlat   = enc?.has_platinum ?? false;
+            const hasBoom   = enc?.has_boom ?? false;
+            const hasPrist  = enc?.has_pristine ?? false;
 
             return (
               <div key={row.system_id64} style={{
@@ -428,6 +429,9 @@ href={`https://inara.cz/elite/starsystem/?search=${encodeURIComponent(row.name)}
 
                   {/* BOOM badge */}
                   {hasBoom && <BoomBadge />}
+
+                  {/* PRIST badge */}
+                  {hasPrist && <PristBadge />}
 
                   {/* Merits remaining */}
                   <span style={{ fontSize: 11, color: "#8b949e", whiteSpace: "nowrap" }}>

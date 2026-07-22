@@ -3,6 +3,8 @@ import { getTargetAnalysis, TargetAnalysisItem } from "../api/targeting";
 import { netValue } from "../utils/decay";
 import { listPowers } from "../api/powers";
 import { ppStateColor, PP_STATE_LABELS, powerColor } from "../constants/ppColors";
+import { getSpanshEnrichmentBatch, SpanshEnrichment } from "../api/spansh";
+import { PlatBadge, BoomBadge, PristBadge } from "../components/SharedCells";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -294,6 +296,10 @@ export default function TargetAnalysisView() {
   const [sortDir,        setSortDir]        = useState<SortDir>("asc");
   const [filterPower,    setFilterPower]    = useState<string>("all");
 
+  // Enrichment state
+  const [enrichment, setEnrichment] = useState<Record<number, SpanshEnrichment>>({});
+  const [enriching,  setEnriching]  = useState(false);
+
   // ── Local settings ────────────────────────────────────────────────────────
   // These mirror backend defaults; changing them re-runs the analysis to apply.
   // They're sent to the backend as part of the analysis, but since the backend
@@ -393,6 +399,17 @@ export default function TargetAnalysisView() {
       m[key] = (m[key] ?? 0) + 1;
     });
     return m;
+  }, [results]);
+
+  // Fetch enrichment for visible target systems
+  useEffect(() => {
+    if (results.length === 0) { setEnrichment({}); return; }
+    setEnriching(true);
+    const ids = results.map(r => r.system_id64);
+    getSpanshEnrichmentBatch(ids)
+      .then(result => setEnrichment(result))
+      .catch(() => console.warn("Spansh enrichment fetch failed on Target Analysis"))
+      .finally(() => setEnriching(false));
   }, [results]);
 
   const primeCount     = results.filter(r => r.score >= 1200).length;
@@ -704,7 +721,7 @@ export default function TargetAnalysisView() {
 
                     {/* System name + reasons tooltip */}
                     <td style={{ padding: "8px 10px", whiteSpace: "nowrap" }}>
-                      <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                         <a
 href={`https://inara.cz/elite/starsystem/?search=${encodeURIComponent(item.system_name)}`}
                           target="_blank" rel="noreferrer"
@@ -712,6 +729,10 @@ href={`https://inara.cz/elite/starsystem/?search=${encodeURIComponent(item.syste
                         >
                           {item.system_name}
                         </a>
+                        {/* Enrichment badges */}
+                        {enrichment[item.system_id64]?.has_platinum && <PlatBadge />}
+                        {enrichment[item.system_id64]?.has_boom && <BoomBadge />}
+                        {enrichment[item.system_id64]?.has_pristine && <PristBadge />}
                       </div>
                       <div style={{ fontSize: 11, color: "#8b949e", marginTop: 2, lineHeight: 1.4 }}>
                         {item.reasons.map((r, idx) => <span key={idx}>{r}<br /></span>)}

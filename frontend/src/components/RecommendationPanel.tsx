@@ -3,12 +3,16 @@ import { RecommendationsResponse, RecommendationItem } from "../api/recommendati
 import { ContestedSystemInfo, parseConflictProgress } from "../api/contested";
 import { ppStateColor, PP_STATE_LABELS, powerColor, CP_DECAY_COLOR } from "../constants/ppColors";
 import { effectiveUndermining, netValue } from "../utils/decay";
+import type { SpanshEnrichment } from "../api/spansh";
+import { PlatBadge, BoomBadge, PristBadge } from "./SharedCells";
 
 interface Props {
   recommendations: RecommendationsResponse | null;
   loading: boolean;
   contested: ContestedSystemInfo[];
   loadingContested: boolean;
+  enrichment?: Record<number, SpanshEnrichment>;
+  enriching?: boolean;
 }
 
 // ── Urgency band helpers ───────────────────────────────────────────────────
@@ -194,12 +198,13 @@ function MeritBar({ item }: { item: RecommendationItem }) {
   );
 }
 
-function ItemRow({ item }: { item: RecommendationItem }) {
+function ItemRow({ item, enrichment }: { item: RecommendationItem; enrichment?: Record<number, SpanshEnrichment> }) {
   const band = urgencyBand(item);
   const r = item.reinforcement ?? 0;
   const u = item.undermining ?? 0;
   const effU = effectiveUndermining(u, item.cp_decay);
   const net = netValue(r, u, item.cp_decay);
+  const enc = enrichment?.[item.system_id64];
 
   return (
     <div style={{
@@ -222,6 +227,10 @@ function ItemRow({ item }: { item: RecommendationItem }) {
         >
           {item.system_name}
         </a>
+        {/* Enrichment badges */}
+        {enc?.has_platinum && <PlatBadge />}
+        {enc?.has_boom && <BoomBadge />}
+        {enc?.has_pristine && <PristBadge />}
         {item.power_state && (
           <span style={{
             background: ppStateColor(item.power_state), color: "#fff",
@@ -316,7 +325,7 @@ function ItemRow({ item }: { item: RecommendationItem }) {
   );
 }
 
-function Section({ title, items, color }: { title: string; items: RecommendationItem[]; color: string }) {
+function Section({ title, items, color, enrichment }: { title: string; items: RecommendationItem[]; color: string; enrichment?: Record<number, SpanshEnrichment> }) {
   return (
     <div style={{ flex: 1, minWidth: 280 }}>
       <h4 style={{ margin: "0 0 10px", fontSize: 12, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: "0.06em" }}>
@@ -324,7 +333,7 @@ function Section({ title, items, color }: { title: string; items: Recommendation
       </h4>
       {items.length === 0
         ? <p style={{ fontSize: 13, color: "#57606a", margin: 0 }}>No recommendations.</p>
-        : items.slice(0, 10).map((item) => <ItemRow key={item.system_id64} item={item} />)
+        : items.slice(0, 10).map((item) => <ItemRow key={item.system_id64} item={item} enrichment={enrichment} />)
       }
     </div>
   );
@@ -433,7 +442,7 @@ function ContestedSection({ items, loading }: { items: ContestedSystemInfo[]; lo
   );
 }
 
-export default function RecommendationPanel({ recommendations, loading, contested, loadingContested }: Props) {
+export default function RecommendationPanel({ recommendations, loading, contested, loadingContested, enrichment, enriching }: Props) {
   const [collapsed, setCollapsed] = useState(false);
 
   const criticalCount = recommendations?.fortify.filter(i => i.score >= 950 || i.days_to_failure === 0).length ?? 0;
@@ -487,8 +496,8 @@ export default function RecommendationPanel({ recommendations, loading, conteste
             <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
               {recommendations && (
                 <>
-                  <Section title="Fortify Priorities" items={recommendations.fortify} color="#D94A4A" />
-                  <Section title="Expansion Targets"  items={recommendations.expand}  color="#4A90D9" />
+                  <Section title="Fortify Priorities" items={recommendations.fortify} color="#D94A4A" enrichment={enrichment} />
+                  <Section title="Expansion Targets"  items={recommendations.expand}  color="#4A90D9" enrichment={enrichment} />
                 </>
               )}
               <ContestedSection items={contested} loading={loadingContested} />

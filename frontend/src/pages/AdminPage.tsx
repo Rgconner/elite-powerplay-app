@@ -4,6 +4,7 @@ import {
   changePassword,
 } from "../api/admin";
 import { FRONTEND_VERSION, FRONTEND_RELEASE_DATE } from "../version";
+import { clearEnrichmentCache, validateEnrichment, getEnrichStatus, type ValidateResponse, type EnrichStatus } from "../api/spansh";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface IngestionRun {
@@ -184,6 +185,15 @@ export default function AdminPage({ onClose }: Props) {
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // ── Spansh enrichment cache state ──────────────────────────────────────────
+  const [enrichStatus,   setEnrichStatus]   = useState<EnrichStatus | null>(null);
+  const [lastValidate,   setLastValidate]   = useState<ValidateResponse | null>(null);
+  const [validating,     setValidating]     = useState(false);
+  const [clearing,       setClearing]       = useState(false);
+  const [enrichMsg,      setEnrichMsg]      = useState<string | null>(null);
+  const [validateStartedAt, setValidateStartedAt] = useState<number | null>(null);
+  const [elapsedSec,     setElapsedSec]     = useState(0);
+
   // ── Change-password form state ──────────────────────────────────────────────
   const [pwCurrent,  setPwCurrent]  = useState("");
   const [pwNew,      setPwNew]      = useState("");
@@ -206,8 +216,9 @@ export default function AdminPage({ onClose }: Props) {
     Promise.all([
       getAdminStatus(),
       apiGet<AdminSetting[]>("/api/admin/settings"),
+      getEnrichStatus(),
     ])
-      .then(([st, sets]) => {
+      .then(([st, sets, es]) => {
         setStatus(st);
         const w:  Record<string, number> = { ...DEFAULT_WEIGHTS };
         const t:  Record<string, number> = { ...DEFAULT_THRESHOLDS };
@@ -228,6 +239,7 @@ export default function AdminPage({ onClose }: Props) {
         setTargetWeights(tw);
         setTargetThresholds(tt);
         setNullTsIsStale(nullStale);
+        setEnrichStatus(es);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -289,6 +301,76 @@ export default function AdminPage({ onClose }: Props) {
     }
   }
 
+  // ── Spansh enrichment cache handlers ──────────────────────────────────────
+  async function handleRefreshEnrichStatus() {
+    setEnrichMsg(null);
+    try {
+      const es = await getEnrichStatus();
+      setEnrichStatus(es);
+    } catch (err: unknown) {
+      setEnrichMsg(`Error: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+
+  async function handleValidateEnrich() {
+    if (validating || clearing) return;
+    setEnrichMsg(null);
+    setValidating(true);
+    setValidateStartedAt(Date.now());
+    setElapsedSec(0);
+    setLastValidate(null);
+    try {
+      const result = await validateEnrichment();
+      setLastValidate(result);
+      if (result.mismatches_found === 0) {
+        setEnrichMsg(`✓ All ${result.total_checked} cached systems match live Spansh data — no corrections needed.`);
+      } else {
+        setEnrichMsg(`✓ Checked ${result.total_checked} systems. ${result.mismatches_found} mismatch${result.mismatches_found === 1 ? "" : "es"} found and auto-corrected.`);
+      }
+      // Refresh cache count after validation (counts may have changed for entries that were auto-corrected)
+      handleRefreshEnrichStatus();
+    } catch (err: unknown) {
+      setEnrichMsg(`Validation error: ${err instanceof Error ? err.message : err}`);
+    } finally {
+      setValidating(false);
+      setValidateStartedAt(null);
+      setElapsedSec(0);
+    }
+  }
+
+  async function handleClearEnrichCache() {
+    if (validating || clearing) return;
+    if (!window.confirm("Clear ALL enrichment cache? Next page load will re-fetch from Spansh.")) return;
+    setEnrichMsg(null);
+    setClearing(true);
+    try {
+      const result = await clearEnrichmentCache();
+      setEnrichMsg(`✓ Cleared ${result.deleted.toLocaleString()} cached system${result.deleted === 1 ? "" : "s"}. Next page load will re-fetch from Spansh.`);
+      setLastValidate(null);
+      handleRefreshEnrichStatus();
+    } catch (err: unknown) {
+      setEnrichMsg(`Clear error: ${err instanceof Error ? err.message : err}`);
+    } finally {
+      setClearing(false);
+    }
+  }
+
+  // Tick elapsed-seconds counter while a validation is in flight
+  useEffect(() => {
+    if (!validating || validateStartedAt == null) return;
+    const id = window.setInterval(() => {
+      setElapsedSec(Math.floor((Date.now() - validateStartedAt) / 1000));
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [validating, validateStartedAt]);
+
+  // Format mm:ss for the elapsed-time display
+  function fmtElapsed(s: number): string {
+    const m = Math.floor(s / 60);
+    const ss = s % 60;
+    return `${m}:${ss.toString().padStart(2, "0")}`;
+  }
+
   const cardStyle: React.CSSProperties = {
     background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: 20, marginBottom: 16,
   };
@@ -324,6 +406,8 @@ export default function AdminPage({ onClose }: Props) {
   // ── Admin panel ─────────────────────────────────────────────────────────────
   return (
     <div style={{ padding: "20px 24px", fontFamily: '-apple-system, "Segoe UI", system-ui, sans-serif', color: "#1f2328", maxWidth: 900 }}>
+      {/* Keyframe for the validation spinner (inline styles can't define keyframes) */}
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
         <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>Admin Panel</h2>
@@ -494,6 +578,164 @@ export default function AdminPage({ onClose }: Props) {
           </div>
         ) : (
           !loading && <p style={{ fontSize: 13, color: "#57606a", margin: 0 }}>No ingestion runs yet.</p>
+        )}
+      </div>
+
+      {/* Spansh Enrichment Cache */}
+      <div style={cardStyle}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Spansh Enrichment Cache</h3>
+          <span style={{ fontSize: 11, color: "#57606a" }}>PLAT / BOOM / PRIST badges</span>
+        </div>
+        <p style={{ fontSize: 12, color: "#57606a", margin: "0 0 14px" }}>
+          Controls the persistent cache that powers the system enrichment badges. The cache is
+          populated on first access (no TTL) — data is kept until explicitly cleared.
+        </p>
+
+        {/* Status row */}
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          background: "#f7f8fa", border: "1px solid #e5e7eb", borderRadius: 6,
+          padding: "10px 14px", marginBottom: 12,
+        }}>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#57606a", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+              Cached systems
+            </div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: "#1f2328", fontVariantNumeric: "tabular-nums" }}>
+              {enrichStatus ? enrichStatus.total_cached.toLocaleString() : "—"}
+            </div>
+          </div>
+          <button
+            onClick={handleRefreshEnrichStatus}
+            disabled={validating || clearing}
+            style={{
+              padding: "6px 12px", fontSize: 12, fontWeight: 600,
+              border: "1px solid #e5e7eb", borderRadius: 5,
+              background: "#fff", color: "#57606a",
+              cursor: validating || clearing ? "not-allowed" : "pointer",
+            }}
+            title="Refresh cache count"
+          >
+            ↻ Refresh
+          </button>
+        </div>
+
+        {/* Action buttons */}
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+          <button
+            onClick={handleValidateEnrich}
+            disabled={validating || clearing}
+            style={{
+              padding: "8px 16px", fontSize: 13, fontWeight: 600,
+              background: validating || clearing ? "#ccc" : "#3b82d4",
+              color: "#fff", border: "none", borderRadius: 5,
+              cursor: validating || clearing ? "not-allowed" : "pointer",
+              display: "flex", alignItems: "center", gap: 6,
+            }}
+          >
+            {validating ? (
+              <>
+                <span style={{
+                  display: "inline-block", width: 12, height: 12,
+                  border: "2px solid #fff", borderTopColor: "transparent",
+                  borderRadius: "50%", animation: "spin 1s linear infinite",
+                }} />
+                Validating… {fmtElapsed(elapsedSec)}
+              </>
+            ) : "Validate Cache"}
+          </button>
+          <button
+            onClick={handleClearEnrichCache}
+            disabled={validating || clearing}
+            style={{
+              padding: "8px 16px", fontSize: 13, fontWeight: 600,
+              background: validating || clearing ? "#ccc" : "#D94A4A",
+              color: "#fff", border: "none", borderRadius: 5,
+              cursor: validating || clearing ? "not-allowed" : "pointer",
+            }}
+          >
+            {clearing ? "Clearing…" : "⚠ Clear Cache"}
+          </button>
+        </div>
+
+        {/* In-flight status note */}
+        {validating && (
+          <div style={{
+            padding: "8px 12px", background: "#f0f9ff", border: "1px solid #3b82d4",
+            borderRadius: 5, fontSize: 12, color: "#1f2328", marginBottom: 12,
+          }}>
+            Re-checking every cached system against live Spansh data — may take several minutes
+            (1 system ≈ 600 ms due to Spansh rate-limiting). Mismatches are auto-corrected in place.
+          </div>
+        )}
+
+        {/* Feedback banner */}
+        {enrichMsg && (
+          <div style={{
+            padding: "8px 12px",
+            background: enrichMsg.startsWith("✓") ? "#f0fff4" : "#fff0f0",
+            border: `1px solid ${enrichMsg.startsWith("✓") ? "#b2dfbd" : "#f5c0c0"}`,
+            borderRadius: 5, fontSize: 13,
+            color: enrichMsg.startsWith("✓") ? "#1a7a2a" : "#D94A4A",
+            marginBottom: 12,
+          }}>
+            {enrichMsg}
+          </div>
+        )}
+
+        {/* Validation results */}
+        {lastValidate && lastValidate.mismatches_found > 0 && (
+          <>
+            <h4 style={{
+              margin: "12px 0 6px", fontSize: 12, fontWeight: 700, color: "#57606a",
+              textTransform: "uppercase", letterSpacing: "0.04em",
+            }}>
+              Mismatches found ({lastValidate.mismatches_found})
+            </h4>
+            <div style={{ overflowX: "auto", maxHeight: 240, overflowY: "auto", border: "1px solid #e5e7eb", borderRadius: 5 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: "#f7f8fa", position: "sticky", top: 0 }}>
+                    {["System", "Field", "Cached", "Live"].map(h => (
+                      <th key={h} style={{
+                        padding: "6px 10px", textAlign: "left", fontSize: 10, fontWeight: 700,
+                        color: "#57606a", textTransform: "uppercase", borderBottom: "1px solid #e5e7eb",
+                      }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {lastValidate.mismatches.slice(0, 200).map((m, i) => (
+                    <tr key={`${m.system_id64}-${m.field}-${i}`} style={{ background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
+                      <td style={{ padding: "5px 10px", fontWeight: 600 }}>
+                        {m.system_name ?? `#${m.system_id64}`}
+                      </td>
+                      <td style={{ padding: "5px 10px", color: "#57606a", fontFamily: "monospace", fontSize: 11 }}>
+                        {m.field}
+                      </td>
+                      <td style={{ padding: "5px 10px", color: "#D94A4A" }}>
+                        {String(m.cached)}
+                      </td>
+                      <td style={{ padding: "5px 10px", color: "#1a7a2a", fontWeight: 600 }}>
+                        {String(m.live)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {lastValidate.mismatches.length > 200 && (
+              <p style={{ fontSize: 11, color: "#bbb", margin: "4px 0 0" }}>
+                Showing first 200 of {lastValidate.mismatches.length} mismatches.
+              </p>
+            )}
+          </>
+        )}
+        {lastValidate && lastValidate.mismatches_found === 0 && (
+          <p style={{ fontSize: 12, color: "#1a7a2a", margin: "8px 0 0", fontStyle: "italic" }}>
+            ✓ No mismatches — all cached entries match live Spansh data.
+          </p>
         )}
       </div>
 

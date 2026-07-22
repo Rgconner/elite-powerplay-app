@@ -141,6 +141,19 @@ export function BoomBadge() {
   );
 }
 
+// ── PRIST badge (Pristine reserve level) ─────────────────────────────────
+
+export function PristBadge() {
+  return (
+    <span style={{
+      background: "#0d2a4a", color: "#00E5CC", border: "1px solid #00E5CC44",
+      borderRadius: 3, padding: "1px 6px", fontSize: 10, fontWeight: 700,
+    }}>
+      💎 PRIST
+    </span>
+  );
+}
+
 // ── Threat arrow ───────────────────────────────────────────────────────────
 
 export function ThreatArrow({ trend }: { trend: string | undefined }) {

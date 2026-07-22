@@ -10,6 +10,7 @@ import RefSystemSelector from "../components/RefSystemSelector";
 import SystemListInput from "../components/SystemListInput";
 import RecommendationPanel from "../components/RecommendationPanel";
 import { useFilterSettings, FILTER_DEFAULTS } from "../hooks/useFilterSettings";
+import { getSpanshEnrichmentBatch, SpanshEnrichment } from "../api/spansh";
 
 // ── PP Cycle clock helpers ─────────────────────────────────────────────────
 // Cycles reset every Thursday at 07:00 UTC
@@ -297,6 +298,10 @@ export default function TableView() {
   const [sortKey,           setSortKey]           = useState<string>("control_progress");
   const [sortDir,           setSortDir]           = useState<SortDir>("asc");
 
+  // Enrichment state: map system_id64 → SpanshEnrichment
+  const [enrichment, setEnrichment] = useState<Record<number, SpanshEnrichment>>({});
+  const [enriching,  setEnriching]  = useState(false);
+
   // Centralised filter settings with optional cookie persistence
   const { settings, saveEnabled, setSaveEnabled, set: setFilter } = useFilterSettings();
   const { expandMinProgress, contestedMaxGap } = settings;
@@ -360,6 +365,17 @@ export default function TableView() {
       .catch(() => setContestedSystems([]))
       .finally(() => setLoadingContested(false));
   }, [powerName]);
+
+  // Fetch Spansh enrichment data for all visible systems
+  useEffect(() => {
+    if (systems.length === 0) { setEnrichment({}); return; }
+    setEnriching(true);
+    const ids = systems.map(s => s.system_id64);
+    getSpanshEnrichmentBatch(ids)
+      .then(result => setEnrichment(result))
+      .catch(() => console.warn("Spansh enrichment fetch failed on Overview"))
+      .finally(() => setEnriching(false));
+  }, [systems]);
 
   // Default sort: by control_progress ascending (most at-risk first) when no ref;
   // by distance ascending when a reference system is selected.
@@ -654,6 +670,8 @@ export default function TableView() {
         loading={loadingRecos}
         contested={filteredContested}
         loadingContested={loadingContested}
+        enrichment={enrichment}
+        enriching={enriching}
       />
 
       {/* Empty states */}
