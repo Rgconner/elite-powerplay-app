@@ -41,7 +41,7 @@ from models.schemas import (
     TargetAnalysisRequest,
     TargetAnalysisResponse,
 )
-from services.scoring import compute_recommendations, load_weights, DEFAULTS as SCORING_DEFAULTS
+from services.scoring import compute_recommendations, load_weights, DEFAULTS as SCORING_DEFAULTS, CONTESTED_MIN_CONTROL_POINTS
 from services.decay import effective_undermining as _eff_under
 
 logger = logging.getLogger(__name__)
@@ -229,10 +229,6 @@ def get_contested_systems(
     The staleness clause for NULL timestamps is built dynamically based on the
     admin setting so it can be toggled without redeployment.
     """
-    # Load weights for the contested_min_control_points threshold
-    from services.scoring import load_weights, DEFAULTS as SCORE_DEFAULTS
-    weights = load_weights(db)
-    MIN_CP = int(weights.get("contested_min_control_points", SCORE_DEFAULTS["contested_min_control_points"]))
 
     # Read the null-timestamp staleness setting
     null_ts_row = db.execute(
@@ -310,9 +306,8 @@ def get_contested_systems(
         if cp_str:
             try:
                 cp_entries = _json.loads(cp_str)
-                MIN_CP = int(weights.get("contested_min_control_points", 35000))
                 for entry in cp_entries:
-                    if isinstance(entry, dict) and (entry.get("progress") or 0) >= MIN_CP:
+                    if isinstance(entry, dict) and (entry.get("progress") or 0) >= CONTESTED_MIN_CONTROL_POINTS:
                         qualifying_powers.append(entry.get("power", ""))
             except Exception:
                 pass
@@ -508,8 +503,7 @@ def target_analysis(
         ORDER BY system_id, snapshot_time DESC
     """), {"attacker_pattern": f"%{attacker}%"}).mappings().all()
 
-    # Filter in Python: attacker + at least 1 other must have ≥ MIN_CP control points
-    MIN_CP = int(w.get("contested_min_control_points", SCORING_DEFAULTS.get("contested_min_control_points", 35000)))
+    # Filter in Python: attacker + at least 1 other must have ≥ CONTESTED_MIN_CONTROL_POINTS
     contested_sys_ids: set[int] = set()
     contested_extra_snaps: dict[int, object] = {}
     for row in contested_snap_rows:
@@ -518,7 +512,7 @@ def target_analysis(
         if cp_str:
             try:
                 for entry in _json.loads(cp_str):
-                    if isinstance(entry, dict) and (entry.get("progress") or 0) >= MIN_CP:
+                    if isinstance(entry, dict) and (entry.get("progress") or 0) >= CONTESTED_MIN_CONTROL_POINTS:
                         qualifying_powers.append(entry.get("power", ""))
             except Exception:
                 pass

@@ -134,12 +134,6 @@ DEFAULTS: dict[str, float] = {
     "target_progress_medium":      0.50,  # ≤ this % → MEDIUM vulnerability
     # (above target_progress_medium → LOW)
 
-    # ── Contested / Acquisition thresholds ────────────────────────────────────
-    # Minimum control points (merits) required for a power to be considered
-    # an active participant in a contested system. All powers below this
-    # threshold are ignored when determining if a system is "truly" contested.
-    "contested_min_control_points": 35000.0,
-
     # ── Staleness — NULL spansh_updated_at behaviour ──────────────────────────
     # When "true" (default): rows where spansh_updated_at IS NULL are treated
     # as stale and excluded from Contested queries (strictest / spec-correct).
@@ -174,6 +168,10 @@ POWER_ALLEGIANCE: dict[str, str] = {
 MERIT_ACQUIRE    = 120_000   # cumulative merits to acquire (Unoccupied → Exploited)
 MERIT_FORTIFIED  = 333_000   # cumulative merits for Fortified
 MERIT_STRONGHOLD = 667_000   # cumulative merits for Stronghold
+
+# Minimum control points (merits) for a power to be considered an active
+# participant in a contested system.  This is a fixed game constant (PP2.0).
+CONTESTED_MIN_CONTROL_POINTS: int = 35_000
 
 # Band widths — merits between downgrade and upgrade thresholds per state
 BAND_EXPLOITED   = MERIT_FORTIFIED  - MERIT_ACQUIRE    # 213,000
@@ -767,8 +765,7 @@ def compute_expand_scores(
     # Contested-expansion: Unoccupied + 2 or more powers + selected power present.
     # Stored during ingest with power_state='Contested' (our internal label) and
     # powers_list = comma-separated list of all contesting powers.
-    # Filter: selected power + at least 1 other must have ≥ MIN_CP control points.
-    MIN_CP = int(weights.get("contested_min_control_points", DEFAULTS.get("contested_min_control_points", 35000)))
+    # Filter: selected power + at least 1 other must have ≥ CONTESTED_MIN_CONTROL_POINTS.
     contested_exp_rows = db.execute(text(f"""
         SELECT DISTINCT ON (system_id)
                system_id, power, power_state,
@@ -792,7 +789,7 @@ def compute_expand_scores(
         if cp_str:
             try:
                 for entry in _json.loads(cp_str):
-                    if isinstance(entry, dict) and (entry.get("progress") or 0) >= MIN_CP:
+                    if isinstance(entry, dict) and (entry.get("progress") or 0) >= CONTESTED_MIN_CONTROL_POINTS:
                         qualifying.append(entry.get("power", ""))
             except Exception:
                 pass
