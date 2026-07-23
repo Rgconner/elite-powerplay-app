@@ -6,7 +6,7 @@
  * score badge, progress bar, merits, and reinforcement/undermining stats.
  */
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { getPowerSystems, PPSystemEntry } from "../api/powers";
 import { useSelectionState } from "../hooks/useSelectionState";
 import PowerSelector from "../components/PowerSelector";
@@ -82,6 +82,13 @@ function cmp(a: unknown, b: unknown, dir: SortDir): number {
 
 export default function TargetListView() {
   const { powerName, refSystem, systemList, setPower, setRef, setSystemList } = useSelectionState();
+
+  // Clear system list when a new power is selected (previously-entered names
+  // belong to a different power and would incorrectly filter the results)
+  const handleSetPower = useCallback((name: string | null) => {
+    setPower(name);
+    if (name !== powerName) setSystemList([]);
+  }, [powerName, setPower, setSystemList]);
 
   const [allSystems,      setAllSystems]      = useState<PPSystemEntry[]>([]);
   const [loading,         setLoading]         = useState(false);
@@ -253,7 +260,7 @@ export default function TargetListView() {
 
         {/* Row 1: Power + Ref */}
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-          <PowerSelector value={powerName} onChange={setPower} />
+          <PowerSelector value={powerName} onChange={handleSetPower} />
           <RefSystemSelector value={refSystem} onChange={setRef} />
           {loading && <span style={{ fontSize: 13, color: "#8b949e" }}>Loading systems…</span>}
           {error && <span style={{ fontSize: 13, color: "#D94A4A" }}>{error}</span>}
