@@ -12,7 +12,7 @@ import { useSelectionState } from "../hooks/useSelectionState";
 import PowerSelector from "../components/PowerSelector";
 import RefSystemSelector from "../components/RefSystemSelector";
 import SystemListInput from "../components/SystemListInput";
-import { computeTargetScore, meritsToNextState } from "../utils/scoring";
+import { computeTargetScore, meritsToNextState, meritsToSafety } from "../utils/scoring";
 import { netValue } from "../utils/decay";
 import { CP_DECAY_COLOR } from "../constants/ppColors";
 import {
@@ -472,6 +472,14 @@ href={`https://inara.cz/elite/starsystem/?search=${encodeURIComponent(row.name)}
                       </strong>
                     </span>
                   )}
+                  {(() => {
+                    const toSafety = meritsToSafety(row.power_state, row.control_progress);
+                    return toSafety != null ? (
+                      <span>
+                        To safety: <strong style={{ color: "#FF8C00" }}>{toSafety.toLocaleString()}</strong>
+                      </span>
+                    ) : null;
+                  })()}
                   <span style={{ color: "#57606a", marginLeft: "auto" }}>
                     Score: <strong>{row.score.toFixed(1)}</strong>
                   </span>

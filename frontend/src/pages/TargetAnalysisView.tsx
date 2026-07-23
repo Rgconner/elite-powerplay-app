@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, type CSSProperties } from "react";
 import { getTargetAnalysis, TargetAnalysisItem } from "../api/targeting";
 import { netValue } from "../utils/decay";
+import { meritsToSafety } from "../utils/scoring";
 import { listPowers } from "../api/powers";
 import { ppStateColor, PP_STATE_LABELS, powerColor } from "../constants/ppColors";
 import { getSpanshEnrichmentBatch, SpanshEnrichment } from "../api/spansh";
@@ -803,6 +804,14 @@ export default function TargetAnalysisView() {
                       📍 {item.distance_from_attacker.toFixed(1)} LY
                     </span>
                   )}
+                  {(() => {
+                    const toSafety = meritsToSafety(item.power_state, item.control_progress);
+                    return toSafety != null ? (
+                      <span>
+                        To safety: <strong style={{ color: "#FF8C00" }}>{toSafety.toLocaleString()}</strong>
+                      </span>
+                    ) : null;
+                  })()}
                 </div>
 
                 {/* ── Reasons ─────────────────────────────────────────────── */}

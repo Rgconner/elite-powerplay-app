@@ -37,6 +37,20 @@ export function meritsToNextState(
   return { meritsEarned, meritsNeeded, meritsRemaining };
 }
 
+/**
+ * Merits needed to reach 25% control progress (safe threshold).
+ * Returns null if already at or above 25%.
+ */
+export function meritsToSafety(
+  power_state: string | null,
+  control_progress: number | null,
+): number | null {
+  if (control_progress == null || control_progress >= 0.25) return null;
+  const current = meritsToNextState(power_state, control_progress);
+  const safe    = meritsToNextState(power_state, 0.25);
+  return Math.max(0, safe.meritsEarned - current.meritsEarned);
+}
+
 /** State label for display */
 export const PP_STATE_LABELS: Record<string, string> = {
   Stronghold:   "Stronghold",
