@@ -229,6 +229,11 @@ def get_contested_systems(
     The staleness clause for NULL timestamps is built dynamically based on the
     admin setting so it can be toggled without redeployment.
     """
+    # Load weights for the contested_min_control_points threshold
+    from services.scoring import load_weights, DEFAULTS as SCORE_DEFAULTS
+    weights = load_weights(db)
+    MIN_CP = int(weights.get("contested_min_control_points", SCORE_DEFAULTS["contested_min_control_points"]))
+
     # Read the null-timestamp staleness setting
     null_ts_row = db.execute(
         text("SELECT value FROM admin_settings WHERE key = 'contested_null_ts_is_stale' LIMIT 1")
@@ -296,21 +301,23 @@ def get_contested_systems(
         if system is None:
             continue
 
-        # ── Condition 2b: selected power must have progress > 0 ──────────────
-        # Parse conflict_progress JSON and verify the power has merits there.
+        # ── Condition 2b: selected power must have ≥ 35,000 control points ──
+        # AND at least one other power must also have ≥ 35,000 control points.
+        # This ensures only "truly" contested systems with significant investment
+        # from both sides are shown.
         cp_str = snap["conflict_progress"] or ""
-        power_has_merits = False
+        qualifying_powers: list[str] = []
         if cp_str:
             try:
                 cp_entries = _json.loads(cp_str)
+                MIN_CP = int(weights.get("contested_min_control_points", 35000))
                 for entry in cp_entries:
-                    if isinstance(entry, dict) and entry.get("power") == name:
-                        if (entry.get("progress") or 0) > 0:
-                            power_has_merits = True
-                        break
+                    if isinstance(entry, dict) and (entry.get("progress") or 0) >= MIN_CP:
+                        qualifying_powers.append(entry.get("power", ""))
             except Exception:
                 pass
-        if not power_has_merits:
+        # System qualifies if selected power + at least 1 other are above threshold
+        if name not in qualifying_powers or len(qualifying_powers) < 2:
             continue
 
         sx, sy, sz = system.x or 0.0, system.y or 0.0, system.z or 0.0
@@ -501,22 +508,22 @@ def target_analysis(
         ORDER BY system_id, snapshot_time DESC
     """), {"attacker_pattern": f"%{attacker}%"}).mappings().all()
 
-    # Filter in Python: attacker must have progress > 0 in conflict_progress
+    # Filter in Python: attacker + at least 1 other must have ≥ MIN_CP control points
+    MIN_CP = int(w.get("contested_min_control_points", SCORING_DEFAULTS.get("contested_min_control_points", 35000)))
     contested_sys_ids: set[int] = set()
     contested_extra_snaps: dict[int, object] = {}
     for row in contested_snap_rows:
         cp_str = row["conflict_progress"] or ""
-        has_merits = False
+        qualifying_powers: list[str] = []
         if cp_str:
             try:
                 for entry in _json.loads(cp_str):
-                    if isinstance(entry, dict) and entry.get("power") == attacker:
-                        if (entry.get("progress") or 0) > 0:
-                            has_merits = True
-                        break
+                    if isinstance(entry, dict) and (entry.get("progress") or 0) >= MIN_CP:
+                        qualifying_powers.append(entry.get("power", ""))
             except Exception:
                 pass
-        if has_merits:
+        # System qualifies if attacker + at least 1 other are above threshold
+        if attacker in qualifying_powers and len(qualifying_powers) >= 2:
             contested_sys_ids.add(row["system_id"])
             contested_extra_snaps[row["system_id"]] = row
 

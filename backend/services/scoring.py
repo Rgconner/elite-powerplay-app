@@ -134,6 +134,12 @@ DEFAULTS: dict[str, float] = {
     "target_progress_medium":      0.50,  # ≤ this % → MEDIUM vulnerability
     # (above target_progress_medium → LOW)
 
+    # ── Contested / Acquisition thresholds ────────────────────────────────────
+    # Minimum control points (merits) required for a power to be considered
+    # an active participant in a contested system. All powers below this
+    # threshold are ignored when determining if a system is "truly" contested.
+    "contested_min_control_points": 35000.0,
+
     # ── Staleness — NULL spansh_updated_at behaviour ──────────────────────────
     # When "true" (default): rows where spansh_updated_at IS NULL are treated
     # as stale and excluded from Contested queries (strictest / spec-correct).
@@ -761,6 +767,8 @@ def compute_expand_scores(
     # Contested-expansion: Unoccupied + 2 or more powers + selected power present.
     # Stored during ingest with power_state='Contested' (our internal label) and
     # powers_list = comma-separated list of all contesting powers.
+    # Filter: selected power + at least 1 other must have ≥ MIN_CP control points.
+    MIN_CP = int(weights.get("contested_min_control_points", DEFAULTS.get("contested_min_control_points", 35000)))
     contested_exp_rows = db.execute(text(f"""
         SELECT DISTINCT ON (system_id)
                system_id, power, power_state,
@@ -774,8 +782,23 @@ def compute_expand_scores(
         ORDER BY system_id, snapshot_time DESC
     """), {"pattern": f"%{power_name}%"}).mappings().all()
 
-    contested_exp_sys_ids = [r["system_id"] for r in contested_exp_rows]
-    contested_exp_snaps   = {r["system_id"]: dict(r) for r in contested_exp_rows}
+    # Apply 35k threshold filter in Python
+    import json as _json
+    contested_exp_sys_ids = []
+    contested_exp_snaps   = {}
+    for r in contested_exp_rows:
+        cp_str = r.get("conflict_progress") or ""
+        qualifying: list[str] = []
+        if cp_str:
+            try:
+                for entry in _json.loads(cp_str):
+                    if isinstance(entry, dict) and (entry.get("progress") or 0) >= MIN_CP:
+                        qualifying.append(entry.get("power", ""))
+            except Exception:
+                pass
+        if power_name in qualifying and len(qualifying) >= 2:
+            contested_exp_sys_ids.append(r["system_id"])
+            contested_exp_snaps[r["system_id"]] = dict(r)
     contested_exp_objs    = {s.id: s for s in (
         db.query(PPSystem).filter(PPSystem.id.in_(contested_exp_sys_ids)).all()
         if contested_exp_sys_ids else []
