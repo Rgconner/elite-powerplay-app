@@ -776,7 +776,7 @@ def compute_expand_scores(
                snapshot_time, spansh_updated_at, conflict_progress,
                powers_list
         FROM pp_system_snapshots
-        WHERE power_state = 'Contested'
+        WHERE power_state IN ('Contested', 'Acquisition')
           AND powers_list ILIKE :pattern
           {_STALE}
         ORDER BY system_id, snapshot_time DESC
