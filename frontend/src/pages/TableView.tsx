@@ -465,14 +465,6 @@ export default function TableView() {
     return contestedSystems.filter(item => {
       const entries = parseConflictProgress(item);
 
-      // ── Acquisition gate: at least one power must be at ≥ 100% (≥ 120k merits) ──
-      // progress is normalised 0–1+ where 1.0 = 120k acquisition threshold.
-      // Systems where nobody has crossed the line yet are noise — hide them.
-      const maxProgress = entries.length > 0
-        ? Math.max(...entries.map(e => e.progress))
-        : (item.control_progress ?? 0);
-      if (maxProgress < 1.0) return false;
-
       // ── Selected-power gate: our power must be present in conflict_progress ──
       // powerName is the currently selected power; if not set, keep all.
       if (powerName) {
