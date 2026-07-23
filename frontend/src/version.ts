@@ -45,7 +45,13 @@
  *                      PowerMultiSelect (TargetAnalysis): pill color matches power brand.
  *                      Contest/expand progress bars: bars & labels use power brand color
  *                      instead of generic rotation palette.
+ *   2.0.0  2026-07-22  Stale data overhaul: filter relaxed 24h→7 days across all
+ *                      backend queries. Added ⚠ STALE badge with tooltip on cards.
+ *                      New POST /api/powers/refresh-stale endpoint for async refresh.
+ *                      Auto-refresh of stale systems on Target List load.
+ *                      Added refreshStaleSystems() API client.
+ *                      System list filter no longer hides systems with stale data.
  */
 
-export const FRONTEND_VERSION      = "1.8.0";
-export const FRONTEND_RELEASE_DATE = "2026-06-27T15:00:00Z";
+export const FRONTEND_VERSION      = "2.0.0";
+export const FRONTEND_RELEASE_DATE = "2026-07-23T00:00:00Z";

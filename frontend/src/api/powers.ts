@@ -46,3 +46,16 @@ export async function getPowerSystems(
   if (!res.ok) throw new Error(`Get power systems failed (${res.status})`);
   return res.json() as Promise<PPSystemEntry[]>;
 }
+
+/** Trigger an async refresh of stale Power Play data for the given systems.
+ * Returns immediately; the backend refreshes in the background.
+ * The frontend should re-fetch getPowerSystems() after a short delay. */
+export async function refreshStaleSystems(systemIds: number[]): Promise<{ status: string; count: number; message: string }> {
+  const res = await fetch("/api/powers/refresh-stale", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ system_ids: systemIds }),
+  });
+  if (!res.ok) throw new Error(`Refresh stale failed (${res.status})`);
+  return res.json();
+}

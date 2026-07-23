@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { getPowerSystems, PPSystemEntry } from "../api/powers";
+import { getPowerSystems, refreshStaleSystems, PPSystemEntry } from "../api/powers";
 import { useSelectionState } from "../hooks/useSelectionState";
 import PowerSelector from "../components/PowerSelector";
 import RefSystemSelector from "../components/RefSystemSelector";
@@ -17,7 +17,7 @@ import { netValue } from "../utils/decay";
 import { CP_DECAY_COLOR } from "../constants/ppColors";
 import {
   PPBadge, ProgressBar, TargetScoreBadge, MeritsCell,
-  PlatBadge, BoomBadge, PristBadge,
+  PlatBadge, BoomBadge, PristBadge, StaleBadge,
 } from "../components/SharedCells";
 import { getSpanshEnrichmentBatch, clearEnrichmentCache, SpanshEnrichment } from "../api/spansh";
 import { getAdminToken } from "../api/admin";
@@ -41,6 +41,7 @@ interface TargetRow {
   score: number;
   meritsRemaining: number;
   meritsNeeded: number;
+  snapshot_time: string | null;
 }
 
 interface SortSpec {
@@ -78,6 +79,16 @@ function cmp(a: unknown, b: unknown, dir: SortDir): number {
   return 0;
 }
 
+const STALE_THRESHOLD_DAYS = 7;
+
+function isStale(snapshotTime: string | null): boolean {
+  if (!snapshotTime) return false;
+  const snap = new Date(snapshotTime).getTime();
+  if (isNaN(snap)) return false;
+  const ageDays = (Date.now() - snap) / (1000 * 60 * 60 * 24);
+  return ageDays > STALE_THRESHOLD_DAYS;
+}
+
 // ── Main component ─────────────────────────────────────────────────────────
 
 export default function TargetListView() {
@@ -102,6 +113,9 @@ export default function TargetListView() {
   const [enriching,  setEnriching]  = useState(false);
   const [caching,    setCaching]    = useState(false);
 
+  // Stale refresh state
+  const [refreshing, setRefreshing] = useState(false);
+
   // Admin state — show cache management buttons only for logged-in admins
   const isAdmin = getAdminToken() !== null;
 
@@ -111,11 +125,34 @@ export default function TargetListView() {
     setLoading(true); setError(null);
     setEnrichment({});
     setEnriching(false);
+    setRefreshing(false);
     getPowerSystems(powerName, refSystem?.id)
       .then(setAllSystems)
       .catch(e => setError(String(e)))
       .finally(() => setLoading(false));
   }, [powerName, refSystem?.id]);
+
+  // Auto-refresh stale systems after they load
+  useEffect(() => {
+    if (!powerName || allSystems.length === 0) return;
+    const staleIds = allSystems
+      .filter(s => isStale(s.snapshot_time))
+      .map(s => s.system_id64);
+    if (staleIds.length === 0) return;
+
+    setRefreshing(true);
+    refreshStaleSystems(staleIds)
+      .then(() => {
+        // Wait a moment for background refresh, then re-fetch
+        setTimeout(() => {
+          getPowerSystems(powerName, refSystem?.id)
+            .then(setAllSystems)
+            .catch(() => {})
+            .finally(() => setRefreshing(false));
+        }, 3000);
+      })
+      .catch(() => setRefreshing(false));
+  }, [powerName, allSystems.length > 0 ? allSystems[0].system_id64 : null]);
 
   // Filter by system list (if any names are validated)
   const displaySystems = useMemo(() => {
@@ -153,6 +190,7 @@ export default function TargetListView() {
         score,
         meritsRemaining,
         meritsNeeded,
+        snapshot_time: sys.snapshot_time,
       };
     });
   }, [displaySystems]);
@@ -334,6 +372,13 @@ export default function TargetListView() {
             </span>
           )}
 
+          {/* Stale refresh status */}
+          {refreshing && (
+            <span style={{ marginLeft: 8, color: "#FF8C00", fontSize: 11 }}>
+              🔄 Refreshing stale data…
+            </span>
+          )}
+
           {/* Admin: cache management buttons */}
           {isAdmin && (
             <>
@@ -407,6 +452,7 @@ export default function TargetListView() {
             const hasPlat   = enc?.has_platinum ?? false;
             const hasBoom   = enc?.has_boom ?? false;
             const hasPrist  = enc?.has_pristine ?? false;
+            const stale     = isStale(row.snapshot_time);
 
             return (
               <div key={row.system_id64} style={{
@@ -429,6 +475,9 @@ href={`https://inara.cz/elite/starsystem/?search=${encodeURIComponent(row.name)}
                   >
                     {row.name}
                   </a>
+
+                  {/* Stale badge */}
+                  {stale && <StaleBadge snapshotTime={row.snapshot_time} />}
 
                   {/* PP State */}
                   <PPBadge state={row.power_state} />

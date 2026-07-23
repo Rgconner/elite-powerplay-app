@@ -110,7 +110,13 @@ Version history:
                      - k8s/image-updater.yaml uses least-privilege ServiceAccount
                        (only get/list/watch/patch on backend + frontend
                        Deployments, no cluster-wide access, no secrets).
+   2.0.0  2026-07-23  Stale data overhaul: filter relaxed 24h→7 days across all
+                     backend queries (powers.py, scoring.py). New POST
+                     /api/powers/refresh-stale endpoint for async targeted refresh
+                     of stale systems from Spansh. Frontend: ⚠ STALE badge with
+                     tooltip on cards, auto-refresh stale systems on Target List
+                     load, refreshStaleSystems() API client.
 """
 
-BACKEND_VERSION      = "1.9.0"
-BACKEND_RELEASE_DATE = "2026-07-22T17:52:00Z"
+BACKEND_VERSION      = "2.0.0"
+BACKEND_RELEASE_DATE = "2026-07-23T00:00:00Z"

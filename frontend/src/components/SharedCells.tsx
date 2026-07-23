@@ -216,6 +216,34 @@ export function TargetScoreBadge({ score }: { score: number }) {
   );
 }
 
+// ── Stale badge ────────────────────────────────────────────────────────────
+
+const STALE_THRESHOLD_DAYS = 7;
+
+export function StaleBadge({ snapshotTime }: { snapshotTime: string | null }) {
+  if (!snapshotTime) return null;
+
+  const now = Date.now();
+  const snap = new Date(snapshotTime).getTime();
+  if (isNaN(snap)) return null;
+
+  const ageDays = (now - snap) / (1000 * 60 * 60 * 24);
+  if (ageDays <= STALE_THRESHOLD_DAYS) return null;
+
+  return (
+    <span
+      title="This system's Power Play data is over 7 days old. Data may not reflect current game state. Click Refresh to update."
+      style={{
+        background: "#2d1a00", color: "#FF8C00", border: "1px solid #FF8C0044",
+        borderRadius: 3, padding: "1px 6px", fontSize: 10, fontWeight: 700,
+        cursor: "help",
+      }}
+    >
+      ⚠ STALE
+    </span>
+  );
+}
+
 // ── Merits cell ────────────────────────────────────────────────────────────
 
 export function MeritsCell({ merits }: { merits: number }) {

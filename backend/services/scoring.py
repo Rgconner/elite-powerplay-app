@@ -297,11 +297,11 @@ def get_latest_snapshots(db: Session) -> dict[int, dict]:
     """Return latest PP snapshot per pp_systems.id using DISTINCT ON.
 
     Staleness filter: exclude snapshots where Spansh's own updated_at is older
-    than 24 hours.  This prevents resolved systems (e.g. a formerly-contested
+    than 7 days.  This prevents resolved systems (e.g. a formerly-contested
     system that is now Exploited) from appearing stale in recommendations.
 
     Rows with NULL spansh_updated_at are only kept if their snapshot_time
-    is also recent (within 48 h), so pre-migration rows eventually age out
+    is also recent (within 7 days), so pre-migration rows eventually age out
     instead of persisting forever.
     """
     rows = db.execute(text("""
@@ -313,10 +313,10 @@ def get_latest_snapshots(db: Session) -> dict[int, dict]:
                cp_decay
         FROM pp_system_snapshots
         WHERE (
-            spansh_updated_at > NOW() - INTERVAL '24 hours'
+            spansh_updated_at > NOW() - INTERVAL '7 days'
             OR (
                 spansh_updated_at IS NULL
-                AND snapshot_time > NOW() - INTERVAL '48 hours'
+                AND snapshot_time > NOW() - INTERVAL '7 days'
             )
         )
         ORDER BY system_id, snapshot_time DESC
@@ -753,8 +753,8 @@ def compute_expand_scores(
     # query because the system may not be near the selected power's territory.
     _STALE = """
         AND (
-            spansh_updated_at > NOW() - INTERVAL '24 hours'
-            OR (spansh_updated_at IS NULL AND snapshot_time > NOW() - INTERVAL '48 hours')
+            spansh_updated_at > NOW() - INTERVAL '7 days'
+            OR (spansh_updated_at IS NULL AND snapshot_time > NOW() - INTERVAL '7 days')
         )
     """
 

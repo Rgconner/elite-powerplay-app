@@ -2,28 +2,33 @@
 
 import json as _json
 import math
+import time
+import logging
+from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, BackgroundTasks
+from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 # Staleness filter for all live data queries.
 # Uses Spansh's own updated_at field (authoritative game-data age).
+# Systems are considered stale if their data is older than 7 days.
 # Rows with NULL spansh_updated_at (ingested before the column was added)
-# are kept ONLY if snapshot_time is recent — so old pre-migration rows
+# are kept only if snapshot_time is recent — so old pre-migration rows
 # eventually age out rather than persisting forever as "valid".
 _STALE_FILTER = """
     AND (
-        spansh_updated_at > NOW() - INTERVAL '24 hours'
+        spansh_updated_at > NOW() - INTERVAL '7 days'
         OR (
             spansh_updated_at IS NULL
-            AND snapshot_time > NOW() - INTERVAL '48 hours'
+            AND snapshot_time > NOW() - INTERVAL '7 days'
         )
     )
 """
 
-from db.session import get_db
+from db.session import get_db, IngestSessionLocal
 from models.models import PPSystem, PPSystemSnapshot
 from models.schemas import (
     ContestedSystemInfo,
@@ -38,6 +43,8 @@ from models.schemas import (
 )
 from services.scoring import compute_recommendations, load_weights, DEFAULTS as SCORING_DEFAULTS
 from services.decay import effective_undermining as _eff_under
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/powers", tags=["powers"])
 
@@ -215,7 +222,7 @@ def get_contested_systems(
       1. power_state = 'Contested'
       2. The selected power appears in powers_list AND has progress > 0 in
          conflict_progress (i.e. has actually earned merits there).
-      3. Data is not stale (spansh_updated_at within 24 h, or within 48 h
+      3. Data is not stale (spansh_updated_at within 7 days, or within 7 days
          via snapshot_time when spansh_updated_at IS NULL — controlled by the
          'contested_null_ts_is_stale' admin setting).
 
@@ -230,7 +237,7 @@ def get_contested_systems(
 
     if null_ts_is_stale:
         # NULL timestamp → treat as stale: require spansh_updated_at to be present and fresh
-        stale_clause = "AND spansh_updated_at > NOW() - INTERVAL '24 hours'"
+        stale_clause = "AND spansh_updated_at > NOW() - INTERVAL '7 days'"
     else:
         # NULL timestamp → keep (legacy pre-migration rows)
         stale_clause = _STALE_FILTER
@@ -461,7 +468,7 @@ def target_analysis(
     #   1. power_state = 'Contested'  (not Acquisition or any other state)
     #   2. The attacker power is in powers_list AND has progress > 0
     #      in conflict_progress  (has actually earned merits there)
-    #   3. Data is fresh (spansh_updated_at within 24 h, or within 48 h via
+    #   3. Data is fresh (spansh_updated_at within 7 days, or within 7 days via
     #      snapshot_time when spansh_updated_at IS NULL per admin setting)
     #
     # Contested rows have power = NULL (set by ingestion), so they are NOT
@@ -477,7 +484,7 @@ def target_analysis(
     ).fetchone()
     null_ts_is_stale = (null_ts_row is None) or (null_ts_row[0].lower() not in ("false", "0", "no"))
     contested_stale_clause = (
-        "AND spansh_updated_at > NOW() - INTERVAL '24 hours'"
+        "AND spansh_updated_at > NOW() - INTERVAL '7 days'"
         if null_ts_is_stale else _STALE_FILTER
     )
 
@@ -699,6 +706,207 @@ def target_analysis(
 
 
 # ---------------------------------------------------------------------------
+# POST /api/powers/refresh-stale  — async refresh stale system data
+# ---------------------------------------------------------------------------
+
+
+class RefreshStaleRequest(BaseModel):
+    system_ids: list[int]
+
+
+class RefreshStaleResponse(BaseModel):
+    status: str
+    count: int
+    message: str
+
+
+def _refresh_stale_sync(system_ids: list[int]):
+    """Synchronous background task to refresh stale systems.
+    
+    Called via BackgroundTasks — runs in a separate thread with its own DB session.
+    Iterates over the requested systems, fetches fresh data from Spansh,
+    and inserts new snapshot rows.
+    """
+    db = IngestSessionLocal()
+    try:
+        from services.decay import compute_cp_decay, current_cycle_start
+        cycle = current_cycle_start()
+        count = 0
+
+        for sid in system_ids:
+            # Fetch from Spansh
+            system_obj = None
+            try:
+                import httpx
+                payload = {
+                    "filters": {"id64": {"value": [sid], "comparison": "="}},
+                    "size": 1,
+                    "page": 0,
+                }
+                resp = httpx.post(
+                    "https://spansh.co.uk/api/systems/search",
+                    json=payload,
+                    timeout=60,
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    results = data.get("results", [])
+                    if results:
+                        system_obj = results[0]
+            except Exception as e:
+                logger.warning("Refresh stale: Spansh fetch failed for system %d: %s", sid, e)
+                continue
+
+            if system_obj is None:
+                logger.warning("Refresh stale: no data returned for system %d", sid)
+                continue
+
+            # Parse fields (mirrors ingestion.py logic)
+            name: str = system_obj.get("name", "")
+            x = system_obj.get("x")
+            y = system_obj.get("y")
+            z = system_obj.get("z")
+            allegiance = system_obj.get("allegiance")
+            population = system_obj.get("population")
+            power_state = system_obj.get("power_state")
+            control_progress = system_obj.get("power_state_control_progress")
+            reinforcement = system_obj.get("power_state_reinforcement")
+            undermining = system_obj.get("power_state_undermining")
+
+            # Parse powers_list and conflict_progress
+            raw_power = system_obj.get("power")
+            if isinstance(raw_power, list) and raw_power:
+                powers_list = ",".join(str(p) for p in raw_power)
+            elif isinstance(raw_power, str) and raw_power:
+                powers_list = raw_power
+            else:
+                powers_list = None
+
+            raw_cp = system_obj.get("power_conflict_progress")
+            conflict_progress = _json.dumps(raw_cp) if raw_cp else None
+
+            # Parse spansh_updated_at
+            spansh_updated_at = None
+            raw_updated = system_obj.get("updated_at")
+            if raw_updated:
+                try:
+                    spansh_updated_at = datetime.fromisoformat(
+                        str(raw_updated).replace("+00", "+00:00")
+                    ).replace(tzinfo=None)
+                except Exception:
+                    pass
+
+            # Upsert pp_systems
+            sys_result = db.execute(
+                text("""
+                    INSERT INTO pp_systems (system_id64, name, x, y, z, allegiance, population)
+                    VALUES (:id64, :name, :x, :y, :z, :allegiance, :population)
+                    ON CONFLICT (system_id64) DO UPDATE
+                        SET name = EXCLUDED.name, x = EXCLUDED.x, y = EXCLUDED.y,
+                            z = EXCLUDED.z, allegiance = EXCLUDED.allegiance,
+                            population = EXCLUDED.population
+                    RETURNING id
+                """),
+                {"id64": sid, "name": name, "x": x, "y": y, "z": z,
+                 "allegiance": allegiance, "population": population},
+            )
+            system_db_id = sys_result.scalar_one()
+
+            # Find power name for this system (use existing snapshot's power)
+            power_row = db.execute(
+                text("""
+                    SELECT power FROM pp_system_snapshots
+                    WHERE system_id = :sid AND power IS NOT NULL
+                    ORDER BY snapshot_time DESC LIMIT 1
+                """),
+                {"sid": system_db_id},
+            ).fetchone()
+            power_name = power_row[0] if power_row else None
+
+            if power_name is None:
+                logger.warning("Refresh stale: no power found for system %d, skipping", sid)
+                continue
+
+            # Compute CP decay
+            cp_decay_val = compute_cp_decay(power_state, control_progress, undermining)
+
+            # Insert snapshot
+            db.execute(
+                text("""
+                    INSERT INTO pp_system_snapshots
+                        (system_id, ingestion_run_id, snapshot_time,
+                         spansh_updated_at, power, power_state, control_progress,
+                         reinforcement, undermining, powers_list, conflict_progress,
+                         cp_decay, decay_cycle_start)
+                    VALUES
+                        (:system_id, NULL, :now, :spansh_updated_at, :power, :power_state,
+                         :control_progress, :reinforcement, :undermining,
+                         :powers_list, :conflict_progress, :cp_decay, :decay_cycle_start)
+                """),
+                {
+                    "system_id": system_db_id,
+                    "now": datetime.utcnow(),
+                    "spansh_updated_at": spansh_updated_at,
+                    "power": power_name,
+                    "power_state": power_state,
+                    "control_progress": control_progress,
+                    "reinforcement": reinforcement,
+                    "undermining": undermining,
+                    "powers_list": powers_list,
+                    "conflict_progress": conflict_progress,
+                    "cp_decay": cp_decay_val,
+                    "decay_cycle_start": cycle,
+                },
+            )
+            count += 1
+
+            # Commit every system
+            db.commit()
+            time.sleep(0.25)  # rate limit: be polite to Spansh
+
+        logger.info("Refresh stale: refreshed %d / %d systems", count, len(system_ids))
+
+    except Exception:
+        logger.exception("Refresh stale background task failed")
+        db.rollback()
+    finally:
+        db.close()
+
+
+@router.post("/refresh-stale", response_model=RefreshStaleResponse)
+async def refresh_stale(
+    body: RefreshStaleRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+) -> RefreshStaleResponse:
+    """Trigger an async refresh of stale Power Play data for the given systems.
+    
+    Accepts a list of system_id64 values. Returns immediately with 202 Accepted,
+    while a background task fetches fresh data from Spansh and inserts new
+    snapshot rows. The frontend should re-fetch the power systems after a delay
+    to pick up the refreshed data.
+    """
+    ids = body.system_ids
+    if not ids:
+        return RefreshStaleResponse(
+            status="error", count=0,
+            message="No system IDs provided",
+        )
+
+    # Deduplicate
+    seen: set[int] = set()
+    unique_ids = [s for s in ids if not (s in seen or seen.add(s))]
+
+    background_tasks.add_task(_refresh_stale_sync, unique_ids)
+
+    return RefreshStaleResponse(
+        status="refreshing",
+        count=len(unique_ids),
+        message=f"Queued {len(unique_ids)} system(s) for async refresh from Spansh",
+    )
+
+
+# ---------------------------------------------------------------------------
 # GET /api/powers/{name}/expand-debug  — diagnostic: show expand candidates
 # ---------------------------------------------------------------------------
 
@@ -713,7 +921,7 @@ def expand_debug(
     """Diagnostic endpoint: return raw expand candidates for a power with full details.
 
     Returns systems that:
-      1. Have fresh Spansh data (spansh_updated_at < 24h, or snapshot_time < 48h for NULL)
+      1. Have fresh Spansh data (spansh_updated_at < 7 days, or snapshot_time < 7 days for NULL)
       2. Are Unoccupied (power_state = 'Unoccupied')
       3. Are within 20 LY of a Fortified system OR 30 LY of a Stronghold system
       4. Have merits_remaining <= merits_max (120,000 if unfiltered)
