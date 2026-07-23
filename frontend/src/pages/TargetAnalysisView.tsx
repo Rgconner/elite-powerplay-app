@@ -152,6 +152,28 @@ function Th({ col, label, sortKey, sortDir, onSort, width, title }: {
   );
 }
 
+// ── Sort button config ────────────────────────────────────────────────────
+
+interface SortOption {
+  col: string;
+  label: string;
+  title?: string;
+}
+
+const SORT_OPTIONS: SortOption[] = [
+  { col: "score",                label: "Score",      title: "Vulnerability score — higher = better undermine target" },
+  { col: "system_name",          label: "System" },
+  { col: "controlling_power",    label: "Owner" },
+  { col: "power_state",          label: "State" },
+  { col: "control_progress",     label: "Progress",   title: "Enemy control progress" },
+  { col: "days_to_downgrade",    label: "Days",       title: "Estimated days until state drops" },
+  { col: "reinforcement",        label: "Reinf." },
+  { col: "undermining",          label: "Underm." },
+  { col: "net",                  label: "Net R–U",    title: "Positive = enemy is reinforcing. Negative = already losing ground." },
+  { col: "distance_from_attacker", label: "Dist LY",  title: "Distance from your nearest controlled system." },
+  { col: "trend",                label: "Trend",      title: "Change in enemy progress. ↘ = falling (good for you)" },
+];
+
 // ── Power multi-select ─────────────────────────────────────────────────────
 
 function PowerMultiSelect({
@@ -677,6 +699,38 @@ export default function TargetAnalysisView() {
         </div>
       )}
 
+      {/* ── Sort bar — pill-style column buttons ───────────────────────── */}
+      {sorted.length > 0 && (
+        <div style={{
+          display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center",
+          marginBottom: 10, fontSize: 11,
+        }}>
+          <span style={{ color: "#57606a", fontWeight: 600, marginRight: 4, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            Sort:
+          </span>
+          {SORT_OPTIONS.map(opt => {
+            const active = sortKey === opt.col;
+            return (
+              <button
+                key={opt.col}
+                onClick={() => handleSort(opt.col)}
+                title={opt.title}
+                style={{
+                  padding: "4px 10px", fontSize: 11, borderRadius: 4,
+                  cursor: "pointer", border: active ? "1px solid #58a6ff" : "1px solid #30363d",
+                  background: active ? "#051d2c" : "#161b22",
+                  color: active ? "#58a6ff" : "#8b949e",
+                  fontWeight: active ? 700 : 400,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {opt.label} {active ? (sortDir === "asc" ? "↑" : "↓") : ""}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* ── Empty state ───────────────────────────────────────────────────── */}
       {!loading && results.length === 0 && !error && (
         <p style={{ color: "#8b949e", fontSize: 14, marginTop: 8 }}>
@@ -686,131 +740,99 @@ export default function TargetAnalysisView() {
         </p>
       )}
 
-      {/* ── Results table ─────────────────────────────────────────────────── */}
+      {/* ── Results grid — 3-column pill cards ───────────────────────────── */}
       {sorted.length > 0 && (
-        <div style={{ overflowX: "auto", borderRadius: 8, border: "1px solid #30363d" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-            <thead>
-              <tr>
-                <Th col="score"                label="Score"        sortKey={sortKey} sortDir={sortDir} onSort={handleSort} width={90}
-                    title="Vulnerability score — higher = better undermine target" />
-                <Th col="system_name"          label="System"       sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                <Th col="controlling_power"    label="Owner"        sortKey={sortKey} sortDir={sortDir} onSort={handleSort} width={160} />
-                <Th col="power_state"          label="State"        sortKey={sortKey} sortDir={sortDir} onSort={handleSort} width={140} />
-                <Th col="control_progress"     label="Progress"     sortKey={sortKey} sortDir={sortDir} onSort={handleSort} width={110}
-                    title={`Enemy control progress. Red=CRITICAL (≤${thresholds.critical}%), Orange=HIGH (≤${thresholds.high}%), Yellow=MEDIUM (≤${thresholds.medium}%)`} />
-                <Th col="days_to_downgrade"    label="Days"         sortKey={sortKey} sortDir={sortDir} onSort={handleSort} width={65}
-                    title="Estimated days until state drops at current undermine rate." />
-                <Th col="reinforcement"        label="Reinf."       sortKey={sortKey} sortDir={sortDir} onSort={handleSort} width={85} />
-                <Th col="undermining"          label="Underm."      sortKey={sortKey} sortDir={sortDir} onSort={handleSort} width={85} />
-                <Th col="net"                  label="Net R–U"      sortKey={sortKey} sortDir={sortDir} onSort={handleSort} width={85}
-                    title="Positive = enemy is reinforcing. Negative = already losing ground." />
-                <Th col="distance_from_attacker" label="Dist LY"   sortKey={sortKey} sortDir={sortDir} onSort={handleSort} width={75}
-                    title="Distance from your nearest controlled system." />
-                <Th col="trend"                label="Trend"        sortKey={sortKey} sortDir={sortDir} onSort={handleSort} width={55}
-                    title="Change in enemy progress. ↘ = falling (good for you)" />
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((item, i) => {
-                const r   = item.reinforcement ?? 0;
-                const u   = item.undermining   ?? 0;
-                const net = netValue(r, u, item.cp_decay);
+        <div style={{
+          display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8,
+        }}>
+          {sorted.map((item) => {
+            const r   = item.reinforcement ?? 0;
+            const u   = item.undermining   ?? 0;
+            const net = netValue(r, u, item.cp_decay);
 
-                // Row tinting: contested = orange glow, highest threat = red glow
-                const rowBg = item.contested    ? "#1a1000"
-                            : item.score >= 1200 ? "#1a0000"
-                            : item.score >= 900  ? "#150c00"
-                            : i % 2 === 0 ? "#0d1117" : "#161b22";
+            // Card background tint by threat tier
+            const cardBg = item.contested    ? "#1a1000"
+                         : item.score >= 1200 ? "#1a0000"
+                         : item.score >= 900  ? "#150c00"
+                         : "#0d1117";
 
-                return (
-                  <tr key={item.system_id64} style={{ background: rowBg }}>
-                    {/* Score + threat band */}
-                    <td style={{ padding: "8px 10px" }}>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                        <ThreatBand score={item.score} />
-                        <span style={{ fontSize: 11, color: "#8b949e", paddingLeft: 1 }}>
-                          {item.score.toFixed(0)}
-                        </span>
-                      </div>
-                    </td>
+            return (
+              <div key={item.system_id64} style={{
+                padding: "10px 14px", borderRadius: 8,
+                border: "1px solid #30363d",
+                background: cardBg,
+                display: "flex", flexDirection: "column", gap: 6,
+              }}>
+                {/* ── Header row: ThreatBand + Score + System + Enrichment ── */}
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  <ThreatBand score={item.score} />
+                  <span style={{ fontSize: 11, color: "#8b949e", fontWeight: 600 }}>
+                    {item.score.toFixed(0)}
+                  </span>
+                  <a
+                    href={`https://inara.cz/elite/starsystem/?search=${encodeURIComponent(item.system_name)}`}
+                    target="_blank" rel="noreferrer"
+                    style={{ color: "#58a6ff", textDecoration: "none", fontWeight: 600, fontSize: 13, flex: 1 }}
+                  >
+                    {item.system_name}
+                  </a>
+                  {enrichment[item.system_id64]?.has_platinum && <PlatBadge />}
+                  {enrichment[item.system_id64]?.has_boom && <BoomBadge />}
+                  {enrichment[item.system_id64]?.has_pristine && <PristBadge />}
+                </div>
 
-                    {/* System name + reasons tooltip */}
-                    <td style={{ padding: "8px 10px", whiteSpace: "nowrap" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                        <a
-href={`https://inara.cz/elite/starsystem/?search=${encodeURIComponent(item.system_name)}`}
-                          target="_blank" rel="noreferrer"
-                          style={{ color: "#58a6ff", textDecoration: "none", fontWeight: 500 }}
-                        >
-                          {item.system_name}
-                        </a>
-                        {/* Enrichment badges */}
-                        {enrichment[item.system_id64]?.has_platinum && <PlatBadge />}
-                        {enrichment[item.system_id64]?.has_boom && <BoomBadge />}
-                        {enrichment[item.system_id64]?.has_pristine && <PristBadge />}
-                      </div>
-                      <div style={{ fontSize: 11, color: "#8b949e", marginTop: 2, lineHeight: 1.4 }}>
-                        {item.reasons.map((r, idx) => <span key={idx}>{r}<br /></span>)}
-                      </div>
-                    </td>
+                {/* ── Owner + State + Contested + Trend ──────────────────── */}
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 12, color: "#8b949e" }}>
+                    {item.controlling_power ?? "Unknown"}
+                  </span>
+                  <PPBadge state={item.power_state} />
+                  {item.contested && <ContestedBadge />}
+                  <TrendArrow trend={item.trend} />
+                </div>
 
-                    {/* Controlling power */}
-                    <td style={{ padding: "8px 10px", color: "#8b949e", fontSize: 12, whiteSpace: "nowrap" }}>
-                      {item.controlling_power ?? "Unknown"}
-                    </td>
+                {/* ── Progress bar ────────────────────────────────────────── */}
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ flex: 1 }}>
+                    <ProgressBar value={item.control_progress} thresholds={activeThr} />
+                  </div>
+                  <DaysCell days={item.days_to_downgrade} />
+                </div>
 
-                    {/* State badge + contested badge */}
-                    <td style={{ padding: "8px 10px" }}>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                        <PPBadge state={item.power_state} />
-                        {item.contested && <ContestedBadge />}
-                      </div>
-                    </td>
+                {/* ── Stats row ───────────────────────────────────────────── */}
+                <div style={{
+                  display: "flex", gap: 12, fontSize: 11, color: "#8b949e",
+                  flexWrap: "wrap", alignItems: "center",
+                }}>
+                  <span>
+                    Reinf: <strong style={{ color: "#4AD94A" }}>{r > 0 ? r.toLocaleString() : "—"}</strong>
+                  </span>
+                  <span>
+                    Underm: <strong style={{ color: u > r ? "#D94A4A" : u > 0 ? "#D9A84A" : "#555" }}>
+                      {u > 0 ? u.toLocaleString() : "—"}
+                    </strong>
+                  </span>
+                  {(r > 0 || u > 0) && (
+                    <span>
+                      Net: <strong style={{ color: net < 0 ? "#4AD94A" : net > 0 ? "#D94A4A" : "#8b949e" }}>
+                        {net >= 0 ? "+" : ""}{net.toLocaleString()}
+                      </strong>
+                    </span>
+                  )}
+                  {item.distance_from_attacker != null && (
+                    <span>
+                      📍 {item.distance_from_attacker.toFixed(1)} LY
+                    </span>
+                  )}
+                </div>
 
-                    {/* Progress bar (threshold-aware) */}
-                    <td style={{ padding: "8px 10px" }}>
-                      <ProgressBar value={item.control_progress} thresholds={activeThr} />
-                    </td>
-
-                    {/* Days to downgrade */}
-                    <td style={{ padding: "8px 10px", textAlign: "center" }}>
-                      <DaysCell days={item.days_to_downgrade} />
-                    </td>
-
-                    {/* Reinforcement */}
-                    <td style={{ padding: "8px 10px", textAlign: "right", color: "#4AD94A", fontVariantNumeric: "tabular-nums" }}>
-                      {r > 0 ? r.toLocaleString() : <span style={{ color: "#555" }}>—</span>}
-                    </td>
-
-                    {/* Undermining */}
-                    <td style={{ padding: "8px 10px", textAlign: "right", color: u > r ? "#D94A4A" : u > 0 ? "#D9A84A" : "#555", fontVariantNumeric: "tabular-nums" }}>
-                      {u > 0 ? u.toLocaleString() : <span style={{ color: "#555" }}>—</span>}
-                    </td>
-
-                    {/* Net R–U — for enemy: negative = we are winning */}
-                    <td style={{ padding: "8px 10px", textAlign: "right", color: net < 0 ? "#4AD94A" : net > 0 ? "#D94A4A" : "#8b949e", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
-                      {(r > 0 || u > 0)
-                        ? <>{net >= 0 ? "+" : ""}{net.toLocaleString()}</>
-                        : <span style={{ color: "#555" }}>—</span>}
-                    </td>
-
-                    {/* Distance */}
-                    <td style={{ padding: "8px 10px", textAlign: "right", color: item.distance_from_attacker != null && item.distance_from_attacker <= 10 ? "#FF8C00" : "#8b949e" }}>
-                      {item.distance_from_attacker != null
-                        ? `${item.distance_from_attacker.toFixed(1)}`
-                        : "—"}
-                    </td>
-
-                    {/* Trend */}
-                    <td style={{ padding: "8px 10px", textAlign: "center" }}>
-                      <TrendArrow trend={item.trend} />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                {/* ── Reasons ─────────────────────────────────────────────── */}
+                <div style={{ fontSize: 11, color: "#8b949e", lineHeight: 1.4 }}>
+                  {item.reasons.map((r, idx) => <span key={idx}>{r}<br /></span>)}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

@@ -380,9 +380,11 @@ export default function TargetListView() {
         </p>
       )}
 
-      {/* ── Pill cards ───────────────────────────────────────────────────── */}
+      {/* ── Pill cards — 3-column grid ──────────────────────────────────── */}
       {sorted.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{
+          display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8,
+        }}>
           {sorted.map((row) => {
             const r   = row.reinforcement ?? 0;
             const u   = row.undermining   ?? 0;
