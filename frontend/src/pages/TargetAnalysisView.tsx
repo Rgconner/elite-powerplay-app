@@ -131,27 +131,6 @@ function TrendArrow({ trend }: { trend: string }) {
   return <span style={{ color: "#444" }}>—</span>;
 }
 
-function Th({ col, label, sortKey, sortDir, onSort, width, title }: {
-  col: string; label: string; sortKey: string; sortDir: SortDir;
-  onSort: (k: string) => void; width?: number; title?: string;
-}) {
-  const active = col === sortKey;
-  return (
-    <th onClick={() => onSort(col)} title={title} style={{
-      padding: "10px 10px", textAlign: "left", fontSize: 11, fontWeight: 700,
-      color: active ? "#e6edf3" : "#8b949e", textTransform: "uppercase",
-      letterSpacing: "0.05em", cursor: "pointer", whiteSpace: "nowrap",
-      background: "#161b22", borderBottom: "2px solid #30363d", width,
-      userSelect: "none",
-    }}>
-      {label}
-      <span style={{ marginLeft: 3, opacity: active ? 1 : 0.3 }}>
-        {active ? (sortDir === "asc" ? "↑" : "↓") : "↕"}
-      </span>
-    </th>
-  );
-}
-
 // ── Sort button config ────────────────────────────────────────────────────
 
 interface SortOption {
