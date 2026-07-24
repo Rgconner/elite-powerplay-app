@@ -58,5 +58,5 @@
  *                      Spansh + EDDN data. EST badge shows live CP estimates.
  */
 
-export const FRONTEND_VERSION      = "2.1.0";
-export const FRONTEND_RELEASE_DATE = "2026-07-24T00:00:00Z";
+export const FRONTEND_VERSION      = "2.1.1";
+export const FRONTEND_RELEASE_DATE = "2026-07-24T12:00:00Z";

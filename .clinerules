@@ -5,12 +5,23 @@
 - Increment `FRONTEND_VERSION` for frontend changes, `BACKEND_VERSION` for backend changes.
 - Follow semantic versioning: bump the patch version (e.g., 1.8.1 → 1.8.2) for bug fixes and minor improvements.
 
-## Data hygine
+## Data hygiene
 - When making changes to variables or data structures, do a second sweep to ensure there are no declared but unread values.
 
-## Code Hygine
+## Code hygiene
 
-- When replacing code, ensure that code has not been "orphaned" because it cannot be called by the program. 
+- When replacing code, ensure that code has not been "orphaned" because it cannot be called by the program.
+
+## Verification — mandatory pre-completion checklist
+
+Before concluding any task (including using attempt_completion), run through:
+
+- [ ] Run `npm run typecheck` (frontend) to verify zero TypeScript errors
+- [ ] Search for every new variable, import, interface, and function you added and confirm it is read/used somewhere (use search_files with the symbol name)
+- [ ] If you deleted or renamed something, confirm no other file references the old name
+- [ ] Verify no declared-but-unread values exist (check for unused state variables, unused imports, unused interfaces)
+- [ ] Update `.version` file if code changed
+- [ ] Update `backend/architecture/schema.json` if services/tables/endpoints changed
 
 ## Architecture Schema
 
