@@ -32,6 +32,7 @@ export interface ServiceStatus {
   completed_at?: string;
   records_processed?: number;
   total_events?: number;
+  row_count?: number;
   latest_event?: string;
   active_pairs?: number;
   latest_refresh?: string;
