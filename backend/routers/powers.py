@@ -1081,3 +1081,133 @@ def get_system_history(
         )
         for r in rows
     ]
+
+
+# ---------------------------------------------------------------------------
+# GET /api/powers/{name}/realtime  — blended Spansh + EDDN realtime data
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{name}/realtime")
+def get_power_realtime(
+    name: str,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Return effective (blended) values: Spansh base + EDDN realtime deltas.
+    
+    For each system under this power's influence, returns:
+    - Standard Spansh snapshot fields (reinforcement, undermining, control_progress)
+    - Realtime delta fields (merits_since_spansh, cp_since_spansh)
+    - Effective totals (effective_reinforcement, effective_undermining)
+    - Live flag indicating whether realtime data is present
+    
+    The realtime data comes from pp_realtime_state table, which is updated
+    every 60 seconds by the realtime_accumulator service.
+    """
+    # Get latest Spansh snapshots for this power
+    latest_sql = text(f"""
+        SELECT DISTINCT ON (system_id)
+               system_id, power, power_state,
+               reinforcement, undermining, control_progress,
+               snapshot_time, spansh_updated_at
+        FROM pp_system_snapshots
+        WHERE power = :power
+        {_STALE_FILTER}
+        ORDER BY system_id, snapshot_time DESC
+    """)
+    snap_rows = db.execute(latest_sql, {"power": name}).mappings().all()
+    
+    if not snap_rows:
+        return {"systems": [], "total_live_systems": 0}
+    
+    system_ids = [r["system_id"] for r in snap_rows]
+    snap_by_id = {r["system_id"]: r for r in snap_rows}
+    
+    # Get system details
+    systems = db.query(PPSystem).filter(PPSystem.id.in_(system_ids)).all()
+    sys_by_id = {s.id: s for s in systems}
+    
+    # Get realtime state for all these systems
+    realtime_rows = db.execute(
+        text("""
+            SELECT system_id64, merits_since_ts, cp_since_ts,
+                   cp_as_reinforcement, cp_as_undermining,
+                   latest_event_ts, refreshed_at
+            FROM pp_realtime_state
+            WHERE power = :power
+              AND system_id64 = ANY(:system_id64s)
+        """),
+        {
+            "power": name,
+            "system_id64s": [s.system_id64 for s in systems],
+        },
+    ).mappings().all()
+    
+    realtime_by_id64 = {r["system_id64"]: r for r in realtime_rows}
+    
+    # Build response
+    results = []
+    total_live = 0
+    
+    for sid, snap in snap_by_id.items():
+        system = sys_by_id.get(sid)
+        if system is None:
+            continue
+        
+        # Base Spansh values
+        base_reinforcement = snap["reinforcement"] or 0
+        base_undermining = snap["undermining"] or 0
+        base_control_progress = snap["control_progress"] or 0.0
+        
+        # Realtime delta (if available)
+        realtime = realtime_by_id64.get(system.system_id64)
+        
+        if realtime and realtime["merits_since_ts"] > 0:
+            # Has live data
+            cp_reinforcement = float(realtime["cp_as_reinforcement"] or 0)
+            cp_undermining = float(realtime["cp_as_undermining"] or 0)
+            
+            effective_reinforcement = base_reinforcement + cp_reinforcement
+            effective_undermining = base_undermining + cp_undermining
+            
+            # Recompute control_progress with effective values
+            # This is a simplified calculation — full logic would use scoring.py
+            net_cp = effective_reinforcement - effective_undermining
+            effective_control_progress = max(0.0, base_control_progress + (net_cp / 1000.0))
+            
+            is_live = True
+            total_live += 1
+        else:
+            # No live data
+            effective_reinforcement = base_reinforcement
+            effective_undermining = base_undermining
+            effective_control_progress = base_control_progress
+            is_live = False
+            cp_reinforcement = 0.0
+            cp_undermining = 0.0
+        
+        results.append({
+            "system_id64": system.system_id64,
+            "name": system.name,
+            "power_state": snap["power_state"],
+            "base_reinforcement": base_reinforcement,
+            "base_undermining": base_undermining,
+            "base_control_progress": base_control_progress,
+            "realtime": {
+                "merits_since_spansh": realtime["merits_since_ts"] if realtime else 0,
+                "cp_since_spansh": float(realtime["cp_since_ts"]) if realtime else 0.0,
+                "cp_as_reinforcement": cp_reinforcement,
+                "cp_as_undermining": cp_undermining,
+                "latest_event_at": realtime["latest_event_ts"].isoformat() if realtime and realtime["latest_event_ts"] else None,
+                "refreshed_at": realtime["refreshed_at"].isoformat() if realtime and realtime["refreshed_at"] else None,
+            } if realtime else None,
+            "effective_reinforcement": effective_reinforcement,
+            "effective_undermining": effective_undermining,
+            "effective_control_progress": effective_control_progress,
+            "is_live": is_live,
+        })
+    
+    return {
+        "systems": results,
+        "total_live_systems": total_live,
+    }

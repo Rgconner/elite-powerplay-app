@@ -623,7 +623,24 @@ def compute_fortify_scores(
     snapshots: dict[int, dict],
     db: Session,
     weights: dict[str, float],
+    realtime_state: Optional[dict[int, dict]] = None,
 ) -> list[RecommendationItem]:
+    """Compute fortify urgency scores for power systems.
+    
+    Args:
+        power_name: Name of the power
+        center_coords: Optional (x, y, z) coordinates for distance calculations
+        power_systems: List of PPSystem objects for this power
+        snapshots: Dict mapping system_id to latest snapshot data
+        db: Database session
+        weights: Scoring weights from admin_settings
+        realtime_state: Optional dict mapping system_id64 to realtime CP deltas.
+                       When provided, effective values (base + realtime) are used
+                       for reinforcement, undermining, and control_progress.
+    
+    Returns:
+        List of RecommendationItem sorted by score (highest urgency first)
+    """
     items: list[RecommendationItem] = []
     fw = weights.get("fortify_weight", 1.0)
 
@@ -635,6 +652,23 @@ def compute_fortify_scores(
         control_progress  = snap.get("control_progress")
         snapshot_time     = snap.get("snapshot_time")   # datetime of the snapshot
         cp_decay_val      = snap.get("cp_decay")
+        
+        # Apply realtime deltas if available
+        if realtime_state and system.system_id64 in realtime_state:
+            rt = realtime_state[system.system_id64]
+            if rt.get("merits_since_ts", 0) > 0:
+                # Add realtime CPs to base values
+                cp_reinforcement = float(rt.get("cp_as_reinforcement", 0))
+                cp_undermining = float(rt.get("cp_as_undermining", 0))
+                
+                reinforcement = (reinforcement or 0) + cp_reinforcement
+                undermining = (undermining or 0) + cp_undermining
+                
+                # Recompute control_progress with effective values
+                # Simplified: adjust based on net CP change
+                net_cp = cp_reinforcement - cp_undermining
+                base_progress = control_progress or 0.0
+                control_progress = max(0.0, base_progress + (net_cp / 1000.0))
 
         trend, daily_delta = get_progress_trend(system.id, db)
 

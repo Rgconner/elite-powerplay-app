@@ -5,6 +5,7 @@ import {
 } from "../api/admin";
 import { FRONTEND_VERSION, FRONTEND_RELEASE_DATE } from "../version";
 import { clearEnrichmentCache, validateEnrichment, getEnrichStatus, type ValidateResponse, type EnrichStatus } from "../api/spansh";
+import ArchitecturePage from "./ArchitecturePage";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface IngestionRun {
@@ -172,6 +173,7 @@ export default function AdminPage({ onClose }: Props) {
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(!!getAdminToken());
+  const [showArchitecture, setShowArchitecture] = useState(false);
 
   const [appVersion, setAppVersion] = useState<AppVersion | null>(null);
   const [status, setStatus] = useState<AdminStatus | null>(null);
@@ -437,6 +439,27 @@ export default function AdminPage({ onClose }: Props) {
     );
   }
 
+  // ── Architecture view ───────────────────────────────────────────────────────
+  if (showArchitecture) {
+    return (
+      <div style={{ position: "fixed", inset: 0, background: "#0d1117", zIndex: 9999 }}>
+        <div style={{ position: "absolute", top: 12, right: 12, zIndex: 10000 }}>
+          <button
+            onClick={() => setShowArchitecture(false)}
+            style={{
+              padding: "8px 16px", fontSize: 13, fontWeight: 600,
+              background: "#21262d", color: "#e6edf3", border: "1px solid #30363d",
+              borderRadius: 6, cursor: "pointer",
+            }}
+          >
+            ← Back to Admin
+          </button>
+        </div>
+        <ArchitecturePage />
+      </div>
+    );
+  }
+
   // ── Admin panel ─────────────────────────────────────────────────────────────
   return (
     <div style={{ padding: "20px 24px", fontFamily: '-apple-system, "Segoe UI", system-ui, sans-serif', color: "#1f2328", maxWidth: 900 }}>
@@ -446,6 +469,17 @@ export default function AdminPage({ onClose }: Props) {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
         <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>Admin Panel</h2>
         <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={() => setShowArchitecture(true)}
+            style={{
+              padding: "6px 14px", fontSize: 13, fontWeight: 600,
+              background: "#1a3a7a", color: "#fff", border: "1px solid #1a3a7a",
+              borderRadius: 6, cursor: "pointer",
+            }}
+            title="View system architecture diagram"
+          >
+            🏗 Architecture
+          </button>
           <button onClick={loadData} style={{ padding: "6px 14px", fontSize: 13, border: "1px solid #e5e7eb", borderRadius: 6, cursor: "pointer", background: "#f7f8fa" }}>
             Refresh
           </button>

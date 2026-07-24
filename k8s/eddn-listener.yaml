@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eddn-listener
+  namespace: powerplay
+  labels:
+    app: eddn-listener
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: eddn-listener
+  template:
+    metadata:
+      labels:
+        app: eddn-listener
+    spec:
+      containers:
+      - name: eddn-listener
+        image: ghcr.io/rgconner/elite-powerplay-eddn-listener:latest
+        imagePullPolicy: Always
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: powerplay-secrets
+              key: database-url
+        - name: EDDN_RELAY_URL
+          value: "tcp://eddn.edcd.io:9500"
+        - name: EDDN_SCHEMA_URL
+          value: "https://eddn.edcd.io/schemas/journal/1"
+        - name: TARGET_EVENT
+          value: "PowerplayMerits"
+        - name: LOG_LEVEL
+          value: "INFO"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - "ps aux | grep -v grep | grep python"
+          initialDelaySeconds: 30
+          periodSeconds: 60
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - "ps aux | grep -v grep | grep python"
+          initialDelaySeconds: 10
+          periodSeconds: 30
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: eddn-listener
+  namespace: powerplay
+  labels:
+    app: eddn-listener
+spec:
+  selector:
+    app: eddn-listener
+  ports:
+  - name: metrics
+    port: 8080
+    targetPort: 8080
+  type: ClusterIP

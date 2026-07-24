@@ -59,3 +59,37 @@ export async function refreshStaleSystems(systemIds: number[]): Promise<{ status
   if (!res.ok) throw new Error(`Refresh stale failed (${res.status})`);
   return res.json();
 }
+
+/** Realtime system data from EDDN ZeroMQ stream */
+export interface RealtimeSystemData {
+  system_id64: number;
+  name: string;
+  power_state: string | null;
+  base_reinforcement: number;
+  base_undermining: number;
+  base_control_progress: number;
+  realtime: {
+    merits_since_spansh: number;
+    cp_since_spansh: number;
+    cp_as_reinforcement: number;
+    cp_as_undermining: number;
+    latest_event_at: string | null;
+    refreshed_at: string | null;
+  } | null;
+  effective_reinforcement: number;
+  effective_undermining: number;
+  effective_control_progress: number;
+  is_live: boolean;
+}
+
+export interface RealtimeResponse {
+  systems: RealtimeSystemData[];
+  total_live_systems: number;
+}
+
+/** Get realtime Power Play data blended with Spansh snapshots */
+export async function getPowerRealtime(powerName: string): Promise<RealtimeResponse> {
+  const res = await fetch(`/api/powers/${encodeURIComponent(powerName)}/realtime`);
+  if (!res.ok) throw new Error(`Get power realtime failed (${res.status})`);
+  return res.json() as Promise<RealtimeResponse>;
+}

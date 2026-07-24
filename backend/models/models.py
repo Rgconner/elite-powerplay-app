@@ -14,11 +14,13 @@ from datetime import datetime
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     Column,
     DateTime,
     Float,
     ForeignKey,
     Integer,
+    Numeric,
     String,
     func,
 )
@@ -180,3 +182,83 @@ class AdminUser(Base):
     email = Column(String(255), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
     created_at = Column(DateTime, default=func.now(), nullable=False)
+
+
+# ---------------------------------------------------------------------------
+# pp_powerplay_events — raw EDDN PowerplayMerits events (insert-only)
+# ---------------------------------------------------------------------------
+
+
+class PpPowerplayEvent(Base):
+    """
+    Raw PowerplayMerits events received from the EDDN ZeroMQ stream.
+
+    Each row represents a single player merit-earning event.  Insert-only —
+    never updated.  Deduplicated by message_id (EDDN header.messageID).
+
+    The EDDN journal/1 schema forwards all journal events; we filter on
+    event == "PowerplayMerits" in the listener service.
+
+    Fields from the ED journal event:
+      Power       — power name (e.g. "A. Lavigny-Duval")
+      System      — system name
+      Merits      — raw merits earned (always positive)
+      StarSystem  — system name (EDDN-required field)
+      SystemAddress — system id64 (EDDN-required field)
+      StarPos     — [x, y, z] coordinates (EDDN-required field)
+    """
+
+    __tablename__ = "pp_powerplay_events"
+
+    id = Column(BigInteger, primary_key=True, index=True)
+    message_id = Column(String(64), unique=True, nullable=False, index=True)
+    uploader_id = Column(String(64), nullable=True)
+    event_timestamp = Column(DateTime, nullable=False, index=True)
+    gateway_ts = Column(DateTime, nullable=True)
+    ingested_at = Column(DateTime, default=func.now(), nullable=False)
+    schema_ref = Column(String(128), nullable=True)
+    power = Column(String(128), nullable=False, index=True)
+    system_name = Column(String(255), nullable=False, index=True)
+    system_id64 = Column(BigInteger, nullable=True, index=True)
+    merits = Column(Integer, nullable=False)
+    star_pos_x = Column(Float, nullable=True)
+    star_pos_y = Column(Float, nullable=True)
+    star_pos_z = Column(Float, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint("merits > 0", name="ck_ppe_merits_positive"),
+    )
+
+
+# ---------------------------------------------------------------------------
+# pp_realtime_state — accumulated real-time CP deltas (UPSERTed every 60s)
+# ---------------------------------------------------------------------------
+
+
+class PpRealtimeState(Base):
+    """
+    Accumulated real-time control point deltas per (power, system).
+
+    Updated every 60 seconds by the realtime_accumulator service.
+    Stores the sum of EDDN merits received since the last Spansh snapshot
+    boundary, converted to CPs at a 4:1 ratio.
+
+    Orientation logic (simplified):
+      - If event_power == controlling_power → CPs add to reinforcement
+      - If event_power != controlling_power → CPs add to undermining
+      - If no controlling_power → CPs add to reinforcement (all powers)
+    """
+
+    __tablename__ = "pp_realtime_state"
+
+    power = Column(String(128), primary_key=True)
+    system_id64 = Column(BigInteger, primary_key=True)
+    controlling_power = Column(String(128), nullable=True)
+    state_at_boundary = Column(String(32), nullable=True)
+    boundary_ts = Column(DateTime, nullable=False)
+    merits_since_ts = Column(Integer, nullable=False, default=0)
+    cp_since_ts = Column(Numeric(12, 2), nullable=False, default=0)
+    cp_as_reinforcement = Column(Numeric(12, 2), nullable=False, default=0)
+    cp_as_undermining = Column(Numeric(12, 2), nullable=False, default=0)
+    latest_event_ts = Column(DateTime, nullable=True)
+    refreshed_at = Column(DateTime, default=func.now(), nullable=False)

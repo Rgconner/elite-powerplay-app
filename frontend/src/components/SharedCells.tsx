@@ -258,3 +258,30 @@ export function MeritsCell({ merits }: { merits: number }) {
     </span>
   );
 }
+
+// ── Live Estimate badge (EST) ──────────────────────────────────────────────
+
+export function LiveEstBadge({ cpDelta, meritsDelta }: { cpDelta: number; meritsDelta: number }) {
+  if (cpDelta <= 0 && meritsDelta <= 0) return null;
+  
+  const tooltip = `Live Estimate (EDDN): +${meritsDelta.toLocaleString()} merits (+${cpDelta.toFixed(1)} CP) since last Spansh sync. These arrive via player merit reports on the EDDN ZeroMQ stream. Values are blended with the last known Spansh snapshot for a more current view.`;
+  
+  return (
+    <span
+      title={tooltip}
+      style={{
+        background: "#0d2e17",
+        color: "#4AD94A",
+        border: "1px solid #4AD94A44",
+        borderRadius: 3,
+        padding: "1px 6px",
+        fontSize: 10,
+        fontWeight: 700,
+        cursor: "help",
+        marginLeft: 4,
+      }}
+    >
+      EST +{cpDelta.toFixed(0)} CP
+    </span>
+  );
+}

@@ -110,13 +110,25 @@ Version history:
                      - k8s/image-updater.yaml uses least-privilege ServiceAccount
                        (only get/list/watch/patch on backend + frontend
                        Deployments, no cluster-wide access, no secrets).
-   2.0.0  2026-07-23  Stale data overhaul: filter relaxed 24h→7 days across all
-                     backend queries (powers.py, scoring.py). New POST
-                     /api/powers/refresh-stale endpoint for async targeted refresh
-                     of stale systems from Spansh. Frontend: ⚠ STALE badge with
-                     tooltip on cards, auto-refresh stale systems on Target List
-                     load, refreshStaleSystems() API client.
-"""
+    2.0.0  2026-07-23  Stale data overhaul: filter relaxed 24h→7 days across all
+                      backend queries (powers.py, scoring.py). New POST
+                      /api/powers/refresh-stale endpoint for async targeted refresh
+                      of stale systems from Spansh. Frontend: ⚠ STALE badge with
+                      tooltip on cards, auto-refresh stale systems on Target List
+                      load, refreshStaleSystems() API client.
+    2.1.0  2026-07-24  EDDN real-time integration:
+                      - New pp_powerplay_events table (insert-only raw event store)
+                      - New pp_realtime_state table (accumulated CP deltas per power/system)
+                      - EDDN listener service (eddn-listener/) — isolated k8s deployment
+                        subscribing to EDDN ZeroMQ relay, filtering PowerplayMerits events
+                      - Realtime accumulator service (60s APScheduler job) — aggregates
+                        EDDN events into CP deltas at 4:1 ratio, determines orientation
+                        (reinforcement vs undermining) based on controlling power
+                      - GET /api/powers/{name}/realtime endpoint — blended Spansh + EDDN data
+                      - Architecture router (admin-only) — schema/status/validate endpoints
+                      - Architecture schema JSON (backend/architecture/schema.json)
+                      - Scoring engine accepts optional realtime_state parameter
+ """
 
-BACKEND_VERSION      = "2.0.0"
-BACKEND_RELEASE_DATE = "2026-07-23T00:00:00Z"
+BACKEND_VERSION      = "2.1.0"
+BACKEND_RELEASE_DATE = "2026-07-24T00:00:00Z"

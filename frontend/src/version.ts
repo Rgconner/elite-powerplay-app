@@ -51,7 +51,12 @@
  *                      Auto-refresh of stale systems on Target List load.
  *                      Added refreshStaleSystems() API client.
  *                      System list filter no longer hides systems with stale data.
+ *   2.1.0  2026-07-24  EDDN real-time integration: Added LiveEstBadge component
+ *                      for displaying real-time CP deltas from EDDN ZeroMQ stream.
+ *                      Architecture visualization page (admin-only) with D3 graph.
+ *                      Realtime endpoint GET /api/powers/{name}/realtime for blended
+ *                      Spansh + EDDN data. EST badge shows live CP estimates.
  */
 
-export const FRONTEND_VERSION      = "2.0.0";
-export const FRONTEND_RELEASE_DATE = "2026-07-23T00:00:00Z";
+export const FRONTEND_VERSION      = "2.1.0";
+export const FRONTEND_RELEASE_DATE = "2026-07-24T00:00:00Z";

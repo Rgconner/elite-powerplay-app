@@ -11,3 +11,9 @@
 ## Code Hygine
 
 - When replacing code, ensure that code has not been "orphaned" because it cannot be called by the program. 
+
+## Architecture Schema
+
+- When adding, removing, or modifying services, tables, endpoints, or data flows, update `backend/architecture/schema.json` to reflect the changes.
+- Bump the `version` field and update `last_updated` when making schema changes.
+- The architecture visualization page (admin-only) renders this schema as an interactive D3 graph.

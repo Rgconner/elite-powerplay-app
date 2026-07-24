@@ -11,6 +11,8 @@ import SystemListInput from "../components/SystemListInput";
 import RecommendationPanel from "../components/RecommendationPanel";
 import { useFilterSettings, FILTER_DEFAULTS } from "../hooks/useFilterSettings";
 import { getSpanshEnrichmentBatch, SpanshEnrichment } from "../api/spansh";
+import { getPowerRealtime, RealtimeSystemData } from "../api/powers";
+import { LiveEstBadge } from "../components/SharedCells";
 
 // ── PP Cycle clock helpers ─────────────────────────────────────────────────
 // Cycles reset every Thursday at 07:00 UTC
@@ -302,6 +304,9 @@ export default function TableView() {
   const [enrichment, setEnrichment] = useState<Record<number, SpanshEnrichment>>({});
   const [enriching,  setEnriching]  = useState(false);
 
+  // Realtime state: map system_id64 → RealtimeSystemData
+  const [realtimeData, setRealtimeData] = useState<Record<number, RealtimeSystemData>>({});
+
   // Centralised filter settings with optional cookie persistence
   const { settings, saveEnabled, setSaveEnabled, set: setFilter } = useFilterSettings();
   const { expandMinProgress, contestedMaxGap } = settings;
@@ -376,6 +381,18 @@ export default function TableView() {
       .catch(() => console.warn("Spansh enrichment fetch failed on Overview"))
       .finally(() => setEnriching(false));
   }, [systems]);
+
+  // Fetch realtime data (EDDN blended values) for the selected power
+  useEffect(() => {
+    if (!powerName) { setRealtimeData({}); return; }
+    getPowerRealtime(powerName)
+      .then(response => {
+        const map: Record<number, RealtimeSystemData> = {};
+        response.systems.forEach(sys => { map[sys.system_id64] = sys; });
+        setRealtimeData(map);
+      })
+      .catch(() => console.warn("Realtime data fetch failed"))
+  }, [powerName]);
 
   // Default sort: by control_progress ascending (most at-risk first) when no ref;
   // by distance ascending when a reference system is selected.

@@ -19,16 +19,13 @@ namespace: elite-powerplay
 resources:
   - namespace.yaml
   - configmap.yaml
-  - postgres-config.yaml   # Tier 4 — custom postgresql.conf for the QueuePool fix
+  - postgres-config.yaml    # Custom postgresql.conf
   - postgres.yaml
   - backend.yaml
   - frontend.yaml
   - image-updater.yaml
-  # ── Choose ONE ingress method ─────────────────────────────────────────────
-  # Option A: Cloudflare Tunnel (recommended — no LoadBalancer / open ports)
-  - cloudflare-tunnel.yaml
-  # Option B: nginx-ingress controller
-  # - ingress.yaml
+  - eddn-listener.yaml      # EDDN ZeroMQ subscriber (isolated deployment)
+  - ingress.yaml            # nginx-ingress controller (replaces Cloudflare Tunnel)
 
 # ── Image tags ────────────────────────────────────────────────────────────────
 # Override the :latest tag here to pin to a specific build SHA.
@@ -48,4 +45,6 @@ images:
   # image-updater pulls its own image from the registry at runtime — no
   # override needed; the controller itself owns its update cycle.
   - name: ghcr.io/rgconner/elite-powerplay-image-updater
+    newTag: latest
+  - name: ghcr.io/rgconner/elite-powerplay-eddn-listener
     newTag: latest
