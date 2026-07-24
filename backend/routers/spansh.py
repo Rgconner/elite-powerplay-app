@@ -114,10 +114,13 @@ async def _fetch_body(body_id64: int) -> dict | None:
 
 def _check_body_for_platinum(body: dict) -> bool:
     """
-    Check a single body (unwrapped) for a Platinum signal.
+    Check a single body (unwrapped) for a Platinum signal in a metallic ring.
 
     Platinum is found in the ring signals:
       rings[].signals[]  →  each entry is a dict with { name: str, count: int }
+
+    Only metallic rings are checked — icy/rocky rings with platinum signals
+    are excluded (PLAT badge requires both platinum AND metallic ring type).
 
     Confirmed via Spansh API (July 2026):
       GET /api/body/{id64}  →  body.rings[].signals[]
@@ -131,6 +134,9 @@ def _check_body_for_platinum(body: dict) -> bool:
     try:
         rings = body.get("rings") or []
         for ring in rings:
+            ring_type = (ring.get("type") or "").lower()
+            if ring_type != "metallic":
+                continue
             ring_signals = ring.get("signals") or []
             for sig in ring_signals:
                 if isinstance(sig, dict) and sig.get("name", "").lower() == "platinum":

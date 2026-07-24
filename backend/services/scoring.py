@@ -169,9 +169,12 @@ MERIT_ACQUIRE    = 120_000   # cumulative merits to acquire (Unoccupied → Expl
 MERIT_FORTIFIED  = 333_000   # cumulative merits for Fortified
 MERIT_STRONGHOLD = 667_000   # cumulative merits for Stronghold
 
-# Minimum control points (merits) for a power to be considered an active
-# participant in a contested system.  This is a fixed game constant (PP2.0).
-CONTESTED_MIN_CONTROL_POINTS: int = 35_000
+# Minimum control points for a power to be considered an active participant
+# in a contested system.  This is a fixed game constant (PP2.0).
+# Spansh's conflict_progress field is a NORMALIZED FRACTION (0.0–1.0+),
+# where 1.0 = 120,000 merits (acquisition threshold).
+# 35,000 merits / 120,000 = 0.2917
+CONTESTED_MIN_CONTROL_POINTS: float = 35_000 / 120_000  # ≈ 0.2917
 
 # Band widths — merits between downgrade and upgrade thresholds per state
 BAND_EXPLOITED   = MERIT_FORTIFIED  - MERIT_ACQUIRE    # 213,000
@@ -779,7 +782,7 @@ def compute_expand_scores(
         ORDER BY system_id, snapshot_time DESC
     """), {"pattern": f"%{power_name}%"}).mappings().all()
 
-    # Apply 35k threshold filter in Python
+    # Apply CONTESTED_MIN_CONTROL_POINTS (≈0.2917) threshold filter in Python
     import json as _json
     contested_exp_sys_ids = []
     contested_exp_snaps   = {}

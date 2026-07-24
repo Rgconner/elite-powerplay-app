@@ -119,10 +119,14 @@ export function DaysCell({ days }: { days: number | null | undefined }) {
 
 export function PlatBadge() {
   return (
-    <span style={{
-      background: "#0d2e17", color: "#4AD94A", border: "1px solid #4AD94A44",
-      borderRadius: 3, padding: "1px 6px", fontSize: 10, fontWeight: 700,
-    }}>
+    <span
+      title="Platinum signal in a metallic ring"
+      style={{
+        background: "#0d2e17", color: "#4AD94A", border: "1px solid #4AD94A44",
+        borderRadius: 3, padding: "1px 6px", fontSize: 10, fontWeight: 700,
+        cursor: "help",
+      }}
+    >
       🪨 PLAT
     </span>
   );
