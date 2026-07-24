@@ -2,7 +2,7 @@ FROM python:3.13-slim
 
 WORKDIR /app
 
-# Install OS packages needed by psycopg2 and pyzmq
+# Install OS packages needed by psycopg3 and pyzmq
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
         libpq-dev \

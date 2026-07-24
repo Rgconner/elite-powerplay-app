@@ -29,7 +29,14 @@ logging.basicConfig(
 logger = logging.getLogger("eddn-listener")
 
 # Database connection
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/powerplay")
+# Normalize the DB URL to use psycopg3 (psycopg[binary]) instead of psycopg2.
+# The k8s secret may provide postgresql:// or postgresql+psycopg2://
+_raw_url = os.getenv("DATABASE_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/powerplay")
+DATABASE_URL = _raw_url.replace(
+    "postgresql://", "postgresql+psycopg://", 1
+).replace(
+    "postgresql+psycopg2://", "postgresql+psycopg://", 1
+)
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine)
 
