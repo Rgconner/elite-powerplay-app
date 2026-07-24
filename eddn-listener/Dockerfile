@@ -5,10 +5,6 @@ WORKDIR /app
 # Install OS packages needed by psycopg2 and pyzmq
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
-        g++ \
-        make \
-        pkg-config \
-        python3-dev \
         libpq-dev \
         libzmq3-dev \
     && rm -rf /var/lib/apt/lists/*
