@@ -24,7 +24,7 @@ spec:
           valueFrom:
             secretKeyRef:
               name: elite-powerplay-secrets
-            key: database-url
+              key: database-url
         - name: EDDN_RELAY_URL
           value: "tcp://eddn.edcd.io:9500"
         - name: EDDN_SCHEMA_URL
