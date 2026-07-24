@@ -2,19 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import * as d3 from "d3";
 import { getArchitectureSchema, getArchitectureStatus, type ArchitectureSchema, type ArchitectureStatus } from "../api/architecture";
 
-interface NodeStatus {
-  status?: string;
-  last_run?: string;
-  completed_at?: string;
-  records_processed?: number;
-  total_events?: number;
-  latest_event?: string;
-  active_pairs?: number;
-  latest_refresh?: string;
-  row_count?: number;
-  error?: string;
-}
-
 export default function ArchitecturePage() {
   const svgRef = useRef<SVGSVGElement>(null);
   const [schema, setSchema] = useState<ArchitectureSchema | null>(null);
