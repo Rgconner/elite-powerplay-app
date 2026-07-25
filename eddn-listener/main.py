@@ -192,7 +192,9 @@ def main():
             try:
                 # Receive message with timeout
                 if socket.poll(timeout=1000):  # 1 second timeout
-                    raw_message = socket.recv()
+                    # EDDN sends multipart messages: [topic_frame, json_frame]
+                    frames = socket.recv_multipart()
+                    raw_message = frames[-1]  # Last frame is the JSON payload
                     message = json.loads(raw_message.decode("utf-8"))
 
                     # Process the message
@@ -208,6 +210,10 @@ def main():
                 logger.error("ZMQ error: %s. Retrying in %d seconds...", e, retry_delay)
                 time.sleep(retry_delay)
                 retry_delay = min(retry_delay * 2, RETRY_DELAY_MAX)
+
+            except UnicodeDecodeError as e:
+                logger.warning("Failed to decode message as UTF-8: %s", e)
+                continue
 
             except json.JSONDecodeError as e:
                 logger.warning("Failed to decode JSON message: %s", e)
