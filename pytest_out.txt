@@ -1,0 +1,48 @@
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0 -- /mnt/c/Users/rgcon/.git/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /mnt/c/Users/rgcon/.git
+configfile: pyproject.toml
+plugins: cov-7.1.0
+collecting ... collected 6 items
+
+tests/test_api.py::test_healthz ERROR                                    [ 16%]
+tests/test_api.py::test_dashboard_renders ERROR                          [ 33%]
+tests/test_api.py::test_list_pins ERROR                                  [ 50%]
+tests/test_api.py::test_toggle_pin_in_mock_mode ERROR                    [ 66%]
+tests/test_api.py::test_create_and_list_job ERROR                        [ 83%]
+tests/test_api.py::test_settings_get_put ERROR                           [100%]
+
+==================================== ERRORS ====================================
+________________________ ERROR at setup of test_healthz ________________________
+/mnt/c/Users/rgcon/.git/tests/test_api.py:42: in client
+    from visinsp.actions import reset_action_registry
+E   ImportError: cannot import name 'reset_action_registry' from 'visinsp.actions' (/mnt/c/Users/rgcon/.git/src/visinsp/actions/__init__.py)
+___________________ ERROR at setup of test_dashboard_renders ___________________
+/mnt/c/Users/rgcon/.git/tests/test_api.py:42: in client
+    from visinsp.actions import reset_action_registry
+E   ImportError: cannot import name 'reset_action_registry' from 'visinsp.actions' (/mnt/c/Users/rgcon/.git/src/visinsp/actions/__init__.py)
+_______________________ ERROR at setup of test_list_pins _______________________
+/mnt/c/Users/rgcon/.git/tests/test_api.py:42: in client
+    from visinsp.actions import reset_action_registry
+E   ImportError: cannot import name 'reset_action_registry' from 'visinsp.actions' (/mnt/c/Users/rgcon/.git/src/visinsp/actions/__init__.py)
+________________ ERROR at setup of test_toggle_pin_in_mock_mode ________________
+/mnt/c/Users/rgcon/.git/tests/test_api.py:42: in client
+    from visinsp.actions import reset_action_registry
+E   ImportError: cannot import name 'reset_action_registry' from 'visinsp.actions' (/mnt/c/Users/rgcon/.git/src/visinsp/actions/__init__.py)
+__________________ ERROR at setup of test_create_and_list_job __________________
+/mnt/c/Users/rgcon/.git/tests/test_api.py:42: in client
+    from visinsp.actions import reset_action_registry
+E   ImportError: cannot import name 'reset_action_registry' from 'visinsp.actions' (/mnt/c/Users/rgcon/.git/src/visinsp/actions/__init__.py)
+___________________ ERROR at setup of test_settings_get_put ____________________
+/mnt/c/Users/rgcon/.git/tests/test_api.py:42: in client
+    from visinsp.actions import reset_action_registry
+E   ImportError: cannot import name 'reset_action_registry' from 'visinsp.actions' (/mnt/c/Users/rgcon/.git/src/visinsp/actions/__init__.py)
+=========================== short test summary info ============================
+ERROR tests/test_api.py::test_healthz - ImportError: cannot import name 'reset_action_registry' from 'visinsp.actions' (/mnt/c/Users/rgcon/.git/src/visinsp/actions/__init__.py)
+ERROR tests/test_api.py::test_dashboard_renders - ImportError: cannot import name 'reset_action_registry' from 'visinsp.actions' (/mnt/c/Users/rgcon/.git/src/visinsp/actions/__init__.py)
+ERROR tests/test_api.py::test_list_pins - ImportError: cannot import name 'reset_action_registry' from 'visinsp.actions' (/mnt/c/Users/rgcon/.git/src/visinsp/actions/__init__.py)
+ERROR tests/test_api.py::test_toggle_pin_in_mock_mode - ImportError: cannot import name 'reset_action_registry' from 'visinsp.actions' (/mnt/c/Users/rgcon/.git/src/visinsp/actions/__init__.py)
+ERROR tests/test_api.py::test_create_and_list_job - ImportError: cannot import name 'reset_action_registry' from 'visinsp.actions' (/mnt/c/Users/rgcon/.git/src/visinsp/actions/__init__.py)
+ERROR tests/test_api.py::test_settings_get_put - ImportError: cannot import name 'reset_action_registry' from 'visinsp.actions' (/mnt/c/Users/rgcon/.git/src/visinsp/actions/__init__.py)
+============================== 6 errors in 2.58s ===============================

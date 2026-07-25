@@ -71,7 +71,7 @@ _SCHEMA: List[str] = [
     )
     """,
     """
-    CREATE TABLE IF NOT EXISTS references (
+    CREATE TABLE IF NOT EXISTS "references" (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         camera_id TEXT NOT NULL,
@@ -92,7 +92,7 @@ _SCHEMA: List[str] = [
         h INTEGER NOT NULL,
         label TEXT DEFAULT '',
         weight REAL NOT NULL DEFAULT 1.0,
-        FOREIGN KEY (reference_id) REFERENCES references(id) ON DELETE CASCADE
+        FOREIGN KEY (reference_id) REFERENCES "references"(id) ON DELETE CASCADE
     )
     """,
     """
@@ -109,7 +109,7 @@ _SCHEMA: List[str] = [
         notes TEXT DEFAULT '',
         created_at TEXT,
         updated_at TEXT,
-        FOREIGN KEY (reference_id) REFERENCES references(id) ON DELETE RESTRICT
+        FOREIGN KEY (reference_id) REFERENCES "references"(id) ON DELETE RESTRICT
     )
     """,
     """
@@ -351,7 +351,7 @@ class StateStore:
             try:
                 conn.execute(
                     """
-                    INSERT INTO references(id, name, camera_id, image_path, width, height, created_at, notes)
+                    INSERT INTO "references"(id, name, camera_id, image_path, width, height, created_at, notes)
                     VALUES(?,?,?,?,?,?,?,?)
                     ON CONFLICT(id) DO UPDATE SET
                         name=excluded.name,
@@ -388,11 +388,11 @@ class StateStore:
 
     def delete_reference(self, ref_id: str) -> None:
         with self._lock, self._connect() as conn:
-            conn.execute("DELETE FROM references WHERE id = ?", (ref_id,))
+            conn.execute('DELETE FROM "references" WHERE id = ?', (ref_id,))
 
     def get_reference(self, ref_id: str) -> Optional[ReferenceImage]:
         with self._lock, self._connect() as conn:
-            row = conn.execute("SELECT * FROM references WHERE id = ?", (ref_id,)).fetchone()
+            row = conn.execute('SELECT * FROM "references" WHERE id = ?', (ref_id,)).fetchone()
             if not row:
                 return None
             bbox_rows = conn.execute(
@@ -424,7 +424,7 @@ class StateStore:
 
     def list_references(self) -> List[ReferenceImage]:
         with self._lock, self._connect() as conn:
-            rows = conn.execute("SELECT id FROM references ORDER BY created_at DESC, id").fetchall()
+            rows = conn.execute('SELECT id FROM "references" ORDER BY created_at DESC, id').fetchall()
             return [self.get_reference(r["id"]) for r in rows if self.get_reference(r["id"])]
 
     # ---- jobs ----
