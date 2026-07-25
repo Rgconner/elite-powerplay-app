@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, type CSSProperties } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, type CSSProperties } from "react";
 import { getTargetAnalysis, TargetAnalysisItem } from "../api/targeting";
 import { netValue } from "../utils/decay";
 import { meritsToSafety } from "../utils/scoring";
@@ -313,6 +313,12 @@ export default function TargetAnalysisView() {
   // as the "live" reference for progress bar colouring
   const [liveThresholds, setLiveThresholds] = useState(DEFAULT_THRESHOLDS);
   const [showThresholds, setShowThresholds] = useState(false);
+  // Track whether the user has manually edited the sliders so we don't
+  // clobber their edits when the backend response arrives.
+  const thresholdsEdited = useRef(false);
+
+  // Progress-band quick filter — declared here so runAnalysis can reset it
+  const [progressFilter, setProgressFilter] = useState<"all"|"critical"|"high"|"medium">("all");
 
   // Load power list on mount
   useEffect(() => {
@@ -326,12 +332,15 @@ export default function TargetAnalysisView() {
     setLoading(true);
     setError(null);
     setResults([]);
+    setProgressFilter("all");
     getTargetAnalysis(attackerPower, targetPowers)
       .then(r => {
         // Slice client-side by maxTargets (backend uses its own DB setting;
         // this gives immediate feedback without a re-query)
         setResults(r.targets.slice(0, maxTargets));
-        // Adopt backend thresholds as live reference
+        // Adopt backend thresholds as live reference.
+        // Only seed the user-facing thresholds on the very first run (before
+        // the user has touched the sliders); afterwards preserve their edits.
         if (r.progress_thresholds) {
           const t = r.progress_thresholds;
           const live = {
@@ -340,7 +349,7 @@ export default function TargetAnalysisView() {
             medium:   Math.round(t.medium   * 100),
           };
           setLiveThresholds(live);
-          setThresholds(live);
+          if (!thresholdsEdited.current) setThresholds(live);
         }
       })
       .catch(e => setError(String(e)))
@@ -367,7 +376,6 @@ export default function TargetAnalysisView() {
 
   // Additional client-side progress filter using local threshold sliders
   // (allows user to quickly narrow results without re-querying)
-  const [progressFilter, setProgressFilter] = useState<"all"|"critical"|"high"|"medium">("all");
   const filteredByProgress = useMemo(() => {
     if (progressFilter === "all") return filtered;
     return filtered.filter(item => {
@@ -524,7 +532,7 @@ export default function TargetAnalysisView() {
               label="🔴 Critical — near collapse"
               color="#FF4444"
               value={thresholds.critical}
-              onChange={v => setThresholds(t => ({ ...t, critical: v }))}
+              onChange={v => { thresholdsEdited.current = true; setThresholds(t => ({ ...t, critical: v })); }}
               max={thresholds.high - 1}
               defaultValue={liveThresholds.critical}
             />
@@ -532,7 +540,7 @@ export default function TargetAnalysisView() {
               label="🟠 High vulnerability"
               color="#FF8C00"
               value={thresholds.high}
-              onChange={v => setThresholds(t => ({ ...t, high: v }))}
+              onChange={v => { thresholdsEdited.current = true; setThresholds(t => ({ ...t, high: v })); }}
               min={thresholds.critical + 1}
               max={thresholds.medium - 1}
               defaultValue={liveThresholds.high}
@@ -541,7 +549,7 @@ export default function TargetAnalysisView() {
               label="🟡 Medium vulnerability"
               color="#D9A84A"
               value={thresholds.medium}
-              onChange={v => setThresholds(t => ({ ...t, medium: v }))}
+              onChange={v => { thresholdsEdited.current = true; setThresholds(t => ({ ...t, medium: v })); }}
               min={thresholds.high + 1}
               defaultValue={liveThresholds.medium}
             />
