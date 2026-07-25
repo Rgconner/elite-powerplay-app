@@ -1,21 +1,26 @@
 # image-updater — auto-roll controller for the elite-powerplay-app stack
 
 A small in-cluster Python controller that watches **GitHub Container Registry**
-(`ghcr.io`) for new image tags and patches the two Kubernetes Deployments
-(`backend` and `frontend`) to roll forward.
+(`ghcr.io`) for a new image digest on the `:latest` tag and patches the two
+Kubernetes Deployments (`backend` and `frontend`) to roll forward.
 
 It is intentionally minimal: no GitOps framework, no CRDs, no
-operator-sdk — just a 200-line Python loop with a namespace-scoped
+operator-sdk — just a ~400-line Python loop with a namespace-scoped
 ServiceAccount.  The whole point is to remove the manual `kubectl set
 image` step after every CI run.
 
-## Why not just use `:latest`?
+## Tag strategy — why `:latest` and not `sha-*`
 
-We tried that.  The problem is timing: if the backend gets a new image
-first, the new API contract is live before the frontend's UI catches up
-— and vice versa.  Pinning to `sha-<short>` tags also gives us a real
-audit trail (`kubectl rollout history` shows the exact git SHA that
-each pod ran).
+The original implementation sorted `sha-*` tags lexicographically on the hex
+portion of the short SHA.  This is **not** time-ordered — `sha-fd8e0b1` sorts
+higher than `sha-3fca1e9` (f > 3) but was built months earlier.  The controller
+was therefore permanently stuck rolling to an old image.
+
+`:latest` is re-pointed to the newest image by every successful CI run via
+`docker/metadata-action` (`type=raw,value=latest`).  It is the canonical
+"current production image".  We compare the **config blob digest** of `:latest`
+against the digest embedded in the running Deployment's image ref — a
+byte-for-byte equality check that cannot be fooled by tag moves.
 
 ## How it works
 
@@ -24,14 +29,15 @@ each pod ran).
 │  elite-powerplay namespace                                   │
 │                                                              │
 │  ┌─────────────────────┐   every 60s                          │
-│  │ image-updater pod   │ ◀──── ghcr.io /tags/list (anonymous) │
+│  │ image-updater pod   │ ◀── ghcr.io :latest digest (PAT)    │
 │  │                     │                                       │
-│  │ compare current SHA │   if drift detected:                  │
-│  │ vs latest SHA tag   │                                       │
+│  │ compare config      │   if digest differs:                  │
+│  │ digest vs running   │                                       │
 │  │                     │   1. patch backend Deployment         │
 │  │                     │   2. wait for rollout complete        │
 │  │                     │   3. GET /api/admin/version until it  │
-│  │                     │      returns the OCI label version    │
+│  │                     │      returns the `backend_version`    │
+│  │                     │      label value from the new image   │
 │  │                     │   4. patch frontend Deployment        │
 │  │                     │   5. wait for rollout complete        │
 │  └─────────────────────┘                                       │
@@ -57,8 +63,10 @@ The fix is a version gate:
    `updated_replicas == replicas`, `available_replicas == replicas`.
 3. **Confirm the new version is live**: poll
    `GET http://backend:8000/api/admin/version` until the
-   `backend_version` field matches the `org.opencontainers.image.version`
-   label on the new image (read from the ghcr.io manifest).
+   `backend_version` field matches the `backend_version` **label** on
+   the new image (read from the ghcr.io config blob).  Note: this label
+   is distinct from `org.opencontainers.image.version`, which is always
+   overwritten to `"main"` by `docker/metadata-action`.
 4. **Only then** roll the frontend.
 
 If any step times out, the **whole reconcile aborts** and is retried
@@ -82,30 +90,43 @@ trying to avoid.
 ## Build-time version labels
 
 The docker-publish workflow extracts `BACKEND_VERSION` and
-`BACKEND_RELEASE_DATE` from `backend/version.py` and `FRONTEND_VERSION`
-from the `.version` file at the repo root, then passes them to the
-Dockerfiles as build-args.  Each Dockerfile stamps them as OCI image
-labels:
+`BACKEND_RELEASE_DATE` from `backend/version.py` and passes them to the
+backend Dockerfile as build-args.  The Dockerfile stamps `BACKEND_VERSION`
+as a custom `backend_version` label (lowercase, app-scoped):
 
 ```dockerfile
-LABEL org.opencontainers.image.version="${BACKEND_VERSION}" \
-      org.opencontainers.image.revision="${VCS_REF}" \
-      org.opencontainers.image.created="${BACKEND_RELEASE_DATE}"
+LABEL org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.created="${BACKEND_RELEASE_DATE}" \
+      backend_version="${BACKEND_VERSION}"
 ```
 
-The image-updater reads these labels via the ghcr.io `/v2/.../manifests/<tag>`
-endpoint — no GitHub PAT required, anonymous token works for public repos.
+**Why not `org.opencontainers.image.version`?**  `docker/metadata-action`
+unconditionally overwrites that label with the branch name (`"main"`), so it
+can never carry the semver string.  The `backend_version` label is set by the
+`LABEL` instruction *before* the workflow's `labels:` input takes effect — but
+since OCI annotations from `metadata-action` also use the same key, the custom
+label is used instead.
+
+The image-updater fetches labels via the ghcr.io v2 API using a PAT
+(`GITHUB_TOKEN` env var from the `image-updater-ghcr-token` Secret).
+Anonymous tokens work for tag listing but are unreliable for OCI index and
+blob fetches; the PAT prevents rate-limiting errors.
 
 ## Deploying
 
 ```bash
-# Build & push the controller image (CI does this on push to main):
+# 1. Create the PAT secret (one-time, before first apply):
+kubectl create secret generic image-updater-ghcr-token \
+  --namespace elite-powerplay \
+  --from-literal=GITHUB_TOKEN=<PAT-with-read:packages>
+
+# 2. Build & push the controller image (CI does this on push to main):
 docker buildx build --push \
     -t ghcr.io/rgconner/elite-powerplay-image-updater:latest \
     -f image-updater/Dockerfile image-updater/
 
-# Apply to the cluster:
-kubectl apply -f k8s/image-updater.yaml
+# 3. Apply to the cluster:
+kubectl apply -f k8s/base/image-updater.yaml
 
 # Or via kustomize (already added to kustomization.yaml):
 kubectl apply -k k8s/
@@ -120,23 +141,23 @@ kubectl -n elite-powerplay logs -f deploy/image-updater
 You should see something like:
 
 ```
-image-updater starting: namespace=elite-powerplay registry=ghcr.io owner=rgconner poll=60s
-backend already on sha-5483e57 — no action
-frontend already on sha-5483e57 — no action
+image-updater starting: namespace=elite-powerplay registry=ghcr.io owner=rgconner poll=60s auth=PAT
+Backend already on latest digest (sha256:5f099e031d00d77b) — no action
+Frontend already on latest digest (sha256:32a202dd20417b8b) — no action
 ```
 
-When a new SHA is pushed, you'll see:
+When a new image is pushed to `:latest`, you'll see:
 
 ```
-Rolling backend ghcr.io/.../backend:latest -> sha-a1b2c3d
-Patched Deployment/backend container=backend image=ghcr.io/.../sha-a1b2c3d
+Backend drift detected: running=sha256:abc... latest=sha256:def... → rolling
+Patched Deployment/backend container=backend image=ghcr.io/.../backend:latest@sha256:def...
 Rollout complete: Deployment/backend ready_replicas=1 available_replicas=1
-Version gate: waiting for backend http://backend.elite-powerplay.svc.cluster.local:8000/api/admin/version to report version=1.9.0
-Version gate passed: backend serving 1.9.0 ✓
-Rolling frontend ghcr.io/.../frontend:latest -> sha-a1b2c3d
-Patched Deployment/frontend container=frontend image=ghcr.io/.../sha-a1b2c3d
+Version gate: waiting for backend http://...svc.cluster.local:8000/api/admin/version to report version=2.2.0
+Version gate passed: backend serving 2.2.0 ✓
+Frontend drift detected: running=sha256:abc... latest=sha256:fed... → rolling
+Patched Deployment/frontend container=frontend image=ghcr.io/.../frontend:latest@sha256:fed...
 Rollout complete: Deployment/frontend ready_replicas=1 available_replicas=1
-Reconcile pass complete: updated ['backend=sha-a1b2c3d', 'frontend=sha-a1b2c3d']
+Reconcile pass complete: updated ['backend@sha256:def...', 'frontend@sha256:fed...']
 ```
 
 ## Configuration
@@ -144,18 +165,19 @@ Reconcile pass complete: updated ['backend=sha-a1b2c3d', 'frontend=sha-a1b2c3d']
 All knobs live in the `image-updater-config` ConfigMap (see
 `k8s/image-updater.yaml`):
 
-| Env var                          | Default                                       | Purpose                                                                |
-|----------------------------------|-----------------------------------------------|------------------------------------------------------------------------|
-| `OWNER`                          | `rgconner`                                    | ghcr.io org / user                                                    |
-| `REGISTRY`                       | `ghcr.io`                                     | OCI registry                                                           |
-| `NAMESPACE`                      | `elite-powerplay`                             | k8s namespace the controller runs in / manages                        |
-| `POLL_INTERVAL_SECONDS`          | `60`                                          | How often to check for new SHAs                                        |
-| `ROLLOUT_TIMEOUT_SECONDS`        | `300`                                         | Max time to wait for a Deployment rollout                              |
-| `VERSION_POLL_INTERVAL_SECONDS`  | `5`                                           | How often to poll `/api/admin/version` during the gate                |
-| `VERSION_POLL_TIMEOUT_SECONDS`   | `300`                                         | Max time to wait for the backend version gate                         |
-| `BACKEND_SERVICE_URL`            | `http://backend.elite-powerplay.svc.cluster.local` | In-cluster URL of the backend service                             |
-| `BACKEND_SERVICE_PORT`           | `8000`                                        | Backend port                                                          |
-| `LOG_LEVEL`                      | `INFO`                                        | `DEBUG` for verbose reconcile output                                   |
+| Env var                          | Source        | Default                                       | Purpose                                                                |
+|----------------------------------|---------------|-----------------------------------------------|------------------------------------------------------------------------|
+| `OWNER`                          | ConfigMap     | `rgconner`                                    | ghcr.io org / user                                                    |
+| `REGISTRY`                       | ConfigMap     | `ghcr.io`                                     | OCI registry                                                           |
+| `NAMESPACE`                      | ConfigMap     | `elite-powerplay`                             | k8s namespace the controller runs in / manages                        |
+| `POLL_INTERVAL_SECONDS`          | ConfigMap     | `60`                                          | How often to check `:latest` digest for drift                          |
+| `ROLLOUT_TIMEOUT_SECONDS`        | ConfigMap     | `300`                                         | Max time to wait for a Deployment rollout                              |
+| `VERSION_POLL_INTERVAL_SECONDS`  | ConfigMap     | `5`                                           | How often to poll `/api/admin/version` during the gate                |
+| `VERSION_POLL_TIMEOUT_SECONDS`   | ConfigMap     | `300`                                         | Max time to wait for the backend version gate                         |
+| `BACKEND_SERVICE_URL`            | ConfigMap     | `http://backend.elite-powerplay.svc.cluster.local` | In-cluster URL of the backend service                             |
+| `BACKEND_SERVICE_PORT`           | ConfigMap     | `8000`                                        | Backend port                                                          |
+| `LOG_LEVEL`                      | ConfigMap     | `INFO`                                        | `DEBUG` for verbose reconcile output                                   |
+| `GITHUB_TOKEN`                   | **Secret**    | `""`                                          | PAT (`read:packages`) for authenticated ghcr.io token exchange        |
 
 ## Security model
 

@@ -17,16 +17,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# OCI image labels — used by the in-cluster image-updater to confirm a
-# new backend pod is actually serving the expected BACKEND_VERSION
-# before the frontend is allowed to roll forward.
+# OCI image labels.
+# NOTE: docker/metadata-action overwrites org.opencontainers.image.version
+# with the branch name ("main"), so we stamp BACKEND_VERSION under a separate
+# app-scoped label `backend_version` that the image-updater reads directly.
 LABEL org.opencontainers.image.title="elite-powerplay-backend" \
       org.opencontainers.image.description="Elite Dangerous Power Play Analyzer — FastAPI backend" \
       org.opencontainers.image.source="https://github.com/Rgconner/elite-powerplay-app" \
       org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.version="${BACKEND_VERSION}" \
       org.opencontainers.image.revision="${VCS_REF}" \
-      org.opencontainers.image.created="${BACKEND_RELEASE_DATE}"
+      org.opencontainers.image.created="${BACKEND_RELEASE_DATE}" \
+      backend_version="${BACKEND_VERSION}"
 
 WORKDIR /app
 

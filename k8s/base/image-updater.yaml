@@ -91,7 +91,7 @@ data:
   REGISTRY: "ghcr.io"
   # Namespace the controller manages (also where it runs).
   NAMESPACE: "elite-powerplay"
-  # How often to check for new sha-* tags.
+  # How often to check for new :latest digest.
   POLL_INTERVAL_SECONDS: "60"
   # How long to wait for a Deployment rollout before failing the reconcile.
   ROLLOUT_TIMEOUT_SECONDS: "300"
@@ -103,6 +103,31 @@ data:
   BACKEND_SERVICE_URL: "http://backend.elite-powerplay.svc.cluster.local"
   BACKEND_SERVICE_PORT: "8000"
   LOG_LEVEL: "INFO"
+---
+# ── Secret  (GitHub PAT for authenticated ghcr.io token exchange) ─────────────
+# Apply once with:
+#   kubectl create secret generic image-updater-ghcr-token \
+#     --namespace elite-powerplay \
+#     --from-literal=GITHUB_TOKEN=<PAT with read:packages>
+#
+# The PAT only needs the `read:packages` scope.  It is used by the image-updater
+# to exchange for a bearer token when fetching OCI manifests and config blobs
+# from ghcr.io — preventing anonymous rate-limiting and 401s on blob fetches.
+#
+# This stub is a placeholder so kustomize / kubectl apply does not error if the
+# Secret is absent.  Replace the empty value with the real PAT before applying,
+# or manage it via a secrets manager (External Secrets, Sealed Secrets, etc.).
+apiVersion: v1
+kind: Secret
+metadata:
+  name: image-updater-ghcr-token
+  namespace: elite-powerplay
+  labels:
+    app.kubernetes.io/name: elite-powerplay
+    app.kubernetes.io/component: image-updater
+type: Opaque
+stringData:
+  GITHUB_TOKEN: ""   # <-- set this before applying, or use a secrets manager
 ---
 # ── Deployment ───────────────────────────────────────────────────────────────
 apiVersion: apps/v1
@@ -143,6 +168,9 @@ spec:
           envFrom:
             - configMapRef:
                 name: image-updater-config
+            - secretRef:
+                name: image-updater-ghcr-token
+                optional: true   # controller falls back to anonymous if absent
           resources:
             requests:
               cpu:    "20m"
