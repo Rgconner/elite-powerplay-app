@@ -13,6 +13,7 @@ import logging
 import os
 import sys
 import time
+import zlib
 from datetime import datetime
 from typing import Optional
 
@@ -20,9 +21,10 @@ import zmq
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
-# Configure logging
+# Configure logging - honor LOG_LEVEL env var
+_log_level = os.getenv("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, _log_level, logging.INFO),
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     handlers=[logging.StreamHandler(sys.stdout)],
 )
@@ -40,14 +42,63 @@ DATABASE_URL = _raw_url.replace(
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine)
 
-# EDDN connection
-EDDN_RELAY = "tcp://eddn.edcd.io:9500"
-EDDN_SCHEMA = "https://eddn.edcd.io/schemas/journal/1"
-TARGET_EVENT = "PowerplayMerits"
+# EDDN connection - env-configurable with defaults
+EDDN_RELAY = os.getenv("EDDN_RELAY_URL", "tcp://eddn.edcd.io:9500")
+EDDN_SCHEMA = os.getenv("EDDN_SCHEMA_URL", "https://eddn.edcd.io/schemas/journal/1")
+TARGET_EVENT = os.getenv("TARGET_EVENT", "PowerplayMerits")
 
 # Retry configuration
 RETRY_DELAY_INITIAL = 1
 RETRY_DELAY_MAX = 30
+
+# Stats logging configuration
+STATS_LOG_INTERVAL_SECONDS = 300  # Log stats every 5 minutes
+
+
+def _hex_preview(data: bytes, max_bytes: int = 32) -> str:
+    """Return a hex preview of bytes for diagnostic logging."""
+    preview = data[:max_bytes]
+    return preview.hex() + ("..." if len(data) > max_bytes else "")
+
+
+def _decode_payload(raw_payload: bytes) -> Optional[str]:
+    """Attempt zlib decompression, then fall back to raw UTF-8 decode.
+
+    EDDN relays typically send zlib-compressed JSON. If decompression
+    fails, fall back to treating the payload as raw UTF-8 so we can
+    still log useful diagnostics.
+    """
+    # Try zlib decompression first (EDDN uses compressed payloads)
+    try:
+        decompressed = zlib.decompress(raw_payload)
+        return decompressed.decode("utf-8")
+    except zlib.error as e:
+        logger.warning(
+            "Zlib decompression failed (len=%d, hex=%s): %s",
+            len(raw_payload),
+            _hex_preview(raw_payload),
+            e,
+        )
+    except UnicodeDecodeError as e:
+        logger.warning(
+            "UTF-8 decode failed after zlib decompression (len=%d, hex=%s): %s",
+            len(raw_payload),
+            _hex_preview(raw_payload),
+            e,
+        )
+
+    # Fallback: try raw UTF-8 without decompression
+    try:
+        return raw_payload.decode("utf-8")
+    except UnicodeDecodeError as e:
+        logger.warning(
+            "UTF-8 decode failed on raw payload (len=%d, hex=%s): %s",
+            len(raw_payload),
+            _hex_preview(raw_payload),
+            e,
+        )
+
+    return None
 
 
 def parse_timestamp(ts_str: str) -> Optional[datetime]:
@@ -187,6 +238,19 @@ def main():
     retry_delay = RETRY_DELAY_INITIAL
     db_session = SessionLocal()
 
+    # Stats counters
+    stats = {
+        "received": 0,
+        "processed": 0,
+        "skipped_schema": 0,
+        "skipped_event": 0,
+        "skipped_fields": 0,
+        "decode_errors": 0,
+        "json_errors": 0,
+        "inserted": 0,
+    }
+    last_stats_time = time.time()
+
     try:
         while True:
             try:
@@ -195,13 +259,71 @@ def main():
                     # EDDN sends multipart messages: [topic_frame, json_frame]
                     frames = socket.recv_multipart()
                     raw_message = frames[-1]  # Last frame is the JSON payload
-                    message = json.loads(raw_message.decode("utf-8"))
+                    stats["received"] += 1
+
+                    # Log frame diagnostics at DEBUG level
+                    logger.debug(
+                        "Received %d frame(s), payload len=%d, hex=%s",
+                        len(frames),
+                        len(raw_message),
+                        _hex_preview(raw_message),
+                    )
+
+                    # Decode payload (zlib + UTF-8 with fallback)
+                    json_text = _decode_payload(raw_message)
+                    if json_text is None:
+                        stats["decode_errors"] += 1
+                        continue
+
+                    try:
+                        message = json.loads(json_text)
+                    except json.JSONDecodeError as e:
+                        logger.warning(
+                            "Failed to decode JSON message (len=%d): %s",
+                            len(json_text),
+                            e,
+                        )
+                        stats["json_errors"] += 1
+                        continue
 
                     # Process the message
-                    process_message(message, db_session)
+                    success = process_message(message, db_session)
+                    if not success:
+                        # Track skip reasons
+                        schema_ref = message.get("$schemaRef", "")
+                        if schema_ref != EDDN_SCHEMA:
+                            stats["skipped_schema"] += 1
+                        else:
+                            msg = message.get("message", {})
+                            event_type = msg.get("event", "")
+                            if event_type != TARGET_EVENT:
+                                stats["skipped_event"] += 1
+                            else:
+                                stats["skipped_fields"] += 1
+                    else:
+                        stats["processed"] += 1
+                        stats["inserted"] += 1
 
                     # Reset retry delay on successful receive
                     retry_delay = RETRY_DELAY_INITIAL
+
+                    # Periodic stats logging
+                    now = time.time()
+                    if now - last_stats_time >= STATS_LOG_INTERVAL_SECONDS:
+                        logger.info(
+                            "Stats: received=%d, processed=%d, inserted=%d, "
+                            "skipped_schema=%d, skipped_event=%d, skipped_fields=%d, "
+                            "decode_errors=%d, json_errors=%d",
+                            stats["received"],
+                            stats["processed"],
+                            stats["inserted"],
+                            stats["skipped_schema"],
+                            stats["skipped_event"],
+                            stats["skipped_fields"],
+                            stats["decode_errors"],
+                            stats["json_errors"],
+                        )
+                        last_stats_time = now
                 else:
                     # No message received, just continue
                     continue
@@ -211,14 +333,6 @@ def main():
                 time.sleep(retry_delay)
                 retry_delay = min(retry_delay * 2, RETRY_DELAY_MAX)
 
-            except UnicodeDecodeError as e:
-                logger.warning("Failed to decode message as UTF-8: %s", e)
-                continue
-
-            except json.JSONDecodeError as e:
-                logger.warning("Failed to decode JSON message: %s", e)
-                continue
-
             except Exception as e:
                 logger.error("Unexpected error: %s. Retrying in %d seconds...", e, retry_delay)
                 time.sleep(retry_delay)
@@ -227,6 +341,20 @@ def main():
     except KeyboardInterrupt:
         logger.info("Shutting down EDDN listener...")
     finally:
+        # Final stats log
+        logger.info(
+            "Final stats: received=%d, processed=%d, inserted=%d, "
+            "skipped_schema=%d, skipped_event=%d, skipped_fields=%d, "
+            "decode_errors=%d, json_errors=%d",
+            stats["received"],
+            stats["processed"],
+            stats["inserted"],
+            stats["skipped_schema"],
+            stats["skipped_event"],
+            stats["skipped_fields"],
+            stats["decode_errors"],
+            stats["json_errors"],
+        )
         socket.close()
         context.term()
         db_session.close()
