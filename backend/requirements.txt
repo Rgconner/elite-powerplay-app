@@ -41,3 +41,7 @@ apscheduler==3.10.4
 
 # OpenAI / LLM integration — pin to 1.x; 2.x has breaking API changes
 openai==1.82.0
+
+# Testing
+pytest==8.3.5
+pytest-cov==6.0.0

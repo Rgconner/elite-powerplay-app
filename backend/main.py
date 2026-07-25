@@ -122,6 +122,27 @@ with engine.connect() as _conn:
         "  PRIMARY KEY (power, system_id64)"
         ")"
     ))
+
+    # ── Admin audit log (persists every settings change and ingest trigger) ──
+    _conn.execute(_text(
+        "CREATE TABLE IF NOT EXISTS audit_log ("
+        "  id SERIAL PRIMARY KEY,"
+        "  admin_email VARCHAR(255) NOT NULL,"
+        "  action VARCHAR(64) NOT NULL,"
+        "  resource_key VARCHAR(255),"
+        "  old_value VARCHAR(512),"
+        "  new_value VARCHAR(512),"
+        "  timestamp TIMESTAMP NOT NULL DEFAULT NOW()"
+        ")"
+    ))
+    _conn.execute(_text(
+        "CREATE INDEX IF NOT EXISTS ix_audit_log_timestamp "
+        "ON audit_log (timestamp DESC)"
+    ))
+    _conn.execute(_text(
+        "CREATE INDEX IF NOT EXISTS ix_audit_log_admin_email "
+        "ON audit_log (admin_email)"
+    ))
     _conn.commit()
 
 from routers import auth, admin  # noqa: E402
@@ -188,12 +209,17 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+_cors_origins_raw = os.getenv(
+    "CORS_ORIGINS", "http://localhost:5173,https://ppa.snwbd.com"
+)
+_cors_origins = [o.strip() for o in _cors_origins_raw.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PATCH"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 API_PREFIX = "/api"

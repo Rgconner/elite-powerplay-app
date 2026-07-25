@@ -1,5 +1,7 @@
 /** Target Analysis API client. */
 
+import { handleFetchError } from "./errors";
+
 export interface TargetAnalysisItem {
   system_id64: number;
   system_name: string;
@@ -43,6 +45,6 @@ export async function getTargetAnalysis(
       target_powers: targetPowers,
     }),
   });
-  if (!res.ok) throw new Error(`Target analysis failed (${res.status})`);
+  if (!res.ok) await handleFetchError(res);
   return res.json() as Promise<TargetAnalysisResponse>;
 }

@@ -295,6 +295,7 @@ export default function TableView() {
   const [loadingRecos,      setLoadingRecos]      = useState(false);
   const [loadingContested,  setLoadingContested]  = useState(false);
   const [error,             setError]             = useState<string | null>(null);
+  const [secondaryError,    setSecondaryError]    = useState<string | null>(null);
   const [sortKey,           setSortKey]           = useState<string>("control_progress");
   const [sortDir,           setSortDir]           = useState<SortDir>("asc");
 
@@ -312,7 +313,7 @@ export default function TableView() {
     fetch("/api/admin/ingest-status")
       .then(r => r.ok ? r.json() as Promise<IngestStatus> : Promise.reject())
       .then(setIngestStatus)
-      .catch(() => {});
+      .catch(() => { /* best-effort background poll — no auth, failure is silent */ });
   }, []);
   useEffect(() => {
     fetchIngestStatus();
@@ -339,8 +340,8 @@ export default function TableView() {
   }
 
   useEffect(() => {
-    if (!powerName) { setSystems([]); setRecommendations(null); return; }
-    setLoadingSystems(true); setError(null);
+    if (!powerName) { setSystems([]); setRecommendations(null); setSecondaryError(null); return; }
+    setLoadingSystems(true); setError(null); setSecondaryError(null);
     getPowerSystems(powerName, refSystem?.id)
       .then(setSystems)
       .catch(e => setError(String(e)))
@@ -352,7 +353,10 @@ export default function TableView() {
     setLoadingRecos(true);
     getRecommendations(powerName, refSystem?.id)
       .then(setRecommendations)
-      .catch(() => setRecommendations(null))
+      .catch(e => {
+        setRecommendations(null);
+        setSecondaryError(`Recommendations unavailable: ${String(e)}`);
+      })
       .finally(() => setLoadingRecos(false));
   }, [powerName, refSystem?.id]);
 
@@ -361,8 +365,11 @@ export default function TableView() {
     if (!powerName) { setContestedSystems([]); return; }
     setLoadingContested(true);
     getContestedSystems(powerName)
-      .then(setContestedSystems)
-      .catch(() => setContestedSystems([]))
+      .then(data => { setContestedSystems(data); })
+      .catch(e => {
+        setContestedSystems([]);
+        setSecondaryError(`Contested systems unavailable: ${String(e)}`);
+      })
       .finally(() => setLoadingContested(false));
   }, [powerName]);
 
@@ -514,6 +521,17 @@ export default function TableView() {
           </span>
         )}
       </div>
+
+      {/* Secondary fetch errors (recommendations / contested) */}
+      {secondaryError && (
+        <p style={{
+          margin: "0 0 10px", padding: "8px 12px", borderRadius: 6,
+          background: "#2d0000", border: "1px solid #D94A4A",
+          color: "#D94A4A", fontSize: 13,
+        }}>
+          {secondaryError}
+        </p>
+      )}
 
       {/* ── Expand Filters bar — min lead progress ─────────────────────────── */}
       {(recommendations?.expand.length ?? 0) > 0 && (

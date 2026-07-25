@@ -1,5 +1,7 @@
 /** Architecture API client — typed fetch wrappers for architecture endpoints. */
 
+import { handleFetchError } from "./errors";
+
 export interface ArchitectureNode {
   id: string;
   type: "service" | "table" | "external" | "endpoint";
@@ -51,13 +53,13 @@ export interface ArchitectureStatus {
 
 export async function getArchitectureSchema(): Promise<ArchitectureSchema> {
   const res = await fetch("/api/architecture/schema");
-  if (!res.ok) throw new Error(`Get architecture schema failed (${res.status})`);
+  if (!res.ok) await handleFetchError(res);
   return res.json() as Promise<ArchitectureSchema>;
 }
 
 export async function getArchitectureStatus(): Promise<ArchitectureStatus> {
   const res = await fetch("/api/architecture/status");
-  if (!res.ok) throw new Error(`Get architecture status failed (${res.status})`);
+  if (!res.ok) await handleFetchError(res);
   return res.json() as Promise<ArchitectureStatus>;
 }
 
@@ -67,7 +69,7 @@ export async function validateArchitectureSchema(): Promise<{
   total_nodes: number;
 }> {
   const res = await fetch("/api/architecture/validate", { method: "POST" });
-  if (!res.ok) throw new Error(`Validate architecture schema failed (${res.status})`);
+  if (!res.ok) await handleFetchError(res);
   return res.json() as Promise<{
     valid: boolean;
     missing_files: string[];

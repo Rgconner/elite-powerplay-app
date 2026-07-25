@@ -1,5 +1,7 @@
 /** Powers API client — typed fetch wrappers for Power Play endpoints. */
 
+import { handleFetchError } from "./errors";
+
 export interface PPSystemEntry {
   system_id64: number;
   name: string;
@@ -23,14 +25,14 @@ export interface PPSystemEntry {
 
 export async function listPowers(): Promise<string[]> {
   const res = await fetch("/api/powers");
-  if (!res.ok) throw new Error(`Powers list failed (${res.status})`);
+  if (!res.ok) await handleFetchError(res);
   const data = await res.json() as { powers: string[] };
   return data.powers;
 }
 
 export async function searchPowers(q: string): Promise<string[]> {
   const res = await fetch(`/api/powers/search?q=${encodeURIComponent(q)}`);
-  if (!res.ok) throw new Error(`Powers search failed (${res.status})`);
+  if (!res.ok) await handleFetchError(res);
   const data = await res.json() as { powers: string[] };
   return data.powers;
 }
@@ -43,7 +45,7 @@ export async function getPowerSystems(
   if (refSystemId64 != null) params.set("ref_id", String(refSystemId64));
   const qs = params.size > 0 ? `?${params.toString()}` : "";
   const res = await fetch(`/api/powers/${encodeURIComponent(powerName)}/systems${qs}`);
-  if (!res.ok) throw new Error(`Get power systems failed (${res.status})`);
+  if (!res.ok) await handleFetchError(res);
   return res.json() as Promise<PPSystemEntry[]>;
 }
 
@@ -56,7 +58,7 @@ export async function refreshStaleSystems(systemIds: number[]): Promise<{ status
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ system_ids: systemIds }),
   });
-  if (!res.ok) throw new Error(`Refresh stale failed (${res.status})`);
+  if (!res.ok) await handleFetchError(res);
   return res.json();
 }
 
@@ -90,6 +92,6 @@ export interface RealtimeResponse {
 /** Get realtime Power Play data blended with Spansh snapshots */
 export async function getPowerRealtime(powerName: string): Promise<RealtimeResponse> {
   const res = await fetch(`/api/powers/${encodeURIComponent(powerName)}/realtime`);
-  if (!res.ok) throw new Error(`Get power realtime failed (${res.status})`);
+  if (!res.ok) await handleFetchError(res);
   return res.json() as Promise<RealtimeResponse>;
 }

@@ -104,6 +104,7 @@ export default function TargetListView() {
   const [allSystems,      setAllSystems]      = useState<PPSystemEntry[]>([]);
   const [loading,         setLoading]         = useState(false);
   const [error,           setError]           = useState<string | null>(null);
+  const [secondaryError,  setSecondaryError]  = useState<string | null>(null);
 
   // Sort state
   const [sort, setSort] = useState<SortSpec>({ col: "score", dir: "desc" });
@@ -121,8 +122,8 @@ export default function TargetListView() {
 
   // Fetch systems for the selected power when power or ref changes
   useEffect(() => {
-    if (!powerName) { setAllSystems([]); return; }
-    setLoading(true); setError(null);
+    if (!powerName) { setAllSystems([]); setSecondaryError(null); return; }
+    setLoading(true); setError(null); setSecondaryError(null);
     setEnrichment({});
     setEnriching(false);
     setRefreshing(false);
@@ -147,11 +148,14 @@ export default function TargetListView() {
         setTimeout(() => {
           getPowerSystems(powerName, refSystem?.id)
             .then(setAllSystems)
-            .catch(() => {})
+            .catch(e => setSecondaryError(`Stale data refresh failed: ${String(e)}`))
             .finally(() => setRefreshing(false));
         }, 3000);
       })
-      .catch(() => setRefreshing(false));
+      .catch(e => {
+        setSecondaryError(`Could not trigger stale refresh: ${String(e)}`);
+        setRefreshing(false);
+      });
   }, [powerName, allSystems.length > 0 ? allSystems[0].system_id64 : null]);
 
   // Filter by system list (if any names are validated)
@@ -307,6 +311,17 @@ export default function TargetListView() {
         {/* Row 2: System list input */}
         <SystemListInput value={systemList} onChange={setSystemList} powerName={powerName} />
       </div>
+
+      {/* Secondary fetch errors (stale refresh failures) */}
+      {secondaryError && (
+        <p style={{
+          margin: "0 0 10px", padding: "8px 12px", borderRadius: 6,
+          background: "#2d0000", border: "1px solid #D94A4A",
+          color: "#D94A4A", fontSize: 13,
+        }}>
+          {secondaryError}
+        </p>
+      )}
 
       {/* ── Score explanation panel ──────────────────────────────────────── */}
       {enriched.length > 0 && (

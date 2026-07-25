@@ -1,5 +1,7 @@
 /** Admin API client. */
 
+import { handleFetchError } from "./errors";
+
 const TOKEN_KEY = "pp_admin_token";
 
 export function getAdminToken(): string | null {
@@ -35,10 +37,7 @@ export async function adminLogin(
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ username: email, password }),
   });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error((data as { detail?: string }).detail ?? `Login failed (${res.status})`);
-  }
+  if (!res.ok) await handleFetchError(res);
   return res.json() as Promise<TokenResponse>;
 }
 
@@ -63,7 +62,7 @@ export async function getAdminStatus(): Promise<{
   edsm_next_run: string | null;
 }> {
   const res = await fetch("/api/admin/status", { headers: getAuthHeader() });
-  if (!res.ok) throw new Error(`Failed to load admin status (${res.status})`);
+  if (!res.ok) await handleFetchError(res);
   return res.json();
 }
 
@@ -72,7 +71,7 @@ export async function triggerSpanshIngest(): Promise<void> {
     method: "POST",
     headers: getAuthHeader(),
   });
-  if (!res.ok) throw new Error(`Spansh ingest trigger failed (${res.status})`);
+  if (!res.ok) await handleFetchError(res);
 }
 
 export async function triggerEdsmSync(): Promise<void> {
@@ -80,12 +79,12 @@ export async function triggerEdsmSync(): Promise<void> {
     method: "POST",
     headers: getAuthHeader(),
   });
-  if (!res.ok) throw new Error(`EDSM sync trigger failed (${res.status})`);
+  if (!res.ok) await handleFetchError(res);
 }
 
 export async function getSettings(): Promise<AdminSettingRecord[]> {
   const res = await fetch("/api/admin/settings", { headers: getAuthHeader() });
-  if (!res.ok) throw new Error(`Failed to load settings (${res.status})`);
+  if (!res.ok) await handleFetchError(res);
   return res.json() as Promise<AdminSettingRecord[]>;
 }
 
@@ -99,7 +98,7 @@ export async function updateSettings(
     headers: { "Content-Type": "application/json", ...getAuthHeader() },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error(`Failed to update settings (${res.status})`);
+  if (!res.ok) await handleFetchError(res);
 }
 
 export async function changePassword(
@@ -116,13 +115,5 @@ export async function changePassword(
       confirm_password:  confirmPassword,
     }),
   });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    // Pydantic validation errors come back as an array under "detail"
-    const detail = (data as { detail?: unknown }).detail;
-    if (Array.isArray(detail)) {
-      throw new Error(detail.map((e: { msg?: string }) => e.msg ?? String(e)).join(" · "));
-    }
-    throw new Error(typeof detail === "string" ? detail : `Change password failed (${res.status})`);
-  }
+  if (!res.ok) await handleFetchError(res);
 }

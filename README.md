@@ -67,6 +67,32 @@ App available at <http://localhost:5173> (proxies `/api` → `http://localhost:8
 
 ---
 
+## Running Tests
+
+### Frontend (Vitest)
+
+```bash
+cd frontend
+npm install
+npm test
+# or with the interactive UI:
+npx vitest --ui
+```
+
+### Backend (pytest)
+
+```bash
+cd backend
+python3.13 -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+pytest tests/
+# with coverage:
+pytest tests/ --cov=services --cov-report=term-missing
+```
+
+---
+
 ## Environment Variables
 
 | Variable | Required | Default | Description |

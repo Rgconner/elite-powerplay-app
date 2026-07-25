@@ -66,6 +66,15 @@ export const PP_STATE_LABELS: Record<string, string> = {
   HomeSystem:   "Home System",
 };
 
+// ── Scoring weights for computeTargetScore ─────────────────────────────────
+export const SCORE_WEIGHTS = {
+  PROGRESS_MAX:             50,    // Maximum points awarded for 100% control progress
+  DISTANCE_MAX:             30,    // Maximum points awarded for a system at 0 LY distance
+  DISTANCE_FALLOFF_LY:     100,    // Distance (LY) at which the distance score reaches 0
+  THREAT_MAX:               20,    // Maximum points awarded for net undermining threat
+  THREAT_THRESHOLD_MERITS: 1000,   // Net merit deficit that saturates the threat score
+} as const;
+
 /**
  * Compute a target priority score for a system in the Target List.
  *
@@ -96,23 +105,23 @@ export function computeTargetScore(params: {
   // Note: power_state is accepted in the params interface for API stability
   // and future use, but is not currently used in the score calculation.
 
-  // 1. Progress component (0–50)
+  // 1. Progress component (0–PROGRESS_MAX)
   const progress = control_progress ?? 0;
-  const progressScore = Math.max(0, Math.min(1, progress)) * 50;
+  const progressScore = Math.max(0, Math.min(1, progress)) * SCORE_WEIGHTS.PROGRESS_MAX;
 
-  // 2. Distance component (0–30) — linear decay: 30 at 0 LY → 0 at 100 LY
+  // 2. Distance component (0–DISTANCE_MAX) — linear decay: DISTANCE_MAX at 0 LY → 0 at DISTANCE_FALLOFF_LY
   const dist = distance_ly ?? 999;
-  const distanceScore = Math.max(0, 30 * (1 - Math.min(1, dist / 100)));
+  const distanceScore = Math.max(0, SCORE_WEIGHTS.DISTANCE_MAX * (1 - Math.min(1, dist / SCORE_WEIGHTS.DISTANCE_FALLOFF_LY)));
 
-  // 3. Undermining threat component (0–20)
+  // 3. Undermining threat component (0–THREAT_MAX)
   //    Net undermining (U − R) indicates how much the system is losing ground
-  //    this cycle. We normalise against a reference of 1000 net merits so that
-  //    typical small deficits get partial credit and large deficits max out.
+  //    this cycle. We normalise against THREAT_THRESHOLD_MERITS net merits so
+  //    that typical small deficits get partial credit and large deficits max out.
   //    Systems with R >= U (healthy) get 0 threat points.
   const r = reinforcement ?? 0;
   const u = undermining ?? 0;
   const netLoss = Math.max(0, u - r);  // only positive losses count
-  const threatScore = Math.min(1, netLoss / 1000) * 20;
+  const threatScore = Math.min(1, netLoss / SCORE_WEIGHTS.THREAT_THRESHOLD_MERITS) * SCORE_WEIGHTS.THREAT_MAX;
 
   const raw = progressScore + distanceScore + threatScore;
   return Math.round(Math.min(100, raw) * 10) / 10;

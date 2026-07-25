@@ -1,5 +1,7 @@
 /** Factions API client — typed fetch wrappers for all factions endpoints. */
 
+import { handleFetchError } from "./errors";
+
 // ---------------------------------------------------------------------------
 // Types (mirror Pydantic schemas exactly)
 // ---------------------------------------------------------------------------
@@ -43,7 +45,7 @@ export async function listFactions(
   limit = 50,
 ): Promise<PaginatedFactions> {
   const res = await fetch(`/api/factions?page=${page}&limit=${limit}`);
-  if (!res.ok) throw new Error(`Faction list failed (${res.status})`);
+  if (!res.ok) await handleFetchError(res);
   return res.json() as Promise<PaginatedFactions>;
 }
 
@@ -51,13 +53,13 @@ export async function searchFactions(q: string): Promise<FactionListItem[]> {
   const res = await fetch(
     `/api/factions/search?q=${encodeURIComponent(q)}`,
   );
-  if (!res.ok) throw new Error(`Faction search failed (${res.status})`);
+  if (!res.ok) await handleFetchError(res);
   return res.json() as Promise<FactionListItem[]>;
 }
 
 export async function getPowers(): Promise<string[]> {
   const res = await fetch("/api/factions/powers");
-  if (!res.ok) throw new Error(`Powers list failed (${res.status})`);
+  if (!res.ok) await handleFetchError(res);
   const data = await res.json() as { powers: string[] };
   return data.powers;
 }
@@ -74,6 +76,6 @@ export async function getFactionSystems(
   const res = await fetch(
     `/api/factions/${encodeURIComponent(factionName)}/systems${qs}`,
   );
-  if (!res.ok) throw new Error(`Get faction systems failed (${res.status})`);
+  if (!res.ok) await handleFetchError(res);
   return res.json() as Promise<FactionSystemEntry[]>;
 }

@@ -1,5 +1,7 @@
 /** Recommendations API client. */
 
+import { handleFetchError } from "./errors";
+
 export interface RecommendationItem {
   system_id64: number;
   system_name: string;
@@ -51,6 +53,6 @@ export async function getRecommendations(
   const res = await fetch(
     `/api/powers/${encodeURIComponent(powerName)}/recommendations${qs}`
   );
-  if (!res.ok) throw new Error(`Get recommendations failed (${res.status})`);
+  if (!res.ok) await handleFetchError(res);
   return res.json() as Promise<RecommendationsResponse>;
 }

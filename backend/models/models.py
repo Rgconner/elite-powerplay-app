@@ -262,3 +262,25 @@ class PpRealtimeState(Base):
     cp_as_undermining = Column(Numeric(12, 2), nullable=False, default=0)
     latest_event_ts = Column(DateTime, nullable=True)
     refreshed_at = Column(DateTime, default=func.now(), nullable=False)
+
+
+# ---------------------------------------------------------------------------
+# audit_log — admin action audit trail
+# ---------------------------------------------------------------------------
+
+
+class AuditLog(Base):
+    """Records every admin settings change and ingest trigger for auditability."""
+
+    __tablename__ = "audit_log"
+
+    id = Column(Integer, primary_key=True, index=True)
+    admin_email = Column(String(255), nullable=False, index=True)
+    # Human-readable action name, e.g. "setting_update" or "ingest_spansh"
+    action = Column(String(64), nullable=False)
+    # The key/resource being affected (setting key or ingest type); nullable for
+    # actions that have no single resource (e.g. bulk actions)
+    resource_key = Column(String(255), nullable=True)
+    old_value = Column(String(512), nullable=True)
+    new_value = Column(String(512), nullable=True)
+    timestamp = Column(DateTime, default=func.now(), nullable=False, index=True)

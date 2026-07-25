@@ -1,5 +1,7 @@
 /** Spansh enrichment API client — PLAT/BOOM/PRISTINE data. */
 
+import { handleFetchError } from "./errors";
+
 export interface SpanshEnrichment {
   has_platinum: boolean;
   has_boom: boolean;
@@ -30,9 +32,7 @@ export async function getSpanshEnrichmentBatch(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ system_ids: systemIds, force_refresh: forceRefresh }),
   });
-  if (!res.ok) {
-    throw new Error(`Spansh enrichment batch failed (${res.status})`);
-  }
+  if (!res.ok) await handleFetchError(res);
   const data = (await res.json()) as BatchEnrichResponse;
   return data.results;
 }
@@ -47,9 +47,7 @@ export async function clearEnrichmentCache(): Promise<{ deleted: number }> {
     method: "DELETE",
     headers: getAuthHeader(),
   });
-  if (!res.ok) {
-    throw new Error(`Clear enrichment cache failed (${res.status})`);
-  }
+  if (!res.ok) await handleFetchError(res);
   return res.json() as Promise<{ deleted: number }>;
 }
 
@@ -77,9 +75,7 @@ export async function validateEnrichment(): Promise<ValidateResponse> {
     method: "POST",
     headers: getAuthHeader(),
   });
-  if (!res.ok) {
-    throw new Error(`Validate enrichment failed (${res.status})`);
-  }
+  if (!res.ok) await handleFetchError(res);
   return res.json() as Promise<ValidateResponse>;
 }
 
@@ -92,8 +88,6 @@ export interface EnrichStatus {
  */
 export async function getEnrichStatus(): Promise<EnrichStatus> {
   const res = await fetch("/api/spansh/enrich/status");
-  if (!res.ok) {
-    throw new Error(`Enrich status failed (${res.status})`);
-  }
+  if (!res.ok) await handleFetchError(res);
   return res.json() as Promise<EnrichStatus>;
 }

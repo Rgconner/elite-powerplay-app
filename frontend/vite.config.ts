@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
@@ -11,5 +12,11 @@ export default defineConfig({
       // All /api/* requests proxied to the FastAPI backend during local dev.
       "/api": "http://localhost:8000",
     },
+  },
+  test: {
+    // Run tests in a jsdom environment so DOM globals are available if needed.
+    environment: "node",
+    // Only pick up *.test.ts / *.test.tsx files.
+    include: ["src/**/*.test.{ts,tsx}"],
   },
 });

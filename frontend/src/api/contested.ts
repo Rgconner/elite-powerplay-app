@@ -1,5 +1,7 @@
 /** Contested Systems API client. */
 
+import { handleFetchError } from "./errors";
+
 export interface ConflictPowerProgress {
   power: string;
   progress: number;
@@ -73,6 +75,6 @@ export async function getContestedSystems(
   const res = await fetch(
     `/api/powers/${encodeURIComponent(powerName)}/contested`,
   );
-  if (!res.ok) throw new Error(`Get contested systems failed (${res.status})`);
+  if (!res.ok) await handleFetchError(res);
   return res.json() as Promise<ContestedSystemInfo[]>;
 }
