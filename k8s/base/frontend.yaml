@@ -70,13 +70,10 @@ spec:
 
 ---
 
-# ── Service ───────────────────────────────────────────────────────────────────
-# Default: ClusterIP — sufficient when using a Cloudflare Tunnel or an
-# nginx-ingress Ingress controller.  The tunnel reaches the service by its
-# cluster-internal DNS name (http://frontend:80).
-#
-# If you need direct external access without a tunnel / ingress controller,
-# change type to LoadBalancer and remove the Cloudflare tunnel deployment.
+# ── Service (LoadBalancer) ────────────────────────────────────────────────────
+# Exposes the frontend externally via the MetalLB / cloud LoadBalancer.
+# loadBalancerIP pins the assigned address to 192.168.11.5 — the IP must be
+# within a range advertised by your load-balancer controller (e.g. MetalLB pool).
 apiVersion: v1
 kind: Service
 metadata:
@@ -88,7 +85,8 @@ metadata:
 spec:
   selector:
     app: frontend
-  type: ClusterIP          # ← change to LoadBalancer if not using CF tunnel
+  type: LoadBalancer
+  loadBalancerIP: 192.168.11.5
   ports:
     - name: http
       port: 80
