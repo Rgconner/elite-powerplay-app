@@ -5,6 +5,8 @@ metadata:
   namespace: elite-powerplay
   labels:
     app: eddn-listener
+    app.kubernetes.io/name: elite-powerplay
+    app.kubernetes.io/component: eddn-listener
 spec:
   replicas: 1
   selector:
@@ -14,6 +16,8 @@ spec:
     metadata:
       labels:
         app: eddn-listener
+        app.kubernetes.io/name: elite-powerplay
+        app.kubernetes.io/component: eddn-listener
     spec:
       containers:
       - name: eddn-listener
@@ -40,23 +44,30 @@ spec:
           limits:
             memory: "256Mi"
             cpu: "200m"
+        # Liveness: the main loop writes /tmp/eddn_heartbeat every iteration.
+        # If the file is missing or older than 120 s the loop has stalled.
         livenessProbe:
           exec:
             command:
             - /bin/sh
             - -c
-            - "ps aux | grep -v grep | grep python"
-          initialDelaySeconds: 30
-          periodSeconds: 60
+            - "test $(( $(date +%s) - $(date +%s -r /tmp/eddn_heartbeat 2>/dev/null || echo 0) )) -lt 120"
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        # Readiness: same file check but tighter window — pod is ready once
+        # the first loop iteration has completed.
         readinessProbe:
           exec:
             command:
             - /bin/sh
             - -c
-            - "ps aux | grep -v grep | grep python"
-          initialDelaySeconds: 10
-          periodSeconds: 30
-      restartPolicy: Always
+            - "test -f /tmp/eddn_heartbeat"
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
 ---
 apiVersion: v1
 kind: Service

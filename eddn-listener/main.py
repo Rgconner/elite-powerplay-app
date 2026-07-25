@@ -251,8 +251,15 @@ def main():
     }
     last_stats_time = time.time()
 
+    HEARTBEAT_FILE = "/tmp/eddn_heartbeat"
     try:
         while True:
+            # Write heartbeat timestamp — checked by the k8s liveness probe.
+            try:
+                open(HEARTBEAT_FILE, "w").close()
+            except OSError:
+                pass
+
             try:
                 # Receive message with timeout
                 if socket.poll(timeout=1000):  # 1 second timeout

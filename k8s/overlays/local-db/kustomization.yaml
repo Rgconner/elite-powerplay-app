@@ -31,7 +31,7 @@ namespace: elite-powerplay
 
 # Pull in the shared base resources
 resources:
-  - ../../             # k8s/ base
+  - ../../base         # k8s/base/
   - postgres.yaml      # StatefulSet + headless Service + PVC
   - postgres-config.yaml   # ConfigMap with custom postgresql.conf
 

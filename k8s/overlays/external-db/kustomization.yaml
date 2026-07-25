@@ -31,4 +31,4 @@ namespace: elite-powerplay
 
 # Pull in the shared base resources — no postgres resources added here.
 resources:
-  - ../../             # k8s/ base
+  - ../../base         # k8s/base/

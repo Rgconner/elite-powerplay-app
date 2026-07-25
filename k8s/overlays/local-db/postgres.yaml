@@ -81,7 +81,7 @@ spec:
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: elite-powerplay-postgres-secrets
+                  name: elite-powerplay-secrets
                   key: postgres-password
 
           # Load the custom postgresql.conf (see postgres-config.yaml)
