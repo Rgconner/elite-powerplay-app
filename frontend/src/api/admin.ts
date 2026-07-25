@@ -117,3 +117,66 @@ export async function changePassword(
   });
   if (!res.ok) await handleFetchError(res);
 }
+
+// ── Telemetry types & fetch ───────────────────────────────────────────────────
+
+export interface TelemetryRunSummary {
+  id: number;
+  status: string;
+  started_at: string;
+  completed_at: string | null;
+  records_processed: number;
+  duration_seconds: number | null;
+  api_calls_made: number;
+  api_errors: number;
+  error_count: number;
+  error_detail: string | null;
+}
+
+export interface TelemetryFeedIngest {
+  status: "green" | "yellow" | "red";
+  last_run: TelemetryRunSummary | null;
+  history: TelemetryRunSummary[];
+  next_run_at: string | null;
+  interval_hours: number;
+}
+
+export interface TelemetryFeedEddn {
+  status: "green" | "yellow" | "red";
+  recorded_at: string | null;
+  listener_started_at: string | null;
+  events_total: number;
+  events_last_5min: number;
+  dedup_rejected: number;
+  decode_errors: number;
+  last_event_ts: string | null;
+}
+
+export interface TelemetryFeedEnrichment {
+  status: "green" | "yellow" | "red";
+  total_cached: number;
+  today: {
+    cache_hits: number;
+    cache_misses: number;
+    hit_rate_pct: number | null;
+    api_calls: number;
+    api_errors: number;
+    avg_fetch_ms: number | null;
+  } | null;
+}
+
+export interface TelemetryStatus {
+  generated_at: string;
+  feeds: {
+    spansh_ingest: TelemetryFeedIngest;
+    edsm_sync:     TelemetryFeedIngest;
+    eddn_stream:   TelemetryFeedEddn;
+    enrichment:    TelemetryFeedEnrichment;
+  };
+}
+
+export async function getTelemetry(): Promise<TelemetryStatus> {
+  const res = await fetch("/api/telemetry", { headers: getAuthHeader() });
+  if (!res.ok) await handleFetchError(res);
+  return res.json() as Promise<TelemetryStatus>;
+}

@@ -53,16 +53,19 @@ def run_edsm_sync(db: Session) -> IngestionRun:
     Returns the completed (or failed) ``IngestionRun`` ORM object.
     """
     # --- create audit record ---------------------------------------------------
+    started_at = datetime.utcnow()
     run = IngestionRun(
         source="edsm",
         status="running",
-        started_at=datetime.utcnow(),
+        started_at=started_at,
         records_processed=0,
     )
     db.add(run)
     db.commit()
     db.refresh(run)
     logger.info("EDSM sync started (run_id=%d).", run.id)
+
+    metrics: dict = {"api_calls": 0, "api_errors": 0, "errors": []}
 
     try:
         systems = db.query(System).all()
@@ -77,7 +80,7 @@ def run_edsm_sync(db: Session) -> IngestionRun:
         ) as client:
             for idx, system in enumerate(systems):
                 pp_power, pp_state, controlling_influence = _fetch_system_data(
-                    client, system.name
+                    client, system.name, metrics
                 )
 
                 snapshot = PPSnapshot(
@@ -107,20 +110,36 @@ def run_edsm_sync(db: Session) -> IngestionRun:
         # Commit any remaining rows in the final partial batch.
         db.commit()
 
+        completed_at = datetime.utcnow()
+        error_detail: str | None = "; ".join(metrics["errors"])[:2048] if metrics["errors"] else None
         run.status = "completed"
-        run.completed_at = datetime.utcnow()
+        run.completed_at = completed_at
         run.records_processed = counter
+        run.duration_seconds = (completed_at - started_at).total_seconds()
+        run.api_calls_made = metrics["api_calls"]
+        run.api_errors = metrics["api_errors"]
+        run.error_count = metrics["api_errors"]
+        run.error_detail = error_detail
         db.commit()
         logger.info(
-            "EDSM sync completed (run_id=%d): %d snapshots inserted.",
-            run.id,
-            counter,
+            "EDSM sync completed (run_id=%d): %d snapshots inserted "
+            "(duration=%.1fs, api_calls=%d, api_errors=%d).",
+            run.id, counter,
+            (completed_at - started_at).total_seconds(),
+            metrics["api_calls"], metrics["api_errors"],
         )
 
     except Exception:
         logger.exception("EDSM sync failed (run_id=%d).", run.id)
+        completed_at = datetime.utcnow()
+        error_detail = "; ".join(metrics["errors"])[:2048] if metrics["errors"] else None
         run.status = "failed"
-        run.completed_at = datetime.utcnow()
+        run.completed_at = completed_at
+        run.duration_seconds = (completed_at - started_at).total_seconds()
+        run.api_calls_made = metrics["api_calls"]
+        run.api_errors = metrics["api_errors"]
+        run.error_count = metrics["api_errors"]
+        run.error_detail = error_detail
         db.commit()
         raise
 
@@ -135,6 +154,7 @@ def run_edsm_sync(db: Session) -> IngestionRun:
 def _fetch_system_data(
     client: httpx.Client,
     system_name: str,
+    metrics: dict | None = None,
 ) -> tuple[str | None, str | None, float | None]:
     """Fetch PP state and controlling faction influence for one system.
 
@@ -146,6 +166,8 @@ def _fetch_system_data(
     controlling_influence: float | None = None
 
     # --- Call 1: PP state ----------------------------------------------------
+    if metrics is not None:
+        metrics["api_calls"] += 1
     try:
         resp = client.get(
             _EDSM_SYSTEM_URL,
@@ -162,11 +184,16 @@ def _fetch_system_data(
             pp_power = powers[0]
         pp_state = data.get("powerState")
     except Exception as exc:
+        if metrics is not None:
+            metrics["api_errors"] += 1
+            metrics["errors"].append(f"[edsm_pp {system_name!r}] {str(exc)[:128]}")
         logger.warning(
             "EDSM PP-state call failed for system %r: %s", system_name, exc
         )
 
     # --- Call 2: faction influence -------------------------------------------
+    if metrics is not None:
+        metrics["api_calls"] += 1
     try:
         resp = client.get(
             _EDSM_FACTIONS_URL,
@@ -180,6 +207,9 @@ def _fetch_system_data(
                 controlling_influence = faction.get("influence")
                 break
     except Exception as exc:
+        if metrics is not None:
+            metrics["api_errors"] += 1
+            metrics["errors"].append(f"[edsm_factions {system_name!r}] {str(exc)[:128]}")
         logger.warning(
             "EDSM factions call failed for system %r: %s", system_name, exc
         )

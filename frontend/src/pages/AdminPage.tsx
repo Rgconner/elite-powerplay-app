@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   getAdminToken, setAdminToken, clearAdminToken, getAuthHeader, getAdminStatus,
-  changePassword,
+  changePassword, getTelemetry, type TelemetryStatus,
 } from "../api/admin";
 import { FRONTEND_VERSION, FRONTEND_RELEASE_DATE } from "../version";
 import { clearEnrichmentCache, validateEnrichment, getEnrichStatus, type ValidateResponse, type EnrichStatus } from "../api/spansh";
@@ -155,6 +155,73 @@ function meritEquiv(state: ThresholdGroup["state"], days: number): string {
   return equiv.toLocaleString();
 }
 
+// ── Feed Stoplight ─────────────────────────────────────────────────────────────
+const STOPLIGHT_COLORS: Record<string, string> = {
+  green:  "#22c55e",
+  yellow: "#f59e0b",
+  red:    "#ef4444",
+};
+const STOPLIGHT_LABELS: Record<string, string> = {
+  green: "OK", yellow: "Stale", red: "Failed",
+};
+
+function fmtAgo(iso: string | null | undefined): string {
+  if (!iso) return "never";
+  const secs = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (secs < 60)     return `${secs}s ago`;
+  if (secs < 3600)   return `${Math.floor(secs / 60)}m ago`;
+  if (secs < 86_400) return `${Math.floor(secs / 3600)}h ago`;
+  return `${Math.floor(secs / 86_400)}d ago`;
+}
+
+interface StoplightFeed {
+  key: string;
+  label: string;
+  status: "green" | "yellow" | "red";
+  lastTs: string | null | undefined;
+}
+
+function FeedStoplight({ telemetry }: { telemetry: TelemetryStatus | null }) {
+  if (!telemetry) {
+    return (
+      <div style={{ padding: "10px 14px", background: "#f7f8fa", border: "1px solid #e5e7eb", borderRadius: 8, marginBottom: 16, fontSize: 12, color: "#57606a" }}>
+        Loading feed health…
+      </div>
+    );
+  }
+  const { feeds } = telemetry;
+  const items: StoplightFeed[] = [
+    { key: "eddn_stream",   label: "EDDN Stream",   status: feeds.eddn_stream.status,   lastTs: feeds.eddn_stream.last_event_ts ?? feeds.eddn_stream.recorded_at },
+    { key: "spansh_ingest", label: "Spansh Ingest", status: feeds.spansh_ingest.status, lastTs: feeds.spansh_ingest.last_run?.completed_at ?? feeds.spansh_ingest.last_run?.started_at },
+    { key: "edsm_sync",     label: "EDSM Sync",     status: feeds.edsm_sync.status,     lastTs: feeds.edsm_sync.last_run?.completed_at ?? feeds.edsm_sync.last_run?.started_at },
+    { key: "enrichment",    label: "Enrichment",    status: feeds.enrichment.status,    lastTs: null },
+  ];
+  return (
+    <div style={{
+      display: "flex", gap: 10, flexWrap: "wrap", padding: "10px 14px",
+      background: "#f7f8fa", border: "1px solid #e5e7eb", borderRadius: 8,
+      marginBottom: 16,
+    }}>
+      {items.map(({ key, label, status, lastTs }) => (
+        <div key={key} style={{
+          display: "flex", alignItems: "center", gap: 6,
+          background: "#fff", border: `1px solid ${STOPLIGHT_COLORS[status]}44`,
+          borderRadius: 20, padding: "4px 12px 4px 8px", fontSize: 12,
+        }}>
+          <span style={{
+            display: "inline-block", width: 10, height: 10, borderRadius: "50%",
+            background: STOPLIGHT_COLORS[status], flexShrink: 0,
+          }} />
+          <span style={{ fontWeight: 600, color: "#1f2328" }}>{label}</span>
+          <span style={{ color: "#57606a" }}>
+            {STOPLIGHT_LABELS[status]}{lastTs ? ` · ${fmtAgo(lastTs)}` : ""}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Status badge ──────────────────────────────────────────────────────────────
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, string> = { completed: "#4AD94A", failed: "#D94A4A", running: "#FF8C00" };
@@ -186,6 +253,7 @@ export default function AdminPage({ onClose }: Props) {
   const [settingsSaved, setSettingsSaved] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [telemetryStatus, setTelemetryStatus] = useState<TelemetryStatus | null>(null);
 
   // ── Spansh enrichment cache state ──────────────────────────────────────────
   const [enrichStatus,   setEnrichStatus]   = useState<EnrichStatus | null>(null);
@@ -228,9 +296,11 @@ export default function AdminPage({ onClose }: Props) {
       getAdminStatus(),
       apiGet<AdminSetting[]>("/api/admin/settings"),
       getEnrichStatus(),
+      getTelemetry().catch(() => null),
     ])
-      .then(([st, sets, es]) => {
+      .then(([st, sets, es, tel]) => {
         setStatus(st);
+        if (tel) setTelemetryStatus(tel);
         const w:  Record<string, number> = { ...DEFAULT_WEIGHTS };
         const t:  Record<string, number> = { ...DEFAULT_THRESHOLDS };
         const tw: Record<string, number> = { ...DEFAULT_TARGET_WEIGHTS };
@@ -587,6 +657,9 @@ export default function AdminPage({ onClose }: Props) {
           )}
         </div>
       </div>
+
+      {/* Feed Health Stoplight */}
+      <FeedStoplight telemetry={telemetryStatus} />
 
       {actionMsg && (
         <div style={{ padding: "10px 14px", background: "#f0f9ff", border: "1px solid #3b82d4", borderRadius: 6, fontSize: 13, marginBottom: 16 }}>

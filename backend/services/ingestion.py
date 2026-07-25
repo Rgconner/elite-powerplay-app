@@ -128,7 +128,7 @@ ALL_POWERS = [
 # ---------------------------------------------------------------------------
 
 
-def _fetch_page_by_power(power: str, page: int) -> dict:
+def _fetch_page_by_power(power: str, page: int, metrics: Optional[dict] = None) -> dict:
     """Fetch one page of systems for a power (controlling_power filter)."""
     payload = {
         "filters": {
@@ -138,12 +138,21 @@ def _fetch_page_by_power(power: str, page: int) -> dict:
         "page": page,
         "sort": [{"id64": {"direction": "asc"}}],
     }
-    resp = requests.post(SPANSH_SEARCH_URL, json=payload, timeout=60)
-    resp.raise_for_status()
-    return resp.json()
+    if metrics is not None:
+        metrics["api_calls"] += 1
+    try:
+        resp = requests.post(SPANSH_SEARCH_URL, json=payload, timeout=60)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as exc:
+        if metrics is not None:
+            metrics["api_errors"] += 1
+            err_msg = f"[page_by_power power={power!r} page={page}] {exc}"
+            metrics["errors"].append(err_msg[:256])
+        raise
 
 
-def _fetch_page_unoccupied(page: int) -> dict:
+def _fetch_page_unoccupied(page: int, metrics: Optional[dict] = None) -> dict:
     """Fetch one page of Unoccupied systems that have multiple powers present.
 
     These are the 'contested' systems in PP2.0: power_state=Unoccupied but
@@ -159,19 +168,28 @@ def _fetch_page_unoccupied(page: int) -> dict:
         "page": page,
         "sort": [{"id64": {"direction": "asc"}}],
     }
-    resp = requests.post(SPANSH_SEARCH_URL, json=payload, timeout=60)
-    resp.raise_for_status()
-    return resp.json()
+    if metrics is not None:
+        metrics["api_calls"] += 1
+    try:
+        resp = requests.post(SPANSH_SEARCH_URL, json=payload, timeout=60)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as exc:
+        if metrics is not None:
+            metrics["api_errors"] += 1
+            err_msg = f"[page_unoccupied page={page}] {exc}"
+            metrics["errors"].append(err_msg[:256])
+        raise
 
 
-def _iter_power_systems(power: str):
+def _iter_power_systems(power: str, metrics: Optional[dict] = None):
     """Yield all system dicts for a given power, paging through the API."""
     page = 0
     total_reported = None
 
     while True:
         logger.debug("Fetching page %d for power '%s'", page, power)
-        data = _fetch_page_by_power(power, page)
+        data = _fetch_page_by_power(power, page, metrics)
 
         if total_reported is None:
             total_reported = data.get("count", 0)
@@ -191,7 +209,7 @@ def _iter_power_systems(power: str):
         time.sleep(REQUEST_DELAY)
 
 
-def _iter_unoccupied_systems():
+def _iter_unoccupied_systems(metrics: Optional[dict] = None):
     """Yield all Unoccupied systems from the Spansh API.
 
     PP2.0 contested systems appear as Unoccupied with a 'power' list containing
@@ -205,7 +223,7 @@ def _iter_unoccupied_systems():
 
     while True:
         logger.debug("Fetching Unoccupied systems page %d", page)
-        data = _fetch_page_unoccupied(page)
+        data = _fetch_page_unoccupied(page, metrics)
 
         if total_reported is None:
             total_reported = data.get("count", 0)
@@ -242,10 +260,11 @@ def run_spansh_ingest(db: Session) -> IngestionRun:
     500 systems at a time.  Inserts one pp_system_snapshots row per system
     per call (insert-only) so the full history accumulates.
     """
+    started_at = datetime.utcnow()
     run = IngestionRun(
         source="spansh_pp",
         status="running",
-        started_at=datetime.utcnow(),
+        started_at=started_at,
         records_processed=0,
     )
     db.add(run)
@@ -255,13 +274,14 @@ def run_spansh_ingest(db: Session) -> IngestionRun:
     logger.info("Spansh PP ingest started via search API (run_id=%d)", run_id)
 
     records_processed = 0
+    metrics: dict = {"api_calls": 0, "api_errors": 0, "errors": []}
 
     try:
         for power in ALL_POWERS:
             logger.info("Ingesting power: %s", power)
             power_count = 0
 
-            for system_obj in _iter_power_systems(power):
+            for system_obj in _iter_power_systems(power, metrics):
                 system_id64: Optional[int] = system_obj.get("id64")
                 if system_id64 is None:
                     continue
@@ -395,7 +415,7 @@ def run_spansh_ingest(db: Session) -> IngestionRun:
         # powers_list and conflict_progress capture the full multi-power data.
         logger.info("Starting multi-power Unoccupied (Contested) pass...")
         contested_count = 0
-        for system_obj in _iter_unoccupied_systems():
+        for system_obj in _iter_unoccupied_systems(metrics):
             system_id64_c: Optional[int] = system_obj.get("id64")
             if system_id64_c is None:
                 continue
@@ -487,28 +507,71 @@ def run_spansh_ingest(db: Session) -> IngestionRun:
         db.commit()
         logger.info("  Finished Contested pass: %d systems stored", contested_count)
 
-        # Final update
+        # Final update — write telemetry alongside status
+        completed_at = datetime.utcnow()
+        error_detail: Optional[str] = "; ".join(metrics["errors"])[:2048] if metrics["errors"] else None
         db.execute(
             text("""
                 UPDATE ingestion_runs
-                SET status = 'completed', completed_at = :now, records_processed = :count
+                SET status = 'completed',
+                    completed_at = :now,
+                    records_processed = :count,
+                    duration_seconds = :duration,
+                    api_calls_made = :api_calls,
+                    api_errors = :api_errors,
+                    error_count = :error_count,
+                    error_detail = :error_detail
                 WHERE id = :run_id
             """),
-            {"now": datetime.utcnow(), "count": records_processed, "run_id": run_id},
+            {
+                "now": completed_at,
+                "count": records_processed,
+                "duration": (completed_at - started_at).total_seconds(),
+                "api_calls": metrics["api_calls"],
+                "api_errors": metrics["api_errors"],
+                "error_count": metrics["api_errors"],
+                "error_detail": error_detail,
+                "run_id": run_id,
+            },
         )
         db.commit()
         db.refresh(run)
         logger.info(
-            "Spansh PP ingest complete: %d total systems across %d powers + contested pass (run_id=%d)",
+            "Spansh PP ingest complete: %d total systems across %d powers + contested pass "
+            "(run_id=%d, duration=%.1fs, api_calls=%d, api_errors=%d)",
             records_processed, len(ALL_POWERS), run_id,
+            (completed_at - started_at).total_seconds(),
+            metrics["api_calls"], metrics["api_errors"],
         )
 
     except Exception:
         logger.exception("Spansh PP ingest failed (run_id=%d)", run_id)
         try:
+            completed_at = datetime.utcnow()
+            error_detail = "; ".join(metrics["errors"])[:2048] if metrics["errors"] else None
             db.execute(
-                text("UPDATE ingestion_runs SET status = 'failed' WHERE id = :id"),
-                {"id": run_id},
+                text("""
+                    UPDATE ingestion_runs
+                    SET status = 'failed',
+                        completed_at = :now,
+                        records_processed = :count,
+                        duration_seconds = :duration,
+                        api_calls_made = :api_calls,
+                        api_errors = :api_errors,
+                        error_count = :error_count,
+                        error_detail = :error_detail
+                    WHERE id = :id
+                """),
+                {
+                    "now": completed_at,
+                    "count": records_processed,
+                    "duration": (completed_at - started_at).total_seconds(),
+                    "api_calls": metrics["api_calls"],
+                    "api_errors": metrics["api_errors"],
+                    "error_count": metrics["api_errors"],
+                    "error_detail": error_detail,
+                    "id": run_id,
+                },
             )
             db.commit()
         except Exception:

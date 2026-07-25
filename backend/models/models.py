@@ -40,11 +40,18 @@ class IngestionRun(Base):
     __tablename__ = "ingestion_runs"
 
     id = Column(Integer, primary_key=True, index=True)
-    source = Column(String(32), nullable=False)          # "spansh_pp"
+    source = Column(String(32), nullable=False)          # "spansh_pp" | "edsm"
     started_at = Column(DateTime, default=func.now(), nullable=False)
     completed_at = Column(DateTime, nullable=True)
     status = Column(String(16), nullable=False, default="running")  # running|completed|failed
     records_processed = Column(Integer, nullable=False, default=0)
+
+    # ── Telemetry fields (added via ALTER TABLE at startup) ───────────────────
+    duration_seconds = Column(Float, nullable=True)
+    error_count = Column(Integer, nullable=False, default=0)
+    api_calls_made = Column(Integer, nullable=False, default=0)
+    api_errors = Column(Integer, nullable=False, default=0)
+    error_detail = Column(String(2048), nullable=True)
 
     snapshots = relationship("PPSystemSnapshot", back_populates="ingestion_run")
 
@@ -262,6 +269,48 @@ class PpRealtimeState(Base):
     cp_as_undermining = Column(Numeric(12, 2), nullable=False, default=0)
     latest_event_ts = Column(DateTime, nullable=True)
     refreshed_at = Column(DateTime, default=func.now(), nullable=False)
+
+
+# ---------------------------------------------------------------------------
+# eddn_feed_stats — singleton heartbeat written by the EDDN listener process
+# ---------------------------------------------------------------------------
+
+
+class EddnFeedStats(Base):
+    """Persistent heartbeat written by the eddn-listener every STATS_LOG_INTERVAL_SECONDS.
+
+    The listener upserts a single row (id=1) so the backend can query
+    the latest stream health without parsing log files.
+    """
+
+    __tablename__ = "eddn_feed_stats"
+
+    id = Column(Integer, primary_key=True)           # always 1 (singleton)
+    recorded_at = Column(DateTime, nullable=False)    # when this row was last written
+    listener_started_at = Column(DateTime, nullable=False)
+    events_total = Column(BigInteger, nullable=False, default=0)   # since process start
+    events_last_5min = Column(Integer, nullable=False, default=0)  # since last flush
+    dedup_rejected = Column(Integer, nullable=False, default=0)    # ON CONFLICT skips
+    decode_errors = Column(Integer, nullable=False, default=0)
+    last_event_ts = Column(DateTime, nullable=True)                # most recent event_timestamp
+
+
+# ---------------------------------------------------------------------------
+# enrichment_stats — daily cache hit/miss counters for Spansh enrichment
+# ---------------------------------------------------------------------------
+
+
+class EnrichmentStats(Base):
+    """One row per calendar day tracking Spansh enrichment cache performance."""
+
+    __tablename__ = "enrichment_stats"
+
+    stat_date = Column(DateTime, primary_key=True)   # truncated to day (UTC)
+    cache_hits = Column(Integer, nullable=False, default=0)
+    cache_misses = Column(Integer, nullable=False, default=0)
+    api_calls = Column(Integer, nullable=False, default=0)
+    api_errors = Column(Integer, nullable=False, default=0)
+    total_fetch_ms = Column(Float, nullable=False, default=0.0)   # for avg calc
 
 
 # ---------------------------------------------------------------------------

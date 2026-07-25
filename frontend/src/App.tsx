@@ -3,13 +3,15 @@ import TableView from "./pages/TableView";
 import TargetListView from "./pages/TargetListView";
 import TargetAnalysisView from "./pages/TargetAnalysisView";
 import AdminPage from "./pages/AdminPage";
+import TelemetryPage from "./pages/TelemetryPage";
 
-type Tab = "table" | "list" | "targets";
+type Tab = "table" | "list" | "targets" | "telemetry";
 
 const TAB_LABELS: Record<Tab, string> = {
-  table:   "📋 Overview",
-  list:    "🎯 Target List",
-  targets: "⚔ Target Analysis",
+  table:     "📋 Overview",
+  list:      "🎯 Target List",
+  targets:   "⚔ Target Analysis",
+  telemetry: "📡 Telemetry",
 };
 
 export default function App() {
@@ -39,7 +41,7 @@ export default function App() {
         </span>
 
         {/* Tab buttons */}
-        {(["table", "list", "targets"] as Tab[]).map((t) => {
+        {(["table", "list", "targets", "telemetry"] as Tab[]).map((t) => {
           const active = tab === t;
           return (
             <button
@@ -88,9 +90,10 @@ export default function App() {
 
       {/* Page content — offset by tab bar height */}
       <div style={{ paddingTop: 44 }}>
-        {tab === "table"   && <TableView />}
-        {tab === "list"    && <TargetListView />}
-        {tab === "targets" && <TargetAnalysisView />}
+        {tab === "table"     && <TableView />}
+        {tab === "list"      && <TargetListView />}
+        {tab === "targets"   && <TargetAnalysisView />}
+        {tab === "telemetry" && <TelemetryPage />}
       </div>
     </div>
   );

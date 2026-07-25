@@ -24,6 +24,11 @@ class IngestionRunSchema(BaseModel):
     completed_at: Optional[datetime] = None
     status: str
     records_processed: int
+    duration_seconds: Optional[float] = None
+    error_count: int = 0
+    api_calls_made: int = 0
+    api_errors: int = 0
+    error_detail: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------

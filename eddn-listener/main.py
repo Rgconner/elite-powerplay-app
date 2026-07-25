@@ -127,9 +127,13 @@ def resolve_system_id64(system_name: str, db_session) -> Optional[int]:
 
 
 def insert_event(event_data: dict, db_session) -> bool:
-    """Insert a PowerplayMerits event into pp_powerplay_events table."""
+    """Insert a PowerplayMerits event into pp_powerplay_events table.
+
+    Returns True if a new row was inserted, False if deduplicated (ON CONFLICT)
+    or on error.
+    """
     try:
-        db_session.execute(
+        result = db_session.execute(
             text("""
                 INSERT INTO pp_powerplay_events (
                     message_id, uploader_id, event_timestamp, gateway_ts,
@@ -145,11 +149,56 @@ def insert_event(event_data: dict, db_session) -> bool:
             event_data,
         )
         db_session.commit()
-        return True
+        # rowcount == 0 means the ON CONFLICT DO NOTHING clause fired (duplicate)
+        return result.rowcount > 0
     except Exception as e:
         logger.error("Failed to insert event: %s", e)
         db_session.rollback()
         return False
+
+
+def flush_stats_to_db(
+    db_session,
+    stats: dict,
+    listener_started_at: datetime,
+    last_event_ts: Optional[datetime],
+    events_since_last_flush: int,
+) -> None:
+    """Upsert a singleton row (id=1) into eddn_feed_stats with current counters."""
+    try:
+        db_session.execute(
+            text("""
+                INSERT INTO eddn_feed_stats (
+                    id, recorded_at, listener_started_at,
+                    events_total, events_last_5min,
+                    dedup_rejected, decode_errors, last_event_ts
+                ) VALUES (
+                    1, NOW(), :started_at,
+                    :events_total, :events_last_5min,
+                    :dedup_rejected, :decode_errors, :last_event_ts
+                )
+                ON CONFLICT (id) DO UPDATE SET
+                    recorded_at        = EXCLUDED.recorded_at,
+                    listener_started_at = EXCLUDED.listener_started_at,
+                    events_total       = EXCLUDED.events_total,
+                    events_last_5min   = EXCLUDED.events_last_5min,
+                    dedup_rejected     = EXCLUDED.dedup_rejected,
+                    decode_errors      = EXCLUDED.decode_errors,
+                    last_event_ts      = EXCLUDED.last_event_ts
+            """),
+            {
+                "started_at": listener_started_at,
+                "events_total": stats["inserted"],
+                "events_last_5min": events_since_last_flush,
+                "dedup_rejected": stats["dedup_rejected"],
+                "decode_errors": stats["decode_errors"],
+                "last_event_ts": last_event_ts,
+            },
+        )
+        db_session.commit()
+    except Exception as e:
+        logger.warning("Failed to flush stats to DB: %s", e)
+        db_session.rollback()
 
 
 def process_message(message: dict, db_session) -> bool:
@@ -237,6 +286,7 @@ def main():
 
     retry_delay = RETRY_DELAY_INITIAL
     db_session = SessionLocal()
+    listener_started_at = datetime.utcnow()
 
     # Stats counters
     stats = {
@@ -248,8 +298,11 @@ def main():
         "decode_errors": 0,
         "json_errors": 0,
         "inserted": 0,
+        "dedup_rejected": 0,
     }
     last_stats_time = time.time()
+    last_event_ts: Optional[datetime] = None
+    inserted_since_last_flush: int = 0
 
     HEARTBEAT_FILE = "/tmp/eddn_heartbeat"
     try:
@@ -294,42 +347,57 @@ def main():
                         continue
 
                     # Process the message
-                    success = process_message(message, db_session)
-                    if not success:
-                        # Track skip reasons
-                        schema_ref = message.get("$schemaRef", "")
-                        if schema_ref != EDDN_SCHEMA:
+                    inserted = process_message(message, db_session)
+                    if inserted is False:
+                        # Track skip / dedup reasons
+                        schema_ref_msg = message.get("$schemaRef", "")
+                        if schema_ref_msg != EDDN_SCHEMA:
                             stats["skipped_schema"] += 1
                         else:
-                            msg = message.get("message", {})
-                            event_type = msg.get("event", "")
+                            msg_body = message.get("message", {})
+                            event_type = msg_body.get("event", "")
                             if event_type != TARGET_EVENT:
                                 stats["skipped_event"] += 1
                             else:
-                                stats["skipped_fields"] += 1
+                                # process_message returned False but schema+event matched:
+                                # either missing fields or a dedup rejection — count as dedup
+                                stats["dedup_rejected"] += 1
                     else:
                         stats["processed"] += 1
                         stats["inserted"] += 1
+                        inserted_since_last_flush += 1
+                        # Capture the event timestamp for the heartbeat
+                        msg_body = message.get("message", {})
+                        ts_str = msg_body.get("timestamp", "")
+                        if ts_str:
+                            parsed = parse_timestamp(ts_str)
+                            if parsed:
+                                last_event_ts = parsed
 
                     # Reset retry delay on successful receive
                     retry_delay = RETRY_DELAY_INITIAL
 
-                    # Periodic stats logging
+                    # Periodic stats logging + DB heartbeat flush
                     now = time.time()
                     if now - last_stats_time >= STATS_LOG_INTERVAL_SECONDS:
                         logger.info(
                             "Stats: received=%d, processed=%d, inserted=%d, "
-                            "skipped_schema=%d, skipped_event=%d, skipped_fields=%d, "
+                            "dedup_rejected=%d, skipped_schema=%d, skipped_event=%d, "
                             "decode_errors=%d, json_errors=%d",
                             stats["received"],
                             stats["processed"],
                             stats["inserted"],
+                            stats["dedup_rejected"],
                             stats["skipped_schema"],
                             stats["skipped_event"],
-                            stats["skipped_fields"],
                             stats["decode_errors"],
                             stats["json_errors"],
                         )
+                        flush_stats_to_db(
+                            db_session, stats, listener_started_at,
+                            last_event_ts, inserted_since_last_flush,
+                        )
+                        inserted_since_last_flush = 0
                         last_stats_time = now
                 else:
                     # No message received, just continue
@@ -348,19 +416,23 @@ def main():
     except KeyboardInterrupt:
         logger.info("Shutting down EDDN listener...")
     finally:
-        # Final stats log
+        # Final stats log + DB flush
         logger.info(
             "Final stats: received=%d, processed=%d, inserted=%d, "
-            "skipped_schema=%d, skipped_event=%d, skipped_fields=%d, "
+            "dedup_rejected=%d, skipped_schema=%d, skipped_event=%d, "
             "decode_errors=%d, json_errors=%d",
             stats["received"],
             stats["processed"],
             stats["inserted"],
+            stats["dedup_rejected"],
             stats["skipped_schema"],
             stats["skipped_event"],
-            stats["skipped_fields"],
             stats["decode_errors"],
             stats["json_errors"],
+        )
+        flush_stats_to_db(
+            db_session, stats, listener_started_at,
+            last_event_ts, inserted_since_last_flush,
         )
         socket.close()
         context.term()

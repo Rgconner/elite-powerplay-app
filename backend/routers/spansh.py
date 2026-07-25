@@ -13,6 +13,7 @@ Endpoints:
 
 import asyncio
 import logging
+import time
 
 import httpx
 from fastapi import APIRouter, Depends
@@ -341,6 +342,50 @@ async def _fetch_system_dump(system_id64: int) -> dict | None:
         return None
 
 
+# ── Enrichment stats helper ────────────────────────────────────────────────────
+
+
+def _record_enrichment_stats(
+    db: Session,
+    hits: int,
+    misses: int,
+    api_calls: int,
+    api_errors: int,
+    total_fetch_ms: float,
+) -> None:
+    """UPSERT today's enrichment_stats row with incremented counters.
+
+    Uses DATE_TRUNC('day', NOW()) as the primary key so one row accumulates
+    per UTC calendar day.  Safe to call from an async handler — runs in the
+    same sync DB session.
+    """
+    try:
+        db.execute(
+            text("""
+                INSERT INTO enrichment_stats
+                    (stat_date, cache_hits, cache_misses, api_calls, api_errors, total_fetch_ms)
+                VALUES
+                    (DATE_TRUNC('day', NOW()),
+                     :hits, :misses, :api_calls, :api_errors, :total_ms)
+                ON CONFLICT (stat_date) DO UPDATE SET
+                    cache_hits    = enrichment_stats.cache_hits    + EXCLUDED.cache_hits,
+                    cache_misses  = enrichment_stats.cache_misses  + EXCLUDED.cache_misses,
+                    api_calls     = enrichment_stats.api_calls     + EXCLUDED.api_calls,
+                    api_errors    = enrichment_stats.api_errors    + EXCLUDED.api_errors,
+                    total_fetch_ms = enrichment_stats.total_fetch_ms + EXCLUDED.total_fetch_ms
+            """),
+            {
+                "hits": hits, "misses": misses,
+                "api_calls": api_calls, "api_errors": api_errors,
+                "total_ms": total_fetch_ms,
+            },
+        )
+        db.commit()
+    except Exception as exc:
+        logger.warning("Failed to record enrichment stats: %s", exc)
+        db.rollback()
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 
@@ -401,6 +446,12 @@ async def enrich_batch(
             else:
                 need_fetch.append(sid)
 
+    # Telemetry counters for this batch
+    cache_hits = len(unique_ids) - len(need_fetch)
+    fetch_api_calls = 0
+    fetch_api_errors = 0
+    fetch_total_ms = 0.0
+
     # --- Phase 2: Fetch missing from Spansh (first-access) ---
     if need_fetch:
         logger.info("Fetching Spansh enrichment for %d system(s)", len(need_fetch))
@@ -422,7 +473,15 @@ async def enrich_batch(
                 await asyncio.sleep(BATCH_DELAY_MS / 1000.0)  # rate limit
 
             sys_name = name_map.get(sid)
-            has_platinum, has_boom, has_pristine = await _enrich_system(sid, sys_name)
+            t0 = time.perf_counter()
+            try:
+                has_platinum, has_boom, has_pristine = await _enrich_system(sid, sys_name)
+                fetch_api_calls += 1
+            except Exception:
+                fetch_api_errors += 1
+                fetch_api_calls += 1
+                has_platinum = has_boom = has_pristine = False
+            fetch_total_ms += (time.perf_counter() - t0) * 1000.0
 
             # Upsert into cache (first-access persistence)
             db.execute(
@@ -442,6 +501,17 @@ async def enrich_batch(
             results[sid] = EnrichResult(
                 has_platinum=has_platinum, has_boom=has_boom, has_pristine=has_pristine,
             )
+
+    # Record telemetry for this batch (fire-and-forget, errors are swallowed)
+    if cache_hits or need_fetch:
+        _record_enrichment_stats(
+            db,
+            hits=cache_hits,
+            misses=len(need_fetch),
+            api_calls=fetch_api_calls,
+            api_errors=fetch_api_errors,
+            total_fetch_ms=fetch_total_ms,
+        )
 
     return BatchEnrichResponse(results=results)
 

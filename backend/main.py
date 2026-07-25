@@ -143,6 +143,54 @@ with engine.connect() as _conn:
         "CREATE INDEX IF NOT EXISTS ix_audit_log_admin_email "
         "ON audit_log (admin_email)"
     ))
+
+    # ── EDDN feed stats (singleton row written by eddn-listener) ─────────────
+    _conn.execute(_text(
+        "CREATE TABLE IF NOT EXISTS eddn_feed_stats ("
+        "  id INTEGER PRIMARY KEY,"
+        "  recorded_at TIMESTAMP NOT NULL,"
+        "  listener_started_at TIMESTAMP NOT NULL,"
+        "  events_total BIGINT NOT NULL DEFAULT 0,"
+        "  events_last_5min INTEGER NOT NULL DEFAULT 0,"
+        "  dedup_rejected INTEGER NOT NULL DEFAULT 0,"
+        "  decode_errors INTEGER NOT NULL DEFAULT 0,"
+        "  last_event_ts TIMESTAMP"
+        ")"
+    ))
+
+    # ── enrichment_stats (daily UPSERT by backend) ────────────────────────────
+    _conn.execute(_text(
+        "CREATE TABLE IF NOT EXISTS enrichment_stats ("
+        "  stat_date TIMESTAMP PRIMARY KEY,"
+        "  cache_hits INTEGER NOT NULL DEFAULT 0,"
+        "  cache_misses INTEGER NOT NULL DEFAULT 0,"
+        "  api_calls INTEGER NOT NULL DEFAULT 0,"
+        "  api_errors INTEGER NOT NULL DEFAULT 0,"
+        "  total_fetch_ms FLOAT NOT NULL DEFAULT 0.0"
+        ")"
+    ))
+
+    # ── ingestion_runs telemetry columns ──────────────────────────────────────
+    _conn.execute(_text(
+        "ALTER TABLE ingestion_runs "
+        "ADD COLUMN IF NOT EXISTS duration_seconds FLOAT"
+    ))
+    _conn.execute(_text(
+        "ALTER TABLE ingestion_runs "
+        "ADD COLUMN IF NOT EXISTS error_count INTEGER NOT NULL DEFAULT 0"
+    ))
+    _conn.execute(_text(
+        "ALTER TABLE ingestion_runs "
+        "ADD COLUMN IF NOT EXISTS api_calls_made INTEGER NOT NULL DEFAULT 0"
+    ))
+    _conn.execute(_text(
+        "ALTER TABLE ingestion_runs "
+        "ADD COLUMN IF NOT EXISTS api_errors INTEGER NOT NULL DEFAULT 0"
+    ))
+    _conn.execute(_text(
+        "ALTER TABLE ingestion_runs "
+        "ADD COLUMN IF NOT EXISTS error_detail VARCHAR(2048)"
+    ))
     _conn.commit()
 
 from routers import auth, admin  # noqa: E402
@@ -150,6 +198,7 @@ from routers.powers import router as powers_router, systems_router  # noqa: E402
 from routers.spansh import router as spansh_router  # noqa: E402
 from routers.admin import run_spansh_ingest_task  # noqa: E402
 from routers.architecture import router as architecture_router  # noqa: E402
+from routers.telemetry import router as telemetry_router  # noqa: E402
 from services.realtime_accumulator import run_realtime_accumulator  # noqa: E402
 
 logger = logging.getLogger(__name__)
@@ -230,6 +279,7 @@ app.include_router(systems_router,       prefix=API_PREFIX)
 app.include_router(spansh_router,        prefix=API_PREFIX)
 app.include_router(admin.router,         prefix=API_PREFIX)
 app.include_router(architecture_router,  prefix=API_PREFIX)
+app.include_router(telemetry_router,     prefix=API_PREFIX)
 
 
 @app.get("/health", tags=["health"])
