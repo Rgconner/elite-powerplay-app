@@ -1,15 +1,13 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# postgres.yaml  —  PostgreSQL StatefulSet + Service
+# overlays/local-db/postgres.yaml  —  PostgreSQL StatefulSet + Service + PVC
 #
-# Uses a PersistentVolumeClaim for durable data storage.
-# The postgres-password is injected from the Secret; the database name and
-# user are pulled from the ConfigMap.
+# Only included when deploying with the local-db overlay.
+# For an external database cluster, skip this file entirely and set
+# DATABASE_URL in k8s/secrets.local.yaml to your external DSN.
 #
 # Tier 4 of the QueuePool fix: a custom postgresql.conf (from
 # postgres-config.yaml) is mounted and selected via
 # `args: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]`.
-# This gives us statement_timeout, idle_in_transaction_session_timeout, and
-# max_connections=200 — none of which the upstream alpine image sets.
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ── Persistent storage ────────────────────────────────────────────────────────
@@ -55,6 +53,11 @@ spec:
     spec:
       terminationGracePeriodSeconds: 60
 
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+
       containers:
         - name: postgres
           image: postgres:16-alpine
@@ -65,7 +68,6 @@ spec:
               protocol: TCP
 
           env:
-            # Database name and user come from the ConfigMap
             - name: POSTGRES_DB
               valueFrom:
                 configMapKeyRef:
@@ -76,16 +78,13 @@ spec:
                 configMapKeyRef:
                   name: elite-powerplay-config
                   key: POSTGRES_USER
-            # Password comes from the Secret
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: elite-powerplay-secrets
+                  name: elite-powerplay-postgres-secrets
                   key: postgres-password
 
-          # Override the entrypoint to load our custom postgresql.conf.
-          # Without this, postgres reads the upstream alpine image's
-          # stock config (max_connections=100, no timeouts, etc.).
+          # Load the custom postgresql.conf (see postgres-config.yaml)
           args:
             - postgres
             - -c
@@ -94,7 +93,6 @@ spec:
           volumeMounts:
             - name: postgres-data
               mountPath: /var/lib/postgresql/data
-            # Custom config file (mounted read-only via subPath)
             - name: postgres-config
               mountPath: /etc/postgresql/postgresql.conf
               subPath: postgresql.conf
@@ -122,9 +120,13 @@ spec:
           readinessProbe:
             exec:
               command:
-                - sh
+                - psql
+                - -U
+                - $(POSTGRES_USER)
+                - -d
+                - $(POSTGRES_DB)
                 - -c
-                - pg_isready -U $(POSTGRES_USER) -d $(POSTGRES_DB)
+                - "SELECT 1"
             initialDelaySeconds: 5
             periodSeconds: 5
             timeoutSeconds: 3
@@ -134,7 +136,6 @@ spec:
         - name: postgres-data
           persistentVolumeClaim:
             claimName: postgres-data
-        # Custom postgresql.conf (see postgres-config.yaml)
         - name: postgres-config
           configMap:
             name: postgres-config
@@ -156,7 +157,7 @@ metadata:
 spec:
   selector:
     app: postgres
-  clusterIP: None          # headless — StatefulSet resolves as postgres.elite-powerplay.svc
+  clusterIP: None          # headless — resolves as postgres.elite-powerplay.svc
   ports:
     - name: postgres
       port: 5432

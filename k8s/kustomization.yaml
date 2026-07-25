@@ -1,15 +1,18 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# kustomization.yaml  —  Kustomize entry point
+# kustomization.yaml  —  BASE Kustomize entry point
 #
-# Apply everything in one command:
-#   kubectl apply -k k8s/
+# This is the shared base.  Do NOT apply this directly — use one of the
+# overlays instead:
 #
-# Or with Kustomize directly:
-#   kustomize build k8s/ | kubectl apply -f -
+#   With a local in-cluster PostgreSQL:
+#     kubectl apply -k k8s/overlays/local-db/
 #
-# NOTE: Apply secrets.local.yaml separately (it is not listed here so you
-#       never accidentally commit real credentials):
+#   With an external PostgreSQL cluster (RDS, Supabase, self-hosted, etc.):
+#     kubectl apply -k k8s/overlays/external-db/
+#
+# Secrets must be applied separately (never committed):
 #   kubectl apply -f k8s/secrets.local.yaml
+#   kubectl apply -f k8s/overlays/local-db/secrets.local.yaml   # (local-db only)
 # ─────────────────────────────────────────────────────────────────────────────
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
@@ -19,13 +22,11 @@ namespace: elite-powerplay
 resources:
   - namespace.yaml
   - configmap.yaml
-  - postgres-config.yaml    # Custom postgresql.conf
-  - postgres.yaml
   - backend.yaml
   - frontend.yaml
   - image-updater.yaml
   - eddn-listener.yaml      # EDDN ZeroMQ subscriber (isolated deployment)
-  - ingress.yaml            # nginx-ingress controller (replaces Cloudflare Tunnel)
+  - ingress.yaml            # nginx-ingress controller
 
 # ── Image tags ────────────────────────────────────────────────────────────────
 # Override the :latest tag here to pin to a specific build SHA.

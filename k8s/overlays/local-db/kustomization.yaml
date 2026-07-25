@@ -1,0 +1,46 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# overlays/local-db/kustomization.yaml
+#
+# Deploys the full stack with an in-cluster PostgreSQL StatefulSet.
+# Use this for local development, home-lab, or single-node clusters where
+# you want Postgres to run inside Kubernetes alongside the application.
+#
+# DEPLOY
+# ------
+#   # 1. Apply the app secrets (database-url points at in-cluster postgres):
+#   kubectl apply -f k8s/secrets.local.yaml
+#
+#   # 2. Apply the postgres-specific secret (password for the StatefulSet):
+#   kubectl apply -f k8s/overlays/local-db/postgres-secrets.local.yaml
+#
+#   # 3. Apply the overlay:
+#   kubectl apply -k k8s/overlays/local-db/
+#
+# SECRETS
+# -------
+# Copy the templates:
+#   cp k8s/secrets.yaml                            k8s/secrets.local.yaml
+#   cp k8s/overlays/local-db/postgres-secrets.yaml \
+#      k8s/overlays/local-db/postgres-secrets.local.yaml
+# Edit both files, then apply as above.
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: elite-powerplay
+
+# Pull in the shared base resources
+resources:
+  - ../../             # k8s/ base
+  - postgres.yaml      # StatefulSet + headless Service + PVC
+  - postgres-config.yaml   # ConfigMap with custom postgresql.conf
+
+# ── Strategic-merge patch: add the wait-for-postgres init container ───────────
+# The base backend.yaml has no initContainers because they're meaningless when
+# using an external database.  This patch appends the init container only for
+# this overlay so the backend pod waits for the local StatefulSet to be ready.
+patches:
+  - path: patch-backend-wait-for-postgres.yaml
+    target:
+      kind: Deployment
+      name: backend

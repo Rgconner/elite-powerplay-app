@@ -1,0 +1,34 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# overlays/external-db/kustomization.yaml
+#
+# Deploys the application stack pointing at an external PostgreSQL service
+# (e.g. Amazon RDS, Supabase, a self-hosted bare-metal/VM Postgres, or any
+# other cluster-external database).
+#
+# No postgres StatefulSet, PVC, or custom postgresql.conf is created.
+# The backend connects directly via the DATABASE_URL secret.
+#
+# DEPLOY
+# ------
+#   # 1. Apply the app secrets — set database-url to your external DSN:
+#   kubectl apply -f k8s/secrets.local.yaml
+#
+#   # 2. Apply the overlay:
+#   kubectl apply -k k8s/overlays/external-db/
+#
+# SECRETS
+# -------
+# Copy the template and fill in your external DSN:
+#   cp k8s/secrets.yaml k8s/secrets.local.yaml
+#   # Edit database-url:
+#   #   postgresql://<user>:<password>@<host>:<port>/<dbname>
+#   kubectl apply -f k8s/secrets.local.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: elite-powerplay
+
+# Pull in the shared base resources — no postgres resources added here.
+resources:
+  - ../../             # k8s/ base

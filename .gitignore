@@ -20,8 +20,12 @@ dist/
 .env
 *.env.local
 
-# Kubernetes secrets with real values (use k8s/secrets.yaml as the template)
-k8s/secrets.local.yaml
+# Kubernetes secrets with real values — covers all *.local.yaml files:
+#   k8s/secrets.local.yaml
+#   k8s/overlays/local-db/postgres-secrets.local.yaml
+#   (and any future *.local.yaml anywhere under k8s/)
+k8s/*.local.yaml
+k8s/**/*.local.yaml
 
 # Editor
 .vscode/

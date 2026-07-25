@@ -1,0 +1,39 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# patch-backend-wait-for-postgres.yaml
+#
+# Strategic-merge patch applied by the local-db overlay only.
+# Adds an initContainer to the backend Deployment that polls pg_isready
+# until the in-cluster postgres StatefulSet is accepting connections.
+#
+# This patch is NOT applied by the external-db overlay because the backend
+# cannot reach an external host via the in-cluster DNS name "postgres".
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: elite-powerplay
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:16-alpine
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -h postgres -U $(POSTGRES_USER) -d $(POSTGRES_DB); do
+                echo "Waiting for postgres…"; sleep 2;
+              done
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: elite-powerplay-config
+                  key: POSTGRES_USER
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: elite-powerplay-config
+                  key: POSTGRES_DB
