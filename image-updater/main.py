@@ -134,6 +134,16 @@ class UpdaterConfig:
                 image_repo=f"{owner}/elite-powerplay-frontend",
                 container_name="frontend",
             ),
+            ImageConfig(
+                name="eddn-listener",
+                image_repo=f"{owner}/elite-powerplay-eddn-listener",
+                container_name="eddn-listener",
+            ),
+            ImageConfig(
+                name="image-updater",
+                image_repo=f"{owner}/elite-powerplay-image-updater",
+                container_name="image-updater",
+            ),
         )
         return cls(
             registry=registry,
@@ -479,6 +489,41 @@ def _backend_version_from_labels(labels: dict[str, str]) -> str:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
+def _reconcile_simple(
+    cfg: UpdaterConfig,
+    apps: client.AppsV1Api,
+    http: httpx.Client,
+    img: "ImageConfig",
+    updated: list[str],
+) -> bool:
+    """Reconcile a single image with no version gate (patch + wait only).
+
+    Returns False if the digest could not be resolved (caller may choose to
+    skip remaining images); True otherwise (including when already up-to-date).
+    """
+    latest = get_latest_digest(http, cfg.registry, img.image_repo, cfg.github_token)
+    if not latest:
+        log.warning("Could not resolve :latest digest for %s — skipping", img.name)
+        return False
+
+    current_image = get_deployment_image(apps, cfg.namespace, img.name, img.container_name)
+    current = _config_digest_from_image(current_image)
+
+    if current != latest:
+        new_image = f"{cfg.registry}/{img.image_repo}:latest@{latest}"
+        log.info(
+            "%s drift detected: running=%s latest=%s → rolling",
+            img.name, current or current_image, latest,
+        )
+        patch_deployment_image(apps, cfg.namespace, img.name, img.container_name, new_image)
+        wait_for_rollout(apps, cfg.namespace, img.name, cfg.rollout_timeout_seconds)
+        updated.append(f"{img.name}@{latest[:19]}")
+    else:
+        log.debug("%s already on latest digest (%s) — no action", img.name, latest[:19])
+
+    return True
+
+
 def reconcile_once(
     cfg: UpdaterConfig,
     apps: client.AppsV1Api,
@@ -486,13 +531,11 @@ def reconcile_once(
 ) -> list[str]:
     """One full reconcile pass.  Returns the list of images that were updated.
 
-    Strategy:
-      • For each image, fetch the config digest of the :latest tag from ghcr.io.
-      • Compare to the digest embedded in the running Deployment's image ref.
-      • If they differ, patch → wait for rollout → (backend only) version gate.
-
-    Pass is sequential: backend first, then frontend.  Any failure aborts the
-    whole pass so we never roll the frontend onto an un-confirmed backend.
+    Ordering (strict sequential — a failure at any step aborts the remainder):
+      1. backend      — patch + rollout-wait + version gate
+      2. frontend     — patch + rollout-wait  (only after backend gate passes)
+      3. eddn-listener — patch + rollout-wait (no version gate)
+      4. image-updater — patch + rollout-wait (self-update; no version gate)
     """
     updated: list[str] = []
 
@@ -511,11 +554,7 @@ def reconcile_once(
     current_digest = _config_digest_from_image(current_image)
 
     if current_digest != latest_digest:
-        # Embed the digest in the image ref so we can compare on the next pass
-        # without a registry round-trip for the digest.
-        new_image = (
-            f"{cfg.registry}/{backend_cfg.image_repo}:latest@{latest_digest}"
-        )
+        new_image = f"{cfg.registry}/{backend_cfg.image_repo}:latest@{latest_digest}"
         log.info(
             "Backend drift detected: running=%s latest=%s → rolling",
             current_digest or current_image, latest_digest,
@@ -541,36 +580,20 @@ def reconcile_once(
     else:
         log.debug("Backend already on latest digest (%s) — no action", latest_digest[:19])
 
-    # ── 2. Frontend (only after backend is confirmed ready) ─────────────────
-    frontend_cfg = cfg.images[1]
-    latest_digest_fe = get_latest_digest(
-        http, cfg.registry, frontend_cfg.image_repo, cfg.github_token
-    )
-    if not latest_digest_fe:
-        log.warning("Could not resolve :latest digest for frontend — skipping")
+    # ── 2. Frontend ──────────────────────────────────────────────────────────
+    if not _reconcile_simple(cfg, apps, http, cfg.images[1], updated):
         return updated
 
-    current_image_fe = get_deployment_image(
-        apps, cfg.namespace, frontend_cfg.name, frontend_cfg.container_name
-    )
-    current_digest_fe = _config_digest_from_image(current_image_fe)
+    # ── 3. EDDN listener ─────────────────────────────────────────────────────
+    if not _reconcile_simple(cfg, apps, http, cfg.images[2], updated):
+        return updated
 
-    if current_digest_fe != latest_digest_fe:
-        new_image_fe = (
-            f"{cfg.registry}/{frontend_cfg.image_repo}:latest@{latest_digest_fe}"
-        )
-        log.info(
-            "Frontend drift detected: running=%s latest=%s → rolling",
-            current_digest_fe or current_image_fe, latest_digest_fe,
-        )
-        patch_deployment_image(
-            apps, cfg.namespace, frontend_cfg.name,
-            frontend_cfg.container_name, new_image_fe,
-        )
-        wait_for_rollout(apps, cfg.namespace, frontend_cfg.name, cfg.rollout_timeout_seconds)
-        updated.append(f"{frontend_cfg.name}@{latest_digest_fe[:19]}")
-    else:
-        log.debug("Frontend already on latest digest (%s) — no action", latest_digest_fe[:19])
+    # ── 4. Image-updater (self-update) ───────────────────────────────────────
+    # Patching our own Deployment causes k8s to replace this pod.  The current
+    # reconcile pass will be interrupted mid-way — that is safe because steps
+    # 1–3 are already complete and the next pass (from the new pod) will be
+    # a no-op for those images.
+    _reconcile_simple(cfg, apps, http, cfg.images[3], updated)
 
     return updated
 
@@ -578,6 +601,9 @@ def reconcile_once(
 # ──────────────────────────────────────────────────────────────────────────────
 # Main loop
 # ──────────────────────────────────────────────────────────────────────────────
+
+
+_HEARTBEAT_FILE = "/tmp/image-updater-heartbeat"
 
 
 def main() -> int:
@@ -588,8 +614,17 @@ def main() -> int:
         "PAT" if cfg.github_token else "anonymous",
     )
     apps, _ = load_k8s_client()
-    with httpx.Client() as http:
-        while True:
+    while True:
+        # Write heartbeat before every pass so the liveness probe can detect
+        # a stalled loop (the probe checks file mtime, not process existence).
+        try:
+            open(_HEARTBEAT_FILE, "w").close()
+        except OSError:
+            pass
+
+        # Create a fresh httpx.Client per pass — avoids stale connections
+        # that ghcr.io resets after idle periods (RemoteProtocolError).
+        with httpx.Client() as http:
             try:
                 updated = reconcile_once(cfg, apps, http)
                 if updated:
@@ -600,7 +635,8 @@ def main() -> int:
                 log.error("k8s API error: %s", exc)
             except Exception:
                 log.exception("Reconcile pass failed")
-            time.sleep(cfg.poll_interval_seconds)
+
+        time.sleep(cfg.poll_interval_seconds)
     return 0
 
 

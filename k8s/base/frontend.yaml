@@ -33,6 +33,8 @@ spec:
         app.kubernetes.io/name: elite-powerplay
         app.kubernetes.io/component: frontend
     spec:
+      imagePullSecrets:
+        - name: ghcr-pull
       containers:
         - name: frontend
           image: ghcr.io/rgconner/elite-powerplay-frontend:latest

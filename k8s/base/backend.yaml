@@ -40,6 +40,8 @@ spec:
         app.kubernetes.io/name: elite-powerplay
         app.kubernetes.io/component: backend
     spec:
+      imagePullSecrets:
+        - name: ghcr-pull
       containers:
         - name: backend
           # Pin to a specific sha tag in production; use :latest for dev.

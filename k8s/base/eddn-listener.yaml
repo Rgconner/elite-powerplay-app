@@ -19,6 +19,8 @@ spec:
         app.kubernetes.io/name: elite-powerplay
         app.kubernetes.io/component: eddn-listener
     spec:
+      imagePullSecrets:
+        - name: ghcr-pull
       containers:
       - name: eddn-listener
         image: ghcr.io/rgconner/elite-powerplay-eddn-listener:latest

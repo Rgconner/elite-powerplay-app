@@ -41,12 +41,14 @@ metadata:
     app.kubernetes.io/name: elite-powerplay
     app.kubernetes.io/component: image-updater
 rules:
-  # Read & patch the two Deployments we manage.
+  # Read & patch the four Deployments we manage.
   - apiGroups: ["apps"]
     resources: ["deployments"]
     resourceNames:
       - backend
       - frontend
+      - eddn-listener
+      - image-updater
     verbs: ["get", "list", "watch", "patch"]
   # Read pods for rollout-status calculation.
   - apiGroups: [""]
@@ -157,6 +159,8 @@ spec:
       serviceAccountName: image-updater
       # Don't keep restarting on transient API blips — give it time.
       terminationGracePeriodSeconds: 30
+      imagePullSecrets:
+        - name: ghcr-pull
 
       # Pin to a specific SHA in production; :latest is fine for dev clusters.
       # Override with `kubectl set image deployment/image-updater ...` or via
@@ -179,24 +183,25 @@ spec:
               cpu:    "200m"
               memory: "256Mi"
 
-          # The controller is a long-running daemon, not a request handler.
-          # Readiness: the pod is "ready" as long as the process hasn't
-          # crashed.  We don't expose an HTTP port yet (no /metrics today).
-          # The liveness probe restarts the container if the entrypoint
-          # hasn't been alive for >= 60s (catches silent deadlocks).
+          # Liveness: the main loop writes /tmp/image-updater-heartbeat at the
+          # start of every pass.  If the file is absent or older than 3× the
+          # poll interval (180s) the loop has stalled — restart the container.
           livenessProbe:
             exec:
-              command: ["python", "-c", "import os, sys; sys.exit(0 if os.getpid() > 0 else 1)"]
-            initialDelaySeconds: 60
+              command:
+                - /bin/sh
+                - -c
+                - "test $(( $(date +%s) - $(date +%s -r /tmp/image-updater-heartbeat 2>/dev/null || echo 0) )) -lt 180"
+            initialDelaySeconds: 90
             periodSeconds: 60
             timeoutSeconds: 5
             failureThreshold: 3
 
           # Startup grace: the first reconcile pass can take 30+ s while
-          # it lists tags and reads the deployment.
+          # it resolves manifests and reads the deployments.
           startupProbe:
             exec:
-              command: ["python", "-c", "import os, sys; sys.exit(0)"]
+              command: ["test", "-f", "/tmp/image-updater-heartbeat"]
             initialDelaySeconds: 5
             periodSeconds: 10
             timeoutSeconds: 5
