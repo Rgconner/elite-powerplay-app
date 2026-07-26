@@ -84,6 +84,14 @@ log = logging.getLogger("image-updater")
 
 
 @dataclass(frozen=True)
+class ImageDigests:
+    """The two digests needed for a single image comparison + patch."""
+
+    manifest: str   # sha256 of the linux/amd64 child manifest — used in image ref for kubelet
+    config: str     # sha256 of the image config blob — used for drift comparison
+
+
+@dataclass(frozen=True)
 class ImageConfig:
     """How to discover and update a single image."""
 
@@ -269,21 +277,91 @@ def get_latest_digest(
     registry: str,
     repo: str,
     github_token: str = "",
-) -> Optional[str]:
-    """Return the linux/amd64 config digest of the :latest tag.
+) -> "Optional[ImageDigests]":
+    """Return the manifest digest and config-blob digest of the :latest linux/amd64 image.
 
-    We use the config blob digest (not the manifest digest) as the unique
-    image identity — it is stable across registry operations that re-push
-    the same image.  Returns None on any error.
+    Two digests are needed for different purposes:
+      • manifest_digest  — the sha256 of the child manifest itself, returned by
+                           the registry in the Docker-Content-Digest response header.
+                           This is what the kubelet requires in an image ref
+                           (e.g. ghcr.io/repo:latest@sha256:<manifest_digest>).
+                           Using the config-blob digest here causes
+                           "unexpected media type application/octet-stream" errors.
+      • config_digest    — the sha256 of the image config blob (manifest["config"]["digest"]).
+                           This is stable across re-tags of the same image content and
+                           is used for drift detection (comparing running vs registry).
+
+    Returns None on any error.
     """
     try:
-        token = _registry_token(http, registry, repo, github_token)
-        manifest = _resolve_index_to_amd64(http, registry, repo, "latest", token)
-        config_digest = manifest.get("config", {}).get("digest", "")
+        # Fetch the index and resolve to the linux/amd64 child manifest.
+        # We inline the index resolution here (rather than calling
+        # _resolve_index_to_amd64) because we need both the response headers
+        # (Docker-Content-Digest → manifest digest) and the body
+        # (config.digest → config blob digest).
+        index_token = _registry_token(http, registry, repo, github_token)
+        ACCEPT = (
+            "application/vnd.oci.image.index.v1+json,"
+            "application/vnd.oci.image.manifest.v1+json,"
+            "application/vnd.docker.distribution.manifest.v2+json,"
+            "application/vnd.docker.distribution.manifest.list.v2+json"
+        )
+        index_resp = http.get(
+            f"https://{registry}/v2/{repo}/manifests/latest",
+            headers={"Authorization": f"Bearer {index_token}", "Accept": ACCEPT},
+            timeout=10.0,
+        )
+        index_resp.raise_for_status()
+        index_body = index_resp.json()
+
+        # Resolve OCI index → linux/amd64 child digest
+        media_type = index_body.get("mediaType", "") or ""
+        is_index = (
+            "index" in media_type
+            or "manifest.list" in media_type
+            or bool(index_body.get("manifests"))
+        )
+        if is_index:
+            children = index_body.get("manifests", [])
+            child = next(
+                (
+                    m for m in children
+                    if m.get("platform", {}).get("os") == "linux"
+                    and m.get("platform", {}).get("architecture") == "amd64"
+                ),
+                children[0] if children else None,
+            )
+            if child is None:
+                log.warning("OCI index for %s:latest has no child manifests", repo)
+                return None
+            child_digest = child["digest"]
+            child_token = _registry_token(http, registry, repo, github_token)
+            child_resp = http.get(
+                f"https://{registry}/v2/{repo}/manifests/{child_digest}",
+                headers={
+                    "Authorization": f"Bearer {child_token}",
+                    "Accept": "application/vnd.oci.image.manifest.v1+json,"
+                              "application/vnd.docker.distribution.manifest.v2+json",
+                },
+                timeout=10.0,
+            )
+            child_resp.raise_for_status()
+            manifest_digest = child_resp.headers.get("Docker-Content-Digest", child_digest)
+            manifest_body = child_resp.json()
+        else:
+            # Already a single-platform manifest
+            manifest_digest = index_resp.headers.get("Docker-Content-Digest", "")
+            manifest_body = index_body
+
+        config_digest = manifest_body.get("config", {}).get("digest", "")
         if not config_digest:
             log.warning("No config digest in manifest for %s:latest", repo)
             return None
-        return config_digest
+        if not manifest_digest:
+            log.warning("No Docker-Content-Digest header for %s:latest", repo)
+            return None
+
+        return ImageDigests(manifest=manifest_digest, config=config_digest)
     except httpx.HTTPError as exc:
         log.warning("Failed to fetch latest digest for %s: %s", repo, exc)
         return None
@@ -455,14 +533,16 @@ def wait_for_backend_version(
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def _config_digest_from_image(image: str) -> str:
-    """Extract a stored config digest from an image ref that encodes it.
+def _running_manifest_digest(image: str) -> str:
+    """Extract the manifest digest embedded in a running Deployment's image ref.
 
-    When we patch a Deployment we write `registry/repo:latest@sha256:<config>`.
-    This helper strips the digest portion so we can compare it to what the
-    registry reports for the current :latest tag.
+    When we patch a Deployment we write:
+        registry/repo:latest@sha256:<manifest_digest>
+    On the next pass we read this back and compare to the registry's current
+    manifest digest to detect drift.
 
-    Returns "" if the image ref does not contain a digest.
+    Returns "" if the image ref does not contain a digest (e.g. bare :latest
+    from a fresh cluster apply — always triggers a roll on the first pass).
     """
     # image ref format: registry/repo:tag@sha256:...
     if "@" in image:
@@ -501,25 +581,29 @@ def _reconcile_simple(
     Returns False if the digest could not be resolved (caller may choose to
     skip remaining images); True otherwise (including when already up-to-date).
     """
-    latest = get_latest_digest(http, cfg.registry, img.image_repo, cfg.github_token)
-    if not latest:
+    digests = get_latest_digest(http, cfg.registry, img.image_repo, cfg.github_token)
+    if not digests:
         log.warning("Could not resolve :latest digest for %s — skipping", img.name)
         return False
 
     current_image = get_deployment_image(apps, cfg.namespace, img.name, img.container_name)
-    current = _config_digest_from_image(current_image)
+    current_manifest = _running_manifest_digest(current_image)
 
-    if current != latest:
-        new_image = f"{cfg.registry}/{img.image_repo}:latest@{latest}"
+    # Drift detection: compare running manifest digest against registry manifest digest.
+    # Config digest is stable across re-tags; manifest digest changes on every push.
+    # We compare manifest digests so a re-push (same code, new timestamp) is still detected.
+    if current_manifest != digests.manifest:
+        # Use the manifest digest in the image ref — the kubelet pulls by manifest, not config blob.
+        new_image = f"{cfg.registry}/{img.image_repo}:latest@{digests.manifest}"
         log.info(
             "%s drift detected: running=%s latest=%s → rolling",
-            img.name, current or current_image, latest,
+            img.name, current_manifest or current_image, digests.manifest,
         )
         patch_deployment_image(apps, cfg.namespace, img.name, img.container_name, new_image)
         wait_for_rollout(apps, cfg.namespace, img.name, cfg.rollout_timeout_seconds)
-        updated.append(f"{img.name}@{latest[:19]}")
+        updated.append(f"{img.name}@{digests.manifest[:19]}")
     else:
-        log.debug("%s already on latest digest (%s) — no action", img.name, latest[:19])
+        log.debug("%s already on latest manifest (%s) — no action", img.name, digests.manifest[:19])
 
     return True
 
@@ -541,30 +625,31 @@ def reconcile_once(
 
     # ── 1. Backend ───────────────────────────────────────────────────────────
     backend_cfg = cfg.images[0]
-    latest_digest = get_latest_digest(
+    latest_digests = get_latest_digest(
         http, cfg.registry, backend_cfg.image_repo, cfg.github_token
     )
-    if not latest_digest:
+    if not latest_digests:
         log.warning("Could not resolve :latest digest for backend — skipping reconcile")
         return updated
 
     current_image = get_deployment_image(
         apps, cfg.namespace, backend_cfg.name, backend_cfg.container_name
     )
-    current_digest = _config_digest_from_image(current_image)
+    current_manifest = _running_manifest_digest(current_image)
 
-    if current_digest != latest_digest:
-        new_image = f"{cfg.registry}/{backend_cfg.image_repo}:latest@{latest_digest}"
+    if current_manifest != latest_digests.manifest:
+        # Use manifest digest in image ref so kubelet can pull by manifest (not config blob).
+        new_image = f"{cfg.registry}/{backend_cfg.image_repo}:latest@{latest_digests.manifest}"
         log.info(
             "Backend drift detected: running=%s latest=%s → rolling",
-            current_digest or current_image, latest_digest,
+            current_manifest or current_image, latest_digests.manifest,
         )
         patch_deployment_image(
             apps, cfg.namespace, backend_cfg.name,
             backend_cfg.container_name, new_image,
         )
         wait_for_rollout(apps, cfg.namespace, backend_cfg.name, cfg.rollout_timeout_seconds)
-        updated.append(f"{backend_cfg.name}@{latest_digest[:19]}")
+        updated.append(f"{backend_cfg.name}@{latest_digests.manifest[:19]}")
 
         # ── Version gate ────────────────────────────────────────────────────
         labels = get_image_labels(
@@ -578,7 +663,7 @@ def reconcile_once(
             log.error("ABORT reconcile: %s", exc)
             return updated
     else:
-        log.debug("Backend already on latest digest (%s) — no action", latest_digest[:19])
+        log.debug("Backend already on latest manifest (%s) — no action", latest_digests.manifest[:19])
 
     # ── 2. Frontend ──────────────────────────────────────────────────────────
     if not _reconcile_simple(cfg, apps, http, cfg.images[1], updated):
