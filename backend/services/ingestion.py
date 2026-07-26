@@ -140,9 +140,12 @@ def _fetch_page_by_power(power: str, page: int, metrics: Optional[dict] = None) 
     }
     if metrics is not None:
         metrics["api_calls"] += 1
+        metrics["pages_fetched"] += 1
     try:
         resp = requests.post(SPANSH_SEARCH_URL, json=payload, timeout=60)
         resp.raise_for_status()
+        if metrics is not None:
+            metrics["bytes_downloaded"] += len(resp.content)
         return resp.json()
     except Exception as exc:
         if metrics is not None:
@@ -170,9 +173,12 @@ def _fetch_page_unoccupied(page: int, metrics: Optional[dict] = None) -> dict:
     }
     if metrics is not None:
         metrics["api_calls"] += 1
+        metrics["pages_fetched"] += 1
     try:
         resp = requests.post(SPANSH_SEARCH_URL, json=payload, timeout=60)
         resp.raise_for_status()
+        if metrics is not None:
+            metrics["bytes_downloaded"] += len(resp.content)
         return resp.json()
     except Exception as exc:
         if metrics is not None:
@@ -274,7 +280,13 @@ def run_spansh_ingest(db: Session) -> IngestionRun:
     logger.info("Spansh PP ingest started via search API (run_id=%d)", run_id)
 
     records_processed = 0
-    metrics: dict = {"api_calls": 0, "api_errors": 0, "errors": []}
+    metrics: dict = {
+        "api_calls": 0,
+        "api_errors": 0,
+        "errors": [],
+        "bytes_downloaded": 0,
+        "pages_fetched": 0,
+    }
 
     try:
         for power in ALL_POWERS:
@@ -520,7 +532,9 @@ def run_spansh_ingest(db: Session) -> IngestionRun:
                     api_calls_made = :api_calls,
                     api_errors = :api_errors,
                     error_count = :error_count,
-                    error_detail = :error_detail
+                    error_detail = :error_detail,
+                    bytes_downloaded = :bytes_downloaded,
+                    pages_fetched = :pages_fetched
                 WHERE id = :run_id
             """),
             {
@@ -531,6 +545,8 @@ def run_spansh_ingest(db: Session) -> IngestionRun:
                 "api_errors": metrics["api_errors"],
                 "error_count": metrics["api_errors"],
                 "error_detail": error_detail,
+                "bytes_downloaded": metrics["bytes_downloaded"],
+                "pages_fetched": metrics["pages_fetched"],
                 "run_id": run_id,
             },
         )
@@ -538,10 +554,11 @@ def run_spansh_ingest(db: Session) -> IngestionRun:
         db.refresh(run)
         logger.info(
             "Spansh PP ingest complete: %d total systems across %d powers + contested pass "
-            "(run_id=%d, duration=%.1fs, api_calls=%d, api_errors=%d)",
+            "(run_id=%d, duration=%.1fs, api_calls=%d, pages=%d, bytes=%d, api_errors=%d)",
             records_processed, len(ALL_POWERS), run_id,
             (completed_at - started_at).total_seconds(),
-            metrics["api_calls"], metrics["api_errors"],
+            metrics["api_calls"], metrics["pages_fetched"],
+            metrics["bytes_downloaded"], metrics["api_errors"],
         )
 
     except Exception:
@@ -559,7 +576,9 @@ def run_spansh_ingest(db: Session) -> IngestionRun:
                         api_calls_made = :api_calls,
                         api_errors = :api_errors,
                         error_count = :error_count,
-                        error_detail = :error_detail
+                        error_detail = :error_detail,
+                        bytes_downloaded = :bytes_downloaded,
+                        pages_fetched = :pages_fetched
                     WHERE id = :id
                 """),
                 {
@@ -570,6 +589,8 @@ def run_spansh_ingest(db: Session) -> IngestionRun:
                     "api_errors": metrics["api_errors"],
                     "error_count": metrics["api_errors"],
                     "error_detail": error_detail,
+                    "bytes_downloaded": metrics["bytes_downloaded"],
+                    "pages_fetched": metrics["pages_fetched"],
                     "id": run_id,
                 },
             )

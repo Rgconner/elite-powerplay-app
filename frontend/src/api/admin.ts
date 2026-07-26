@@ -150,6 +150,13 @@ export interface TelemetryFeedEddn {
   dedup_rejected: number;
   decode_errors: number;
   last_event_ts: string | null;
+  // Extended throughput metrics
+  messages_received_total: number;
+  bytes_received_total: number;
+  skipped_schema_total: number;
+  skipped_event_total: number;
+  messages_per_min: number | null;
+  top_schemas: Record<string, number>;
 }
 
 export interface TelemetryFeedEnrichment {
@@ -162,6 +169,7 @@ export interface TelemetryFeedEnrichment {
     api_calls: number;
     api_errors: number;
     avg_fetch_ms: number | null;
+    bytes_fetched: number;
   } | null;
 }
 

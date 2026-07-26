@@ -52,6 +52,8 @@ class IngestionRun(Base):
     api_calls_made = Column(Integer, nullable=False, default=0)
     api_errors = Column(Integer, nullable=False, default=0)
     error_detail = Column(String(2048), nullable=True)
+    bytes_downloaded = Column(BigInteger, nullable=False, default=0)  # raw bytes from source API
+    pages_fetched = Column(Integer, nullable=False, default=0)        # paginated pages retrieved
 
     snapshots = relationship("PPSystemSnapshot", back_populates="ingestion_run")
 
@@ -311,6 +313,7 @@ class EnrichmentStats(Base):
     api_calls = Column(Integer, nullable=False, default=0)
     api_errors = Column(Integer, nullable=False, default=0)
     total_fetch_ms = Column(Float, nullable=False, default=0.0)   # for avg calc
+    bytes_fetched = Column(BigInteger, nullable=False, default=0) # raw response bytes from Spansh
 
 
 # ---------------------------------------------------------------------------

@@ -157,6 +157,31 @@ with engine.connect() as _conn:
         "  last_event_ts TIMESTAMP"
         ")"
     ))
+    # Extended EDDN throughput columns
+    _conn.execute(_text(
+        "ALTER TABLE eddn_feed_stats "
+        "ADD COLUMN IF NOT EXISTS messages_received_total BIGINT NOT NULL DEFAULT 0"
+    ))
+    _conn.execute(_text(
+        "ALTER TABLE eddn_feed_stats "
+        "ADD COLUMN IF NOT EXISTS bytes_received_total BIGINT NOT NULL DEFAULT 0"
+    ))
+    _conn.execute(_text(
+        "ALTER TABLE eddn_feed_stats "
+        "ADD COLUMN IF NOT EXISTS skipped_schema_total BIGINT NOT NULL DEFAULT 0"
+    ))
+    _conn.execute(_text(
+        "ALTER TABLE eddn_feed_stats "
+        "ADD COLUMN IF NOT EXISTS skipped_event_total BIGINT NOT NULL DEFAULT 0"
+    ))
+    _conn.execute(_text(
+        "ALTER TABLE eddn_feed_stats "
+        "ADD COLUMN IF NOT EXISTS messages_per_min FLOAT"
+    ))
+    _conn.execute(_text(
+        "ALTER TABLE eddn_feed_stats "
+        "ADD COLUMN IF NOT EXISTS top_schemas VARCHAR(1024)"
+    ))
 
     # ── enrichment_stats (daily UPSERT by backend) ────────────────────────────
     _conn.execute(_text(
@@ -168,6 +193,10 @@ with engine.connect() as _conn:
         "  api_errors INTEGER NOT NULL DEFAULT 0,"
         "  total_fetch_ms FLOAT NOT NULL DEFAULT 0.0"
         ")"
+    ))
+    _conn.execute(_text(
+        "ALTER TABLE enrichment_stats "
+        "ADD COLUMN IF NOT EXISTS bytes_fetched BIGINT NOT NULL DEFAULT 0"
     ))
 
     # ── ingestion_runs telemetry columns ──────────────────────────────────────
@@ -190,6 +219,14 @@ with engine.connect() as _conn:
     _conn.execute(_text(
         "ALTER TABLE ingestion_runs "
         "ADD COLUMN IF NOT EXISTS error_detail VARCHAR(2048)"
+    ))
+    _conn.execute(_text(
+        "ALTER TABLE ingestion_runs "
+        "ADD COLUMN IF NOT EXISTS bytes_downloaded BIGINT NOT NULL DEFAULT 0"
+    ))
+    _conn.execute(_text(
+        "ALTER TABLE ingestion_runs "
+        "ADD COLUMN IF NOT EXISTS pages_fetched INTEGER NOT NULL DEFAULT 0"
     ))
     _conn.commit()
 

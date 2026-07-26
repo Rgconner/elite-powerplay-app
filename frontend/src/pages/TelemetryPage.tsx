@@ -51,6 +51,14 @@ function fmtNum(n: number | null | undefined): string {
   return n.toLocaleString();
 }
 
+function fmtBytes(n: number | null | undefined): string {
+  if (n == null || n === 0) return "—";
+  if (n < 1_024)       return `${n} B`;
+  if (n < 1_048_576)   return `${(n / 1_024).toFixed(1)} KB`;
+  if (n < 1_073_741_824) return `${(n / 1_048_576).toFixed(1)} MB`;
+  return `${(n / 1_073_741_824).toFixed(2)} GB`;
+}
+
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function StatusDot({ status }: { status: "green" | "yellow" | "red" }) {
@@ -99,8 +107,8 @@ function RunRow({ run }: { run: TelemetryRunSummary }) {
   };
   return (
     <div style={{
-      display: "grid", gridTemplateColumns: "70px 1fr 60px 60px 60px",
-      gap: 6, fontSize: 11, padding: "4px 0", borderBottom: `1px solid ${BORDER}`,
+      display: "grid", gridTemplateColumns: "70px 1fr 55px 55px 52px 52px",
+      gap: 5, fontSize: 11, padding: "4px 0", borderBottom: `1px solid ${BORDER}`,
       alignItems: "center",
     }}>
       <span style={{ color: statusColor[run.status] ?? MUTED, fontWeight: 600 }}>
@@ -109,6 +117,7 @@ function RunRow({ run }: { run: TelemetryRunSummary }) {
       <span style={{ color: MUTED }}>{fmtAgo(run.completed_at ?? run.started_at)}</span>
       <span style={{ color: TEXT, textAlign: "right" }}>{fmtNum(run.records_processed)}</span>
       <span style={{ color: TEXT, textAlign: "right" }}>{fmtDuration(run.duration_seconds)}</span>
+      <span style={{ color: TEXT, textAlign: "right" }}>{fmtBytes(run.bytes_downloaded)}</span>
       <span style={{ color: run.api_errors > 0 ? STATUS_COLOR.yellow : MUTED, textAlign: "right" }}>
         {run.api_errors > 0 ? `⚠ ${run.api_errors}` : "—"}
       </span>
@@ -121,12 +130,14 @@ function IngestPanel({ title, feed }: { title: string; feed: TelemetryFeedIngest
   return (
     <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 8, padding: 16 }}>
       <CardHeader label={title} status={feed.status} />
-      <KV label="Last completed" value={fmtAgo(lr?.completed_at ?? lr?.started_at)} />
-      <KV label="Records"        value={fmtNum(lr?.records_processed)} />
-      <KV label="Duration"       value={fmtDuration(lr?.duration_seconds)} />
-      <KV label="API calls"      value={fmtNum(lr?.api_calls_made)} />
-      <KV label="API errors"     value={lr?.api_errors != null && lr.api_errors > 0 ? `⚠ ${lr.api_errors}` : "0"} />
-      <KV label="Next run"       value={feed.next_run_at ? fmtAgo(feed.next_run_at) + " (scheduled)" : "—"} />
+      <KV label="Last completed"  value={fmtAgo(lr?.completed_at ?? lr?.started_at)} />
+      <KV label="Records"         value={fmtNum(lr?.records_processed)} />
+      <KV label="Duration"        value={fmtDuration(lr?.duration_seconds)} />
+      <KV label="Pages fetched"   value={fmtNum(lr?.pages_fetched)} />
+      <KV label="Downloaded"      value={fmtBytes(lr?.bytes_downloaded)} />
+      <KV label="API calls"       value={fmtNum(lr?.api_calls_made)} />
+      <KV label="API errors"      value={lr?.api_errors != null && lr.api_errors > 0 ? `⚠ ${lr.api_errors}` : "0"} />
+      <KV label="Next run"        value={feed.next_run_at ? fmtAgo(feed.next_run_at) + " (scheduled)" : "—"} />
       {lr?.error_detail && (
         <div style={{
           marginTop: 8, padding: "6px 8px", background: "#2d1a1a", borderRadius: 4,
@@ -139,7 +150,7 @@ function IngestPanel({ title, feed }: { title: string; feed: TelemetryFeedIngest
         <>
           <Divider />
           <div style={{ fontSize: 11, color: MUTED, fontWeight: 600, marginBottom: 6 }}>
-            Recent runs — Status / Age / Records / Duration / API Errors
+            Recent runs — Status / Age / Records / Duration / Downloaded / Errors
           </div>
           {feed.history.map((r) => <RunRow key={r.id} run={r} />)}
         </>
@@ -149,21 +160,58 @@ function IngestPanel({ title, feed }: { title: string; feed: TelemetryFeedIngest
 }
 
 function EddnPanel({ feed }: { feed: TelemetryFeedEddn }) {
-  const eventsPerMin = feed.events_last_5min != null
-    ? (feed.events_last_5min / 5).toFixed(1)
-    : null;
+  // Prefer the instrumented msgs/min; fall back to events_last_5min/5
+  const msgsPerMin = feed.messages_per_min != null
+    ? feed.messages_per_min.toFixed(1)
+    : feed.events_last_5min != null
+      ? (feed.events_last_5min / 5).toFixed(1)
+      : null;
+
+  // Schema breakdown — top 5 by count
+  const topSchemas = Object.entries(feed.top_schemas ?? {})
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
+
+  // Abbreviate the schema URL to just the last path segment for display
+  const schemaLabel = (s: string) => s.split("/").filter(Boolean).pop() ?? s;
+
   return (
     <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 8, padding: 16 }}>
       <CardHeader label="EDDN Real-Time Stream" status={feed.status} />
-      <KV label="Last event"       value={fmtAgo(feed.last_event_ts)} />
-      <KV label="Stats recorded"   value={fmtAgo(feed.recorded_at)} />
-      <KV label="Events/min (5m)"  value={eventsPerMin ?? "—"} />
-      <KV label="Events last 5min" value={fmtNum(feed.events_last_5min)} />
-      <KV label="Total events"     value={fmtNum(feed.events_total)} />
+      <KV label="Last event"        value={fmtAgo(feed.last_event_ts)} />
+      <KV label="Stats recorded"    value={fmtAgo(feed.recorded_at)} />
+      <KV label="Msgs/min (live)"   value={msgsPerMin ?? "—"} />
+      <KV label="Events last 5min"  value={fmtNum(feed.events_last_5min)} />
+      <KV label="Total events"      value={fmtNum(feed.events_total)} />
+      <KV label="Total messages"    value={fmtNum(feed.messages_received_total)} />
+      <KV label="Data received"     value={fmtBytes(feed.bytes_received_total)} />
       <Divider />
-      <KV label="Dedup rejected"   value={fmtNum(feed.dedup_rejected)} />
-      <KV label="Decode errors"    value={feed.decode_errors > 0 ? `⚠ ${feed.decode_errors}` : "0"} />
+      <KV label="Non-journal msgs"  value={fmtNum(feed.skipped_schema_total)} />
+      <KV label="Non-PP journal"    value={fmtNum(feed.skipped_event_total)} />
+      <KV label="Dedup rejected"    value={fmtNum(feed.dedup_rejected)} />
+      <KV label="Decode errors"     value={feed.decode_errors > 0 ? `⚠ ${feed.decode_errors}` : "0"} />
       <KV label="Listener up since" value={fmtAgo(feed.listener_started_at)} />
+      {topSchemas.length > 0 && (
+        <>
+          <Divider />
+          <div style={{ fontSize: 11, color: MUTED, fontWeight: 600, marginBottom: 6 }}>
+            Top schemas seen (all time)
+          </div>
+          {topSchemas.map(([schema, count]) => (
+            <div key={schema} style={{
+              display: "flex", justifyContent: "space-between",
+              fontSize: 11, marginBottom: 3,
+            }}>
+              <span style={{ color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "75%" }}>
+                {schemaLabel(schema)}
+              </span>
+              <span style={{ color: TEXT, fontVariantNumeric: "tabular-nums" }}>
+                {count.toLocaleString()}
+              </span>
+            </div>
+          ))}
+        </>
+      )}
     </div>
   );
 }
@@ -184,6 +232,7 @@ function EnrichPanel({ feed }: { feed: TelemetryFeedEnrichment }) {
           <KV label="API calls"     value={fmtNum(t.api_calls)} />
           <KV label="API errors"    value={t.api_errors > 0 ? `⚠ ${t.api_errors}` : "0"} />
           <KV label="Avg fetch ms"  value={t.avg_fetch_ms != null ? `${t.avg_fetch_ms}ms` : "—"} />
+          <KV label="Downloaded"    value={fmtBytes(t.bytes_fetched)} />
         </>
       ) : (
         <div style={{ fontSize: 12, color: MUTED }}>No requests today</div>

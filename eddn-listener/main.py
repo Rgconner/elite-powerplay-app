@@ -163,36 +163,67 @@ def flush_stats_to_db(
     listener_started_at: datetime,
     last_event_ts: Optional[datetime],
     events_since_last_flush: int,
+    elapsed_seconds: float,
 ) -> None:
     """Upsert a singleton row (id=1) into eddn_feed_stats with current counters."""
+    import json as _json
+
+    # Compute messages/min over the flush interval
+    msgs_per_min: Optional[float] = None
+    if elapsed_seconds > 0:
+        msgs_per_min = round(stats["received_since_last_flush"] / elapsed_seconds * 60.0, 2)
+
+    # Build top-schemas JSON (cap at 10 schemas by count)
+    schema_counts: dict = stats.get("schema_counts", {})
+    top = sorted(schema_counts.items(), key=lambda kv: kv[1], reverse=True)[:10]
+    top_schemas_json = _json.dumps(dict(top)) if top else None
+
     try:
         db_session.execute(
             text("""
                 INSERT INTO eddn_feed_stats (
                     id, recorded_at, listener_started_at,
                     events_total, events_last_5min,
-                    dedup_rejected, decode_errors, last_event_ts
+                    dedup_rejected, decode_errors, last_event_ts,
+                    messages_received_total, bytes_received_total,
+                    skipped_schema_total, skipped_event_total,
+                    messages_per_min, top_schemas
                 ) VALUES (
                     1, NOW(), :started_at,
                     :events_total, :events_last_5min,
-                    :dedup_rejected, :decode_errors, :last_event_ts
+                    :dedup_rejected, :decode_errors, :last_event_ts,
+                    :msgs_total, :bytes_total,
+                    :skipped_schema, :skipped_event,
+                    :msgs_per_min, :top_schemas
                 )
                 ON CONFLICT (id) DO UPDATE SET
-                    recorded_at        = EXCLUDED.recorded_at,
-                    listener_started_at = EXCLUDED.listener_started_at,
-                    events_total       = EXCLUDED.events_total,
-                    events_last_5min   = EXCLUDED.events_last_5min,
-                    dedup_rejected     = EXCLUDED.dedup_rejected,
-                    decode_errors      = EXCLUDED.decode_errors,
-                    last_event_ts      = EXCLUDED.last_event_ts
+                    recorded_at             = EXCLUDED.recorded_at,
+                    listener_started_at     = EXCLUDED.listener_started_at,
+                    events_total            = EXCLUDED.events_total,
+                    events_last_5min        = EXCLUDED.events_last_5min,
+                    dedup_rejected          = EXCLUDED.dedup_rejected,
+                    decode_errors           = EXCLUDED.decode_errors,
+                    last_event_ts           = EXCLUDED.last_event_ts,
+                    messages_received_total = EXCLUDED.messages_received_total,
+                    bytes_received_total    = EXCLUDED.bytes_received_total,
+                    skipped_schema_total    = EXCLUDED.skipped_schema_total,
+                    skipped_event_total     = EXCLUDED.skipped_event_total,
+                    messages_per_min        = EXCLUDED.messages_per_min,
+                    top_schemas             = EXCLUDED.top_schemas
             """),
             {
-                "started_at": listener_started_at,
-                "events_total": stats["inserted"],
+                "started_at":    listener_started_at,
+                "events_total":  stats["inserted"],
                 "events_last_5min": events_since_last_flush,
                 "dedup_rejected": stats["dedup_rejected"],
-                "decode_errors": stats["decode_errors"],
-                "last_event_ts": last_event_ts,
+                "decode_errors":  stats["decode_errors"],
+                "last_event_ts":  last_event_ts,
+                "msgs_total":     stats["received"],
+                "bytes_total":    stats["bytes_received"],
+                "skipped_schema": stats["skipped_schema"],
+                "skipped_event":  stats["skipped_event"],
+                "msgs_per_min":   msgs_per_min,
+                "top_schemas":    top_schemas_json,
             },
         )
         db_session.commit()
@@ -299,6 +330,10 @@ def main():
         "json_errors": 0,
         "inserted": 0,
         "dedup_rejected": 0,
+        # Extended throughput metrics
+        "bytes_received": 0,
+        "received_since_last_flush": 0,   # messages in the current flush window
+        "schema_counts": {},              # {schema_ref: count} for top-schemas breakdown
     }
     last_stats_time = time.time()
     last_event_ts: Optional[datetime] = None
@@ -320,6 +355,8 @@ def main():
                     frames = socket.recv_multipart()
                     raw_message = frames[-1]  # Last frame is the JSON payload
                     stats["received"] += 1
+                    stats["bytes_received"] += sum(len(f) for f in frames)
+                    stats["received_since_last_flush"] += 1
 
                     # Log frame diagnostics at DEBUG level
                     logger.debug(
@@ -345,6 +382,12 @@ def main():
                         )
                         stats["json_errors"] += 1
                         continue
+
+                    # Track schema breakdown (count every schema we see)
+                    schema_ref_seen = message.get("$schemaRef", "unknown")
+                    stats["schema_counts"][schema_ref_seen] = (
+                        stats["schema_counts"].get(schema_ref_seen, 0) + 1
+                    )
 
                     # Process the message
                     inserted = process_message(message, db_session)
@@ -380,13 +423,16 @@ def main():
                     # Periodic stats logging + DB heartbeat flush
                     now = time.time()
                     if now - last_stats_time >= STATS_LOG_INTERVAL_SECONDS:
+                        elapsed = now - last_stats_time
                         logger.info(
-                            "Stats: received=%d, processed=%d, inserted=%d, "
-                            "dedup_rejected=%d, skipped_schema=%d, skipped_event=%d, "
-                            "decode_errors=%d, json_errors=%d",
+                            "Stats: received=%d (%.1f/min), processed=%d, inserted=%d, "
+                            "bytes_recv=%d, dedup_rejected=%d, skipped_schema=%d, "
+                            "skipped_event=%d, decode_errors=%d, json_errors=%d",
                             stats["received"],
+                            stats["received_since_last_flush"] / elapsed * 60.0,
                             stats["processed"],
                             stats["inserted"],
+                            stats["bytes_received"],
                             stats["dedup_rejected"],
                             stats["skipped_schema"],
                             stats["skipped_event"],
@@ -396,8 +442,10 @@ def main():
                         flush_stats_to_db(
                             db_session, stats, listener_started_at,
                             last_event_ts, inserted_since_last_flush,
+                            elapsed_seconds=elapsed,
                         )
                         inserted_since_last_flush = 0
+                        stats["received_since_last_flush"] = 0
                         last_stats_time = now
                 else:
                     # No message received, just continue
@@ -417,13 +465,15 @@ def main():
         logger.info("Shutting down EDDN listener...")
     finally:
         # Final stats log + DB flush
+        final_elapsed = time.time() - last_stats_time
         logger.info(
             "Final stats: received=%d, processed=%d, inserted=%d, "
-            "dedup_rejected=%d, skipped_schema=%d, skipped_event=%d, "
-            "decode_errors=%d, json_errors=%d",
+            "bytes_received=%d, dedup_rejected=%d, skipped_schema=%d, "
+            "skipped_event=%d, decode_errors=%d, json_errors=%d",
             stats["received"],
             stats["processed"],
             stats["inserted"],
+            stats["bytes_received"],
             stats["dedup_rejected"],
             stats["skipped_schema"],
             stats["skipped_event"],
@@ -433,6 +483,7 @@ def main():
         flush_stats_to_db(
             db_session, stats, listener_started_at,
             last_event_ts, inserted_since_last_flush,
+            elapsed_seconds=final_elapsed,
         )
         socket.close()
         context.term()

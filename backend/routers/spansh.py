@@ -75,8 +75,8 @@ class ValidateResponse(BaseModel):
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-async def _fetch_system(system_id64: int) -> dict | None:
-    """Fetch system data from Spansh API, returns parsed JSON or None.
+async def _fetch_system(system_id64: int) -> tuple[dict | None, int]:
+    """Fetch system data from Spansh API, returns (parsed JSON or None, bytes_received).
 
     The Spansh system API wraps the record in a {"record": {...}} envelope,
     so we unwrap it before returning.
@@ -84,33 +84,33 @@ async def _fetch_system(system_id64: int) -> dict | None:
     try:
         async with httpx.AsyncClient(timeout=20) as client:
             resp = await client.get(SPANSH_SYSTEM_URL.format(system_id64))
+            n_bytes = len(resp.content)
             if resp.status_code == 200:
                 raw = resp.json()
-                # Unwrap the record envelope that Spansh uses
-                return raw.get("record", raw)
+                return raw.get("record", raw), n_bytes
             logger.warning("Spansh system %d returned %d", system_id64, resp.status_code)
-            return None
+            return None, n_bytes
     except Exception as e:
         logger.error("Error fetching Spansh system %d: %s", system_id64, e)
-        return None
+        return None, 0
 
 
-async def _fetch_body(body_id64: int) -> dict | None:
-    """Fetch body data from Spansh API, returns parsed JSON or None.
+async def _fetch_body(body_id64: int) -> tuple[dict | None, int]:
+    """Fetch body data from Spansh API, returns (parsed JSON or None, bytes_received).
 
     The Spansh body API also wraps the record in a {"record": {...}} envelope.
     """
     try:
         async with httpx.AsyncClient(timeout=20) as client:
             resp = await client.get(SPANSH_BODY_URL.format(body_id64))
+            n_bytes = len(resp.content)
             if resp.status_code == 200:
                 raw = resp.json()
-                # Unwrap the record envelope that Spansh uses
-                return raw.get("record", raw)
-            return None
+                return raw.get("record", raw), n_bytes
+            return None, n_bytes
     except Exception as e:
         logger.error("Error fetching Spansh body %d: %s", body_id64, e)
-        return None
+        return None, 0
 
 
 def _check_body_for_platinum(body: dict) -> bool:
@@ -198,14 +198,14 @@ def _check_system_for_pristine(system: dict) -> bool:
     return False
 
 
-async def _fetch_bodies_by_system_name(system_name: str) -> list[dict] | None:
+async def _fetch_bodies_by_system_name(system_name: str) -> tuple[list[dict] | None, int]:
     """Fetch all bodies for a system via the Spansh bodies/search API.
 
     This endpoint returns complete body data (including rings and materials)
     in a single call — no need to fetch individual bodies. This is both
     faster and more reliable than the system→body fetch chain.
 
-    Returns a list of body dicts, or None if the request failed.
+    Returns (list of body dicts or None, bytes_received).
     """
     try:
         async with httpx.AsyncClient(timeout=30) as client:
@@ -221,17 +221,18 @@ async def _fetch_bodies_by_system_name(system_name: str) -> list[dict] | None:
                     "size": 100,  # max bodies to return
                 },
             )
+            n_bytes = len(resp.content)
             if resp.status_code == 200:
                 data = resp.json()
-                return data.get("results", [])
+                return data.get("results", []), n_bytes
             logger.warning(
                 "Spansh bodies/search for '%s' returned %d",
                 system_name, resp.status_code,
             )
-            return None
+            return None, n_bytes
     except Exception as e:
         logger.error("Error fetching bodies for system '%s': %s", system_name, e)
-        return None
+        return None, 0
 
 
 def _check_bodies_for_platinum(bodies: list[dict]) -> bool:
@@ -248,10 +249,10 @@ def _check_bodies_for_platinum(bodies: list[dict]) -> bool:
     return False
 
 
-async def _enrich_system(system_id64: int, system_name: str | None = None) -> tuple[bool, bool, bool]:
+async def _enrich_system(system_id64: int, system_name: str | None = None) -> tuple[bool, bool, bool, int]:
     """
     Fetch Spansh enrichment data for a single system.
-    Returns (has_platinum, has_boom, has_pristine).
+    Returns (has_platinum, has_boom, has_pristine, bytes_fetched).
     Rate-limited: caller should wait BATCH_DELAY_MS between calls.
 
     Strategy (primary → fallback):
@@ -265,35 +266,29 @@ async def _enrich_system(system_id64: int, system_name: str | None = None) -> tu
 
     PRISTINE is checked from the system dump API for reserve_level data.
     """
+    bytes_fetched: int = 0
+
     # Always fetch the system record for BOOM detection
-    system = await _fetch_system(system_id64)
+    system, sys_bytes = await _fetch_system(system_id64)
+    bytes_fetched += sys_bytes
     if system is None:
-        return False, False, False
+        return False, False, False, bytes_fetched
 
     has_boom = _check_system_for_boom(system)
     has_platinum = False
 
     # ── Primary: bodies/search API (if we have the system name) ──────────────
     if system_name:
-        bodies = await _fetch_bodies_by_system_name(system_name)
+        bodies, bodies_bytes = await _fetch_bodies_by_system_name(system_name)
+        bytes_fetched += bodies_bytes
         if bodies is not None:
             has_platinum = _check_bodies_for_platinum(bodies)
-            if has_platinum:
-                # Still need to check pristine from the dump API
-                pass
-            # If bodies/search returned results but no platinum, trust it.
-            # Only fall through to the per-body chain if we got no results
-            # at all (None = request failed; [] = system has no bodies).
-            if len(bodies) > 0 and has_platinum:
-                # Check pristine from dump, then return early
-                dump_data = await _fetch_system_dump(system_id64)
-                has_pristine = _check_system_for_pristine(dump_data) if dump_data else False
-                return has_platinum, has_boom, has_pristine
             if len(bodies) > 0:
-                # No platinum found; check pristine from dump
-                dump_data = await _fetch_system_dump(system_id64)
+                # Check pristine from dump
+                dump_data, dump_bytes = await _fetch_system_dump(system_id64)
+                bytes_fetched += dump_bytes
                 has_pristine = _check_system_for_pristine(dump_data) if dump_data else False
-                return has_platinum, has_boom, has_pristine
+                return has_platinum, has_boom, has_pristine, bytes_fetched
             # Empty results — might be a name mismatch; try fallback below.
 
     # ── Fallback: system/{id} → per-body fetch chain ─────────────────────────
@@ -311,35 +306,39 @@ async def _enrich_system(system_id64: int, system_name: str | None = None) -> tu
 
         # Fetch the body detail and check for platinum
         await asyncio.sleep(0.05)  # small delay between body fetches
-        body = await _fetch_body(body_id64)
+        body, body_bytes = await _fetch_body(body_id64)
+        bytes_fetched += body_bytes
         if body and _check_body_for_platinum(body):
             has_platinum = True
             break  # found platinum, no need to check more bodies
 
     # ── Check pristine from dump API ─────────────────────────────────────────
-    dump_data = await _fetch_system_dump(system_id64)
+    dump_data, dump_bytes = await _fetch_system_dump(system_id64)
+    bytes_fetched += dump_bytes
     has_pristine = _check_system_for_pristine(dump_data) if dump_data else False
 
-    return has_platinum, has_boom, has_pristine
+    return has_platinum, has_boom, has_pristine, bytes_fetched
 
 
-async def _fetch_system_dump(system_id64: int) -> dict | None:
+async def _fetch_system_dump(system_id64: int) -> tuple[dict | None, int]:
     """Fetch system dump data from Spansh dump API for reserve level info.
 
     The dump endpoint (https://spansh.co.uk/api/dump/{id64}) returns
     detailed system data including body reserve levels.
+    Returns (data or None, bytes_received).
     """
     try:
         async with httpx.AsyncClient(timeout=20) as client:
             resp = await client.get(SPANSH_SYSTEM_DUMP_URL.format(system_id64))
+            n_bytes = len(resp.content)
             if resp.status_code == 200:
                 raw = resp.json()
-                return raw.get("record", raw)
+                return raw.get("record", raw), n_bytes
             logger.warning("Spansh dump %d returned %d", system_id64, resp.status_code)
-            return None
+            return None, n_bytes
     except Exception as e:
         logger.error("Error fetching Spansh dump %d: %s", system_id64, e)
-        return None
+        return None, 0
 
 
 # ── Enrichment stats helper ────────────────────────────────────────────────────
@@ -352,6 +351,7 @@ def _record_enrichment_stats(
     api_calls: int,
     api_errors: int,
     total_fetch_ms: float,
+    bytes_fetched: int = 0,
 ) -> None:
     """UPSERT today's enrichment_stats row with incremented counters.
 
@@ -363,21 +363,24 @@ def _record_enrichment_stats(
         db.execute(
             text("""
                 INSERT INTO enrichment_stats
-                    (stat_date, cache_hits, cache_misses, api_calls, api_errors, total_fetch_ms)
+                    (stat_date, cache_hits, cache_misses, api_calls, api_errors,
+                     total_fetch_ms, bytes_fetched)
                 VALUES
                     (DATE_TRUNC('day', NOW()),
-                     :hits, :misses, :api_calls, :api_errors, :total_ms)
+                     :hits, :misses, :api_calls, :api_errors, :total_ms, :bytes_fetched)
                 ON CONFLICT (stat_date) DO UPDATE SET
-                    cache_hits    = enrichment_stats.cache_hits    + EXCLUDED.cache_hits,
-                    cache_misses  = enrichment_stats.cache_misses  + EXCLUDED.cache_misses,
-                    api_calls     = enrichment_stats.api_calls     + EXCLUDED.api_calls,
-                    api_errors    = enrichment_stats.api_errors    + EXCLUDED.api_errors,
-                    total_fetch_ms = enrichment_stats.total_fetch_ms + EXCLUDED.total_fetch_ms
+                    cache_hits     = enrichment_stats.cache_hits     + EXCLUDED.cache_hits,
+                    cache_misses   = enrichment_stats.cache_misses   + EXCLUDED.cache_misses,
+                    api_calls      = enrichment_stats.api_calls      + EXCLUDED.api_calls,
+                    api_errors     = enrichment_stats.api_errors     + EXCLUDED.api_errors,
+                    total_fetch_ms = enrichment_stats.total_fetch_ms + EXCLUDED.total_fetch_ms,
+                    bytes_fetched  = enrichment_stats.bytes_fetched  + EXCLUDED.bytes_fetched
             """),
             {
                 "hits": hits, "misses": misses,
                 "api_calls": api_calls, "api_errors": api_errors,
                 "total_ms": total_fetch_ms,
+                "bytes_fetched": bytes_fetched,
             },
         )
         db.commit()
@@ -451,6 +454,7 @@ async def enrich_batch(
     fetch_api_calls = 0
     fetch_api_errors = 0
     fetch_total_ms = 0.0
+    fetch_bytes = 0
 
     # --- Phase 2: Fetch missing from Spansh (first-access) ---
     if need_fetch:
@@ -511,6 +515,7 @@ async def enrich_batch(
             api_calls=fetch_api_calls,
             api_errors=fetch_api_errors,
             total_fetch_ms=fetch_total_ms,
+            bytes_fetched=fetch_bytes,
         )
 
     return BatchEnrichResponse(results=results)

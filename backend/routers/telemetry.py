@@ -116,6 +116,8 @@ def _run_row(row) -> dict | None:
         "api_errors":       row.api_errors,
         "error_count":      row.error_count,
         "error_detail":     row.error_detail,
+        "bytes_downloaded": getattr(row, "bytes_downloaded", 0) or 0,
+        "pages_fetched":    getattr(row, "pages_fetched", 0) or 0,
     }
 
 
@@ -195,14 +197,29 @@ def get_telemetry(
 
     eddn_data: dict = {}
     if eddn_row:
+        import json as _json
+        top_schemas: dict = {}
+        try:
+            raw_schemas = eddn_row.get("top_schemas")
+            if raw_schemas:
+                top_schemas = _json.loads(raw_schemas)
+        except Exception:
+            pass
+
         eddn_data = {
-            "recorded_at":          _fmt(eddn_row["recorded_at"]),
-            "listener_started_at":  _fmt(eddn_row["listener_started_at"]),
-            "events_total":         eddn_row["events_total"],
-            "events_last_5min":     eddn_row["events_last_5min"],
-            "dedup_rejected":       eddn_row["dedup_rejected"],
-            "decode_errors":        eddn_row["decode_errors"],
-            "last_event_ts":        _fmt(eddn_row["last_event_ts"]),
+            "recorded_at":              _fmt(eddn_row["recorded_at"]),
+            "listener_started_at":      _fmt(eddn_row["listener_started_at"]),
+            "events_total":             eddn_row["events_total"],
+            "events_last_5min":         eddn_row["events_last_5min"],
+            "dedup_rejected":           eddn_row["dedup_rejected"],
+            "decode_errors":            eddn_row["decode_errors"],
+            "last_event_ts":            _fmt(eddn_row["last_event_ts"]),
+            "messages_received_total":  eddn_row.get("messages_received_total", 0) or 0,
+            "bytes_received_total":     eddn_row.get("bytes_received_total", 0) or 0,
+            "skipped_schema_total":     eddn_row.get("skipped_schema_total", 0) or 0,
+            "skipped_event_total":      eddn_row.get("skipped_event_total", 0) or 0,
+            "messages_per_min":         eddn_row.get("messages_per_min"),
+            "top_schemas":              top_schemas,
         }
 
     # ── 4. Enrichment stats (today) ───────────────────────────────────────────
@@ -238,6 +255,7 @@ def get_telemetry(
             "api_calls":      today_enrich["api_calls"],
             "api_errors":     today_enrich["api_errors"],
             "avg_fetch_ms":   avg_ms,
+            "bytes_fetched":  today_enrich.get("bytes_fetched", 0) or 0,
         }
 
     # ── Compute status colours ────────────────────────────────────────────────
@@ -277,4 +295,96 @@ def get_telemetry(
                 **enrich_data,
             },
         },
+    }
+
+
+@router.get("/history")
+def get_telemetry_history(
+    admin: AdminUserDep,
+    db: Session = Depends(get_db),
+    days: int = 7,
+) -> dict:
+    """Return per-day aggregates for the last N days (default 7).
+
+    Includes:
+      - ingestion_runs: daily count, avg duration, total records, total bytes per source
+      - enrichment_stats: daily cache hit rate, API calls, bytes fetched
+      - eddn: events_last_5min is a point-in-time snapshot, so we report the current
+              events_total broken down by uptime instead of per-day.
+    """
+    from models.models import IngestionRun
+
+    # ── Daily ingestion aggregate (last N days) ───────────────────────────────
+    ingest_rows = db.execute(
+        text("""
+            SELECT
+                DATE_TRUNC('day', started_at)   AS day,
+                source,
+                COUNT(*)                         AS run_count,
+                SUM(records_processed)           AS total_records,
+                SUM(bytes_downloaded)            AS total_bytes,
+                SUM(pages_fetched)               AS total_pages,
+                AVG(duration_seconds)            AS avg_duration_s,
+                SUM(api_errors)                  AS total_api_errors
+            FROM ingestion_runs
+            WHERE started_at >= NOW() - INTERVAL ':days days'
+              AND status IN ('completed', 'failed')
+            GROUP BY DATE_TRUNC('day', started_at), source
+            ORDER BY day DESC, source
+        """).bindparams(days=days)
+    ).mappings().all()
+
+    ingest_by_day: dict = {}
+    for r in ingest_rows:
+        day_key = r["day"].date().isoformat() if r["day"] else "unknown"
+        if day_key not in ingest_by_day:
+            ingest_by_day[day_key] = {}
+        ingest_by_day[day_key][r["source"]] = {
+            "run_count":        r["run_count"],
+            "total_records":    r["total_records"],
+            "total_bytes":      r["total_bytes"] or 0,
+            "total_pages":      r["total_pages"] or 0,
+            "avg_duration_s":   round(float(r["avg_duration_s"]), 1) if r["avg_duration_s"] else None,
+            "total_api_errors": r["total_api_errors"] or 0,
+        }
+
+    # ── Daily enrichment stats (last N days) ─────────────────────────────────
+    enrich_rows = db.execute(
+        text("""
+            SELECT
+                stat_date::date AS day,
+                cache_hits, cache_misses,
+                api_calls, api_errors,
+                total_fetch_ms, bytes_fetched
+            FROM enrichment_stats
+            WHERE stat_date >= NOW() - (INTERVAL '1 day' * :days)
+            ORDER BY stat_date DESC
+        """),
+        {"days": days},
+    ).mappings().all()
+
+    enrich_history = []
+    for r in enrich_rows:
+        total = (r["cache_hits"] or 0) + (r["cache_misses"] or 0)
+        hit_rate = round(r["cache_hits"] / total * 100, 1) if total > 0 else None
+        avg_ms   = (
+            round(r["total_fetch_ms"] / r["api_calls"], 1)
+            if r["api_calls"] and r["api_calls"] > 0 else None
+        )
+        enrich_history.append({
+            "day":          r["day"].isoformat() if r["day"] else "unknown",
+            "cache_hits":   r["cache_hits"] or 0,
+            "cache_misses": r["cache_misses"] or 0,
+            "hit_rate_pct": hit_rate,
+            "api_calls":    r["api_calls"] or 0,
+            "api_errors":   r["api_errors"] or 0,
+            "avg_fetch_ms": avg_ms,
+            "bytes_fetched": r["bytes_fetched"] or 0,
+        })
+
+    return {
+        "generated_at": datetime.utcnow().isoformat(),
+        "days": days,
+        "ingest_by_day": ingest_by_day,
+        "enrichment_history": enrich_history,
     }
