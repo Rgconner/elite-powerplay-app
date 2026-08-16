@@ -131,6 +131,8 @@ export interface TelemetryRunSummary {
   api_errors: number;
   error_count: number;
   error_detail: string | null;
+  bytes_downloaded: number;
+  pages_fetched: number;
 }
 
 export interface TelemetryFeedIngest {
