@@ -128,7 +128,11 @@ Version history:
                       - Architecture router (admin-only) — schema/status/validate endpoints
                       - Architecture schema JSON (backend/architecture/schema.json)
                       - Scoring engine accepts optional realtime_state parameter
+    2.1.2  2026-08-16  IO hardening (1/5): global FastAPI exception handler —
+                       unhandled endpoint errors now log method/path/exception
+                       and return structured JSON 500 instead of a bare traceback
+                       (#7). Safety net under per-handler try/except (#5).
  """
 
-BACKEND_VERSION      = "2.1.1"
-BACKEND_RELEASE_DATE = "2026-07-24T12:00:00Z"
+BACKEND_VERSION      = "2.1.2"
+BACKEND_RELEASE_DATE = "2026-08-16T17:02:48Z"

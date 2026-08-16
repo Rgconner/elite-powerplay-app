@@ -5,8 +5,9 @@ import os
 from contextlib import asynccontextmanager
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 
 from version import BACKEND_VERSION
@@ -322,3 +323,15 @@ app.include_router(telemetry_router,     prefix=API_PREFIX)
 @app.get("/health", tags=["health"])
 async def health_check() -> dict:
     return {"status": "ok"}
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Last-resort handler: log the failure with context, return JSON 500.
+
+    Safety net under the per-handler try/except wrapping. HTTPException keeps
+    FastAPI's default handling; this catches everything else so no request
+    dies as a bare traceback and every failure is logged with its endpoint.
+    """
+    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
