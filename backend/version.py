@@ -136,7 +136,11 @@ Version history:
                        runs inside try/except — DB/network failures are logged
                        with handler context and returned as JSON 500; HTTPException
                        paths unchanged (#5). 27 handlers across 7 routers.
+    2.1.4  2026-08-16  IO hardening (3/5): startup DB initialisation (create_all +
+                       incremental migrations) now guarded — failures log the
+                       attempted operation and exit(1) instead of dying with a raw
+                       traceback (#6). Fail-fast behaviour preserved.
  """
 
-BACKEND_VERSION      = "2.1.3"
+BACKEND_VERSION      = "2.1.4"
 BACKEND_RELEASE_DATE = "2026-08-16T17:02:48Z"

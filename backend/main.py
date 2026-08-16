@@ -14,17 +14,24 @@ from version import BACKEND_VERSION
 
 load_dotenv()
 
+logger = logging.getLogger(__name__)
+
 from db.session import Base, engine  # noqa: E402
 import models.models  # noqa: F401
 from sqlalchemy import text as _text  # noqa: E402
 
-Base.metadata.create_all(bind=engine)
+try:
+    Base.metadata.create_all(bind=engine)
+except Exception:
+    logger.error("Startup schema creation (create_all) failed — aborting.", exc_info=True)
+    raise SystemExit(1)
 
 # ── Incremental schema migrations ────────────────────────────────────────────
 # SQLAlchemy's create_all() only creates missing tables, not missing columns.
 # We run explicit ADD COLUMN IF NOT EXISTS here so existing deployments pick up
 # new fields without a full DB wipe.
-with engine.connect() as _conn:
+_conn = engine.connect()
+try:
     _conn.execute(_text(
         "ALTER TABLE pp_system_snapshots "
         "ADD COLUMN IF NOT EXISTS powers_list VARCHAR(512)"
@@ -230,6 +237,11 @@ with engine.connect() as _conn:
         "ADD COLUMN IF NOT EXISTS pages_fetched INTEGER NOT NULL DEFAULT 0"
     ))
     _conn.commit()
+except Exception:
+    logger.error("Startup schema migration failed — aborting.", exc_info=True)
+    raise SystemExit(1)
+finally:
+    _conn.close()
 
 from routers import auth, admin  # noqa: E402
 from routers.powers import router as powers_router, systems_router  # noqa: E402
@@ -238,8 +250,6 @@ from routers.admin import run_spansh_ingest_task  # noqa: E402
 from routers.architecture import router as architecture_router  # noqa: E402
 from routers.telemetry import router as telemetry_router  # noqa: E402
 from services.realtime_accumulator import run_realtime_accumulator  # noqa: E402
-
-logger = logging.getLogger(__name__)
 
 SPANSH_INGEST_INTERVAL_HOURS: int = int(os.getenv("SPANSH_INGEST_INTERVAL_HOURS", "24"))
 
