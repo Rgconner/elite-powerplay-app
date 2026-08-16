@@ -75,6 +75,9 @@ WEB_MAX_OVERFLOW    = _env_int("DB_MAX_OVERFLOW",    20)
 WEB_POOL_TIMEOUT    = _env_int("DB_POOL_TIMEOUT",    10)
 WEB_POOL_RECYCLE    = _env_int("DB_POOL_RECYCLE",  1800)
 WEB_POOL_PRE_PING   = _env_bool("DB_POOL_PRE_PING", True)
+# Per-statement cap for web queries (ms). A runaway query is killed by
+# Postgres instead of holding a pool connection indefinitely.
+WEB_STATEMENT_TIMEOUT_MS = _env_int("DB_STATEMENT_TIMEOUT_MS", 30000)
 
 # Ingest pool  ───────────────────────────────────────────────────────────────
 # Sized for ONE serial long-running task (Spansh ingest).  No overflow — the
@@ -84,6 +87,12 @@ INGEST_MAX_OVERFLOW = _env_int("DB_INGEST_MAX_OVERFLOW", 0)
 INGEST_POOL_TIMEOUT = _env_int("DB_INGEST_POOL_TIMEOUT", 60)
 INGEST_POOL_RECYCLE = _env_int("DB_INGEST_POOL_RECYCLE", 1800)
 INGEST_POOL_PRE_PING = _env_bool("DB_INGEST_POOL_PRE_PING", True)
+# Ingest statements legitimately run longer than web queries.
+INGEST_STATEMENT_TIMEOUT_MS = _env_int("DB_INGEST_STATEMENT_TIMEOUT_MS", 600000)
+
+# TCP connect cap (seconds) shared by both engines — bounds how long a new
+# connection attempt can hang when Postgres is unreachable.
+DB_CONNECT_TIMEOUT = _env_int("DB_CONNECT_TIMEOUT", 10)
 
 
 def _build_engine(
@@ -93,6 +102,7 @@ def _build_engine(
     pool_timeout: int,
     pool_recycle: int,
     pool_pre_ping: bool,
+    statement_timeout_ms: int,
     label: str,
 ) -> Engine:
     """Construct a SQLAlchemy Engine with the given pool config.
@@ -106,6 +116,10 @@ def _build_engine(
     any reasonable Postgres-side `idle_session_timeout` (typically 8h+).
     This prevents "stale-but-not-dead" connections from accumulating in
     the pool.
+
+    `connect_timeout` (via connect_args) bounds the TCP connect when Postgres
+    is unreachable; `statement_timeout` makes Postgres kill runaway queries
+    instead of letting them hold a pool connection indefinitely.
     """
     return create_engine(
         DATABASE_URL,
@@ -114,6 +128,10 @@ def _build_engine(
         pool_timeout=pool_timeout,
         pool_recycle=pool_recycle,
         pool_pre_ping=pool_pre_ping,
+        connect_args={
+            "connect_timeout": DB_CONNECT_TIMEOUT,
+            "options": f"-c statement_timeout={statement_timeout_ms}",
+        },
         # Echo the SQL on every query when LOG_LEVEL=DEBUG.
         echo=os.getenv("SQL_ECHO", "false").lower() == "true",
     )
@@ -125,6 +143,7 @@ engine: Engine = _build_engine(
     pool_timeout=WEB_POOL_TIMEOUT,
     pool_recycle=WEB_POOL_RECYCLE,
     pool_pre_ping=WEB_POOL_PRE_PING,
+    statement_timeout_ms=WEB_STATEMENT_TIMEOUT_MS,
     label="web",
 )
 
@@ -136,6 +155,7 @@ ingest_engine: Engine = _build_engine(
     pool_timeout=INGEST_POOL_TIMEOUT,
     pool_recycle=INGEST_POOL_RECYCLE,
     pool_pre_ping=INGEST_POOL_PRE_PING,
+    statement_timeout_ms=INGEST_STATEMENT_TIMEOUT_MS,
     label="ingest",
 )
 

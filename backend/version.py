@@ -144,7 +144,11 @@ Version history:
                        explicit timeout (AI_TIMEOUT_SECONDS, default 30s) — the SDK
                        default of 600s could hang a recommendations request for ten
                        minutes (#8).
+    2.1.6  2026-08-16  IO hardening (5/5): both DB engines now bound TCP connects
+                       (DB_CONNECT_TIMEOUT, default 10s) and runaway queries
+                       (statement_timeout: DB_STATEMENT_TIMEOUT_MS 30s web /
+                       DB_INGEST_STATEMENT_TIMEOUT_MS 600s ingest) (#9).
  """
 
-BACKEND_VERSION      = "2.1.5"
+BACKEND_VERSION      = "2.1.6"
 BACKEND_RELEASE_DATE = "2026-08-16T17:02:48Z"
