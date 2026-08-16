@@ -57,15 +57,21 @@ router = APIRouter(prefix="/powers", tags=["powers"])
 @router.get("", response_model=PowersList)
 def list_powers(db: Session = Depends(get_db)) -> PowersList:
     """Return all distinct power names present in the latest snapshot data."""
-    rows = db.execute(
-        text("""
-            SELECT DISTINCT power
-            FROM pp_system_snapshots
-            WHERE power IS NOT NULL
-            ORDER BY power
-        """)
-    ).all()
-    return PowersList(powers=[r.power for r in rows])
+    try:
+        rows = db.execute(
+            text("""
+                SELECT DISTINCT power
+                FROM pp_system_snapshots
+                WHERE power IS NOT NULL
+                ORDER BY power
+            """)
+        ).all()
+        return PowersList(powers=[r.power for r in rows])
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("list_powers failed")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ---------------------------------------------------------------------------
@@ -79,17 +85,23 @@ def search_powers(
     db: Session = Depends(get_db),
 ) -> PowersList:
     """Case-insensitive substring search over power names."""
-    rows = db.execute(
-        text("""
-            SELECT DISTINCT power
-            FROM pp_system_snapshots
-            WHERE power ILIKE :q
-            ORDER BY power
-            LIMIT 20
-        """),
-        {"q": f"%{q}%"},
-    ).all()
-    return PowersList(powers=[r.power for r in rows])
+    try:
+        rows = db.execute(
+            text("""
+                SELECT DISTINCT power
+                FROM pp_system_snapshots
+                WHERE power ILIKE :q
+                ORDER BY power
+                LIMIT 20
+            """),
+            {"q": f"%{q}%"},
+        ).all()
+        return PowersList(powers=[r.power for r in rows])
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("search_powers failed")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ---------------------------------------------------------------------------
@@ -109,82 +121,88 @@ def get_power_systems(
     enriched with their latest PP snapshot.  Optionally compute distance
     from a reference system when ref_id (or legacy center_id) system_id64 is supplied.
     """
-    # Accept either ref_id or legacy center_id
-    resolved_ref_id = ref_id if ref_id is not None else center_id
+    try:
+        # Accept either ref_id or legacy center_id
+        resolved_ref_id = ref_id if ref_id is not None else center_id
 
-    # Latest snapshot per system — exclude stale Spansh data
-    latest_sql = text(f"""
-        SELECT DISTINCT ON (system_id)
-               system_id, power, power_state,
-               reinforcement, undermining, control_progress,
-               snapshot_time, spansh_updated_at,
-               cp_decay
-        FROM pp_system_snapshots
-        WHERE power = :power
-        {_STALE_FILTER}
-        ORDER BY system_id, snapshot_time DESC
-    """)
-    snap_rows = db.execute(latest_sql, {"power": name}).mappings().all()
+        # Latest snapshot per system — exclude stale Spansh data
+        latest_sql = text(f"""
+            SELECT DISTINCT ON (system_id)
+                   system_id, power, power_state,
+                   reinforcement, undermining, control_progress,
+                   snapshot_time, spansh_updated_at,
+                   cp_decay
+            FROM pp_system_snapshots
+            WHERE power = :power
+            {_STALE_FILTER}
+            ORDER BY system_id, snapshot_time DESC
+        """)
+        snap_rows = db.execute(latest_sql, {"power": name}).mappings().all()
 
-    if not snap_rows:
-        return []
+        if not snap_rows:
+            return []
 
-    system_ids = [r["system_id"] for r in snap_rows]
-    snap_by_id = {r["system_id"]: r for r in snap_rows}
+        system_ids = [r["system_id"] for r in snap_rows]
+        snap_by_id = {r["system_id"]: r for r in snap_rows}
 
-    systems = db.query(PPSystem).filter(PPSystem.id.in_(system_ids)).all()
-    sys_by_id = {s.id: s for s in systems}
+        systems = db.query(PPSystem).filter(PPSystem.id.in_(system_ids)).all()
+        sys_by_id = {s.id: s for s in systems}
 
-    # Resolve reference coords
-    cx: Optional[float] = None
-    cy: Optional[float] = None
-    cz: Optional[float] = None
-    if resolved_ref_id is not None:
-        center_sys = db.query(PPSystem).filter(PPSystem.system_id64 == resolved_ref_id).first()
-        if center_sys:
-            cx, cy, cz = center_sys.x, center_sys.y, center_sys.z
+        # Resolve reference coords
+        cx: Optional[float] = None
+        cy: Optional[float] = None
+        cz: Optional[float] = None
+        if resolved_ref_id is not None:
+            center_sys = db.query(PPSystem).filter(PPSystem.system_id64 == resolved_ref_id).first()
+            if center_sys:
+                cx, cy, cz = center_sys.x, center_sys.y, center_sys.z
 
-    results: list[PPSystemEntry] = []
-    for sid, snap in snap_by_id.items():
-        system = sys_by_id.get(sid)
-        if system is None:
-            continue
+        results: list[PPSystemEntry] = []
+        for sid, snap in snap_by_id.items():
+            system = sys_by_id.get(sid)
+            if system is None:
+                continue
 
-        x = system.x or 0.0
-        y = system.y or 0.0
-        z = system.z or 0.0
+            x = system.x or 0.0
+            y = system.y or 0.0
+            z = system.z or 0.0
 
-        distance: Optional[float] = None
-        if cx is not None and cy is not None and cz is not None:
-            distance = math.sqrt((x - cx) ** 2 + (y - cy) ** 2 + (z - cz) ** 2)
+            distance: Optional[float] = None
+            if cx is not None and cy is not None and cz is not None:
+                distance = math.sqrt((x - cx) ** 2 + (y - cy) ** 2 + (z - cz) ** 2)
 
-        rein = snap["reinforcement"]
-        under = snap["undermining"]
-        cp_decay_val = snap["cp_decay"]
-        eff_u = _eff_under(under, cp_decay_val)
-        undermine_ratio: Optional[float] = None
-        if rein and rein > 0:
-            undermine_ratio = eff_u / rein
+            rein = snap["reinforcement"]
+            under = snap["undermining"]
+            cp_decay_val = snap["cp_decay"]
+            eff_u = _eff_under(under, cp_decay_val)
+            undermine_ratio: Optional[float] = None
+            if rein and rein > 0:
+                undermine_ratio = eff_u / rein
 
-        results.append(PPSystemEntry(
-            system_id64=system.system_id64,
-            name=system.name,
-            x=x, y=y, z=z,
-            allegiance=system.allegiance,
-            population=system.population,
-            power=snap["power"],
-            power_state=snap["power_state"],
-            reinforcement=rein,
-            undermining=under,
-            control_progress=snap["control_progress"],
-            snapshot_time=snap["snapshot_time"],
-            spansh_updated_at=snap["spansh_updated_at"],
-            distance_from_center=distance,
-            undermine_ratio=undermine_ratio,
-            cp_decay=cp_decay_val,
-        ))
+            results.append(PPSystemEntry(
+                system_id64=system.system_id64,
+                name=system.name,
+                x=x, y=y, z=z,
+                allegiance=system.allegiance,
+                population=system.population,
+                power=snap["power"],
+                power_state=snap["power_state"],
+                reinforcement=rein,
+                undermining=under,
+                control_progress=snap["control_progress"],
+                snapshot_time=snap["snapshot_time"],
+                spansh_updated_at=snap["spansh_updated_at"],
+                distance_from_center=distance,
+                undermine_ratio=undermine_ratio,
+                cp_decay=cp_decay_val,
+            ))
 
-    return results
+        return results
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("get_power_systems failed")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ---------------------------------------------------------------------------
@@ -200,9 +218,15 @@ def get_power_recommendations(
     db: Session = Depends(get_db),
 ) -> RecommendationsResponse:
     """Return fortify and expand recommendations for a Power."""
-    resolved_ref_id = ref_id if ref_id is not None else center_id
-    result = compute_recommendations(name, resolved_ref_id, db)
-    return RecommendationsResponse(**result)
+    try:
+        resolved_ref_id = ref_id if ref_id is not None else center_id
+        result = compute_recommendations(name, resolved_ref_id, db)
+        return RecommendationsResponse(**result)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("get_power_recommendations failed")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ---------------------------------------------------------------------------
@@ -229,124 +253,130 @@ def get_contested_systems(
     The staleness clause for NULL timestamps is built dynamically based on the
     admin setting so it can be toggled without redeployment.
     """
+    try:
 
-    # Read the null-timestamp staleness setting
-    null_ts_row = db.execute(
-        text("SELECT value FROM admin_settings WHERE key = 'contested_null_ts_is_stale' LIMIT 1")
-    ).fetchone()
-    null_ts_is_stale = (null_ts_row is None) or (null_ts_row[0].lower() not in ("false", "0", "no"))
+        # Read the null-timestamp staleness setting
+        null_ts_row = db.execute(
+            text("SELECT value FROM admin_settings WHERE key = 'contested_null_ts_is_stale' LIMIT 1")
+        ).fetchone()
+        null_ts_is_stale = (null_ts_row is None) or (null_ts_row[0].lower() not in ("false", "0", "no"))
 
-    if null_ts_is_stale:
-        # NULL timestamp → treat as stale: require spansh_updated_at to be present and fresh
-        stale_clause = "AND spansh_updated_at > NOW() - INTERVAL '7 days'"
-    else:
-        # NULL timestamp → keep (legacy pre-migration rows)
-        stale_clause = _STALE_FILTER
+        if null_ts_is_stale:
+            # NULL timestamp → treat as stale: require spansh_updated_at to be present and fresh
+            stale_clause = "AND spansh_updated_at > NOW() - INTERVAL '7 days'"
+        else:
+            # NULL timestamp → keep (legacy pre-migration rows)
+            stale_clause = _STALE_FILTER
 
-    # Get the latest snapshot for every Contested system where the selected
-    # power appears in powers_list AND has earned merits (progress > 0 in
-    # conflict_progress JSON).  This covers both directions:
-    #   - Our power is attacking an enemy-controlled Contested system
-    #   - An enemy is attacking one of our Contested systems
-    # The conflict_progress filter is applied in Python after the DB fetch
-    # because conflict_progress is a JSON string, not a SQL-queryable column.
-    contested_rows = db.execute(text(f"""
-        SELECT DISTINCT ON (system_id)
-               system_id, power, power_state,
-               control_progress, reinforcement, undermining,
-               powers_list, conflict_progress, spansh_updated_at
-        FROM pp_system_snapshots
-        WHERE power_state IN ('Contested', 'Acquisition')
-          AND powers_list ILIKE :power_pattern
-          {stale_clause}
-        ORDER BY system_id, snapshot_time DESC
-    """), {"power_pattern": f"%{name}%"}).mappings().all()
+        # Get the latest snapshot for every Contested system where the selected
+        # power appears in powers_list AND has earned merits (progress > 0 in
+        # conflict_progress JSON).  This covers both directions:
+        #   - Our power is attacking an enemy-controlled Contested system
+        #   - An enemy is attacking one of our Contested systems
+        # The conflict_progress filter is applied in Python after the DB fetch
+        # because conflict_progress is a JSON string, not a SQL-queryable column.
+        contested_rows = db.execute(text(f"""
+            SELECT DISTINCT ON (system_id)
+                   system_id, power, power_state,
+                   control_progress, reinforcement, undermining,
+                   powers_list, conflict_progress, spansh_updated_at
+            FROM pp_system_snapshots
+            WHERE power_state IN ('Contested', 'Acquisition')
+              AND powers_list ILIKE :power_pattern
+              {stale_clause}
+            ORDER BY system_id, snapshot_time DESC
+        """), {"power_pattern": f"%{name}%"}).mappings().all()
 
-    if not contested_rows:
-        return []
+        if not contested_rows:
+            return []
 
-    contested_sys_ids = [r["system_id"] for r in contested_rows]
-    contested_snaps   = {r["system_id"]: r for r in contested_rows}
+        contested_sys_ids = [r["system_id"] for r in contested_rows]
+        contested_snaps   = {r["system_id"]: r for r in contested_rows}
 
-    # Fetch system coords
-    contested_systems = db.query(PPSystem).filter(
-        PPSystem.id.in_(contested_sys_ids)
-    ).all()
-    sys_by_id = {s.id: s for s in contested_systems}
+        # Fetch system coords
+        contested_systems = db.query(PPSystem).filter(
+            PPSystem.id.in_(contested_sys_ids)
+        ).all()
+        sys_by_id = {s.id: s for s in contested_systems}
 
-    # Get coords for the selected power's systems to compute distance (no stale filter
-    # here — we want all territory coords even if data is slightly old)
-    power_snap_rows = db.execute(text("""
-        SELECT DISTINCT ON (system_id) system_id
-        FROM pp_system_snapshots
-        WHERE power = :power
-        ORDER BY system_id, snapshot_time DESC
-    """), {"power": name}).mappings().all()
+        # Get coords for the selected power's systems to compute distance (no stale filter
+        # here — we want all territory coords even if data is slightly old)
+        power_snap_rows = db.execute(text("""
+            SELECT DISTINCT ON (system_id) system_id
+            FROM pp_system_snapshots
+            WHERE power = :power
+            ORDER BY system_id, snapshot_time DESC
+        """), {"power": name}).mappings().all()
 
-    power_sys_ids = [r["system_id"] for r in power_snap_rows]
-    power_systems = db.query(PPSystem).filter(
-        PPSystem.id.in_(power_sys_ids)
-    ).all() if power_sys_ids else []
-    power_coords = [
-        (s.x or 0.0, s.y or 0.0, s.z or 0.0) for s in power_systems
-    ]
+        power_sys_ids = [r["system_id"] for r in power_snap_rows]
+        power_systems = db.query(PPSystem).filter(
+            PPSystem.id.in_(power_sys_ids)
+        ).all() if power_sys_ids else []
+        power_coords = [
+            (s.x or 0.0, s.y or 0.0, s.z or 0.0) for s in power_systems
+        ]
 
-    results: list[ContestedSystemInfo] = []
-    for sid, snap in contested_snaps.items():
-        system = sys_by_id.get(sid)
-        if system is None:
-            continue
+        results: list[ContestedSystemInfo] = []
+        for sid, snap in contested_snaps.items():
+            system = sys_by_id.get(sid)
+            if system is None:
+                continue
 
-        # ── Condition 2b: selected power must have ≥ 35,000 control points ──
-        # AND at least one other power must also have ≥ 35,000 control points.
-        # This ensures only "truly" contested systems with significant investment
-        # from both sides are shown.
-        cp_str = snap["conflict_progress"] or ""
-        qualifying_powers: list[str] = []
-        if cp_str:
-            try:
-                cp_entries = _json.loads(cp_str)
-                for entry in cp_entries:
-                    if isinstance(entry, dict) and (entry.get("progress") or 0) >= CONTESTED_MIN_CONTROL_POINTS:
-                        qualifying_powers.append(entry.get("power", ""))
-            except Exception:
-                pass
-        # System qualifies if selected power + at least 1 other are above threshold
-        if name not in qualifying_powers or len(qualifying_powers) < 2:
-            continue
+            # ── Condition 2b: selected power must have ≥ 35,000 control points ──
+            # AND at least one other power must also have ≥ 35,000 control points.
+            # This ensures only "truly" contested systems with significant investment
+            # from both sides are shown.
+            cp_str = snap["conflict_progress"] or ""
+            qualifying_powers: list[str] = []
+            if cp_str:
+                try:
+                    cp_entries = _json.loads(cp_str)
+                    for entry in cp_entries:
+                        if isinstance(entry, dict) and (entry.get("progress") or 0) >= CONTESTED_MIN_CONTROL_POINTS:
+                            qualifying_powers.append(entry.get("power", ""))
+                except Exception:
+                    pass
+            # System qualifies if selected power + at least 1 other are above threshold
+            if name not in qualifying_powers or len(qualifying_powers) < 2:
+                continue
 
-        sx, sy, sz = system.x or 0.0, system.y or 0.0, system.z or 0.0
+            sx, sy, sz = system.x or 0.0, system.y or 0.0, system.z or 0.0
 
-        dist: Optional[float] = None
-        if power_coords:
-            dist = min(
-                _dist3(sx, sy, sz, cx, cy, cz)
-                for cx, cy, cz in power_coords
-            )
+            dist: Optional[float] = None
+            if power_coords:
+                dist = min(
+                    _dist3(sx, sy, sz, cx, cy, cz)
+                    for cx, cy, cz in power_coords
+                )
 
-        # Build a friendly controlling_power label from powers_list
-        pl = snap["powers_list"] or ""
-        powers = [p.strip() for p in pl.split(",") if p.strip()]
-        label = "Multiple" if len(powers) > 1 else (powers[0] if powers else "Unknown")
+            # Build a friendly controlling_power label from powers_list
+            pl = snap["powers_list"] or ""
+            powers = [p.strip() for p in pl.split(",") if p.strip()]
+            label = "Multiple" if len(powers) > 1 else (powers[0] if powers else "Unknown")
 
-        results.append(ContestedSystemInfo(
-            system_id64=system.system_id64,
-            system_name=system.name,
-            controlling_power=label,
-            power_state="Contested",
-            control_progress=snap["control_progress"],
-            reinforcement=snap["reinforcement"] if (snap["reinforcement"] or 0) > 0 else None,
-            undermining=snap["undermining"] if (snap["undermining"] or 0) > 0 else None,
-            distance_from_power=dist,
-            x=sx, y=sy, z=sz,
-            powers_list=snap["powers_list"],
-            conflict_progress=snap["conflict_progress"],
-            spansh_updated_at=snap["spansh_updated_at"],
-        ))
+            results.append(ContestedSystemInfo(
+                system_id64=system.system_id64,
+                system_name=system.name,
+                controlling_power=label,
+                power_state="Contested",
+                control_progress=snap["control_progress"],
+                reinforcement=snap["reinforcement"] if (snap["reinforcement"] or 0) > 0 else None,
+                undermining=snap["undermining"] if (snap["undermining"] or 0) > 0 else None,
+                distance_from_power=dist,
+                x=sx, y=sy, z=sz,
+                powers_list=snap["powers_list"],
+                conflict_progress=snap["conflict_progress"],
+                spansh_updated_at=snap["spansh_updated_at"],
+            ))
 
-    # Sort by distance to the selected power's territory
-    results.sort(key=lambda r: r.distance_from_power if r.distance_from_power is not None else 9999.0)
-    return results
+        # Sort by distance to the selected power's territory
+        results.sort(key=lambda r: r.distance_from_power if r.distance_from_power is not None else 9999.0)
+        return results
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("get_contested_systems failed")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ---------------------------------------------------------------------------
@@ -409,301 +439,307 @@ def target_analysis(
     Includes Contested systems (power_state = "Contested") where our power
     already has a foothold but hasn't flipped the system yet.
     """
-    # ── 0. Load configurable weights from DB ─────────────────────────────────
-    w = load_weights(db)
+    try:
+        # ── 0. Load configurable weights from DB ─────────────────────────────────
+        w = load_weights(db)
 
-    score_stronghold  = float(w.get("target_score_stronghold",  SCORING_DEFAULTS["target_score_stronghold"]))
-    score_fortified   = float(w.get("target_score_fortified",   SCORING_DEFAULTS["target_score_fortified"]))
-    score_exploited   = float(w.get("target_score_exploited",   SCORING_DEFAULTS["target_score_exploited"]))
-    score_contested   = float(w.get("target_score_contested",   SCORING_DEFAULTS["target_score_contested"]))
-    prog_bonus_max    = float(w.get("target_progress_bonus_max",SCORING_DEFAULTS["target_progress_bonus_max"]))
-    prox_bonus_max    = float(w.get("target_prox_bonus_max",    SCORING_DEFAULTS["target_prox_bonus_max"]))
-    dist_max_ly       = float(w.get("target_dist_max_ly",       SCORING_DEFAULTS["target_dist_max_ly"]))
-    max_results       = int(float(w.get("target_max_results",   SCORING_DEFAULTS["target_max_results"])))
+        score_stronghold  = float(w.get("target_score_stronghold",  SCORING_DEFAULTS["target_score_stronghold"]))
+        score_fortified   = float(w.get("target_score_fortified",   SCORING_DEFAULTS["target_score_fortified"]))
+        score_exploited   = float(w.get("target_score_exploited",   SCORING_DEFAULTS["target_score_exploited"]))
+        score_contested   = float(w.get("target_score_contested",   SCORING_DEFAULTS["target_score_contested"]))
+        prog_bonus_max    = float(w.get("target_progress_bonus_max",SCORING_DEFAULTS["target_progress_bonus_max"]))
+        prox_bonus_max    = float(w.get("target_prox_bonus_max",    SCORING_DEFAULTS["target_prox_bonus_max"]))
+        dist_max_ly       = float(w.get("target_dist_max_ly",       SCORING_DEFAULTS["target_dist_max_ly"]))
+        max_results       = int(float(w.get("target_max_results",   SCORING_DEFAULTS["target_max_results"])))
 
-    # Thresholds returned to the UI for calibrated colour labels
-    prog_critical = float(w.get("target_progress_critical", SCORING_DEFAULTS["target_progress_critical"]))
-    prog_high     = float(w.get("target_progress_high",     SCORING_DEFAULTS["target_progress_high"]))
-    prog_medium   = float(w.get("target_progress_medium",   SCORING_DEFAULTS["target_progress_medium"]))
+        # Thresholds returned to the UI for calibrated colour labels
+        prog_critical = float(w.get("target_progress_critical", SCORING_DEFAULTS["target_progress_critical"]))
+        prog_high     = float(w.get("target_progress_high",     SCORING_DEFAULTS["target_progress_high"]))
+        prog_medium   = float(w.get("target_progress_medium",   SCORING_DEFAULTS["target_progress_medium"]))
 
-    attacker = body.attacker_power
-    targets  = body.target_powers
+        attacker = body.attacker_power
+        targets  = body.target_powers
 
-    # ── 1. Get attacker's system coords ──────────────────────────────────────
-    attacker_snap_rows = db.execute(text(f"""
-        SELECT DISTINCT ON (system_id)
-               system_id, power
-        FROM pp_system_snapshots
-        WHERE power = :power
-        {_STALE_FILTER}
-        ORDER BY system_id, snapshot_time DESC
-    """), {"power": attacker}).mappings().all()
+        # ── 1. Get attacker's system coords ──────────────────────────────────────
+        attacker_snap_rows = db.execute(text(f"""
+            SELECT DISTINCT ON (system_id)
+                   system_id, power
+            FROM pp_system_snapshots
+            WHERE power = :power
+            {_STALE_FILTER}
+            ORDER BY system_id, snapshot_time DESC
+        """), {"power": attacker}).mappings().all()
 
-    attacker_sys_ids = [r["system_id"] for r in attacker_snap_rows]
-    attacker_systems = db.query(PPSystem).filter(
-        PPSystem.id.in_(attacker_sys_ids)
-    ).all() if attacker_sys_ids else []
-    attacker_coords = [
-        (s.x or 0.0, s.y or 0.0, s.z or 0.0) for s in attacker_systems
-    ]
+        attacker_sys_ids = [r["system_id"] for r in attacker_snap_rows]
+        attacker_systems = db.query(PPSystem).filter(
+            PPSystem.id.in_(attacker_sys_ids)
+        ).all() if attacker_sys_ids else []
+        attacker_coords = [
+            (s.x or 0.0, s.y or 0.0, s.z or 0.0) for s in attacker_systems
+        ]
 
-    # ── 2. Get latest snapshots for all target powers ─────────────────────────
-    if not targets:
-        return TargetAnalysisResponse(
-            targets=[], attacker_power=attacker, target_powers=targets,
-            progress_thresholds={"critical": prog_critical, "high": prog_high, "medium": prog_medium},
+        # ── 2. Get latest snapshots for all target powers ─────────────────────────
+        if not targets:
+            return TargetAnalysisResponse(
+                targets=[], attacker_power=attacker, target_powers=targets,
+                progress_thresholds={"critical": prog_critical, "high": prog_high, "medium": prog_medium},
+            )
+
+        target_snap_rows = db.execute(text(f"""
+            SELECT DISTINCT ON (system_id)
+                   system_id, power, power_state,
+                   reinforcement, undermining, control_progress,
+                   cp_decay
+            FROM pp_system_snapshots
+            WHERE power = ANY(:powers)
+            {_STALE_FILTER}
+            ORDER BY system_id, snapshot_time DESC
+        """), {"powers": targets}).mappings().all()
+
+        # ── 2b. Contested systems — spec-correct query ────────────────────────────
+        # A system is a Contested Target when ALL THREE conditions hold:
+        #   1. power_state = 'Contested'  (not Acquisition or any other state)
+        #   2. The attacker power is in powers_list AND has progress > 0
+        #      in conflict_progress  (has actually earned merits there)
+        #   3. Data is fresh (spansh_updated_at within 7 days, or within 7 days via
+        #      snapshot_time when spansh_updated_at IS NULL per admin setting)
+        #
+        # Contested rows have power = NULL (set by ingestion), so they are NOT
+        # returned by the target_snap_rows query above.  We fetch them separately
+        # and merge them into snap_by_id so they participate in scoring.
+        #
+        # Both directions are surfaced:
+        #   - Our power attacking an enemy-held Contested system (common)
+        #   - Enemy attacking one of our Contested systems (defensive alert)
+
+        null_ts_row = db.execute(
+            text("SELECT value FROM admin_settings WHERE key = 'contested_null_ts_is_stale' LIMIT 1")
+        ).fetchone()
+        null_ts_is_stale = (null_ts_row is None) or (null_ts_row[0].lower() not in ("false", "0", "no"))
+        contested_stale_clause = (
+            "AND spansh_updated_at > NOW() - INTERVAL '7 days'"
+            if null_ts_is_stale else _STALE_FILTER
         )
 
-    target_snap_rows = db.execute(text(f"""
-        SELECT DISTINCT ON (system_id)
-               system_id, power, power_state,
-               reinforcement, undermining, control_progress,
-               cp_decay
-        FROM pp_system_snapshots
-        WHERE power = ANY(:powers)
-        {_STALE_FILTER}
-        ORDER BY system_id, snapshot_time DESC
-    """), {"powers": targets}).mappings().all()
+        contested_snap_rows = db.execute(text(f"""
+            SELECT DISTINCT ON (system_id)
+                   system_id, power, power_state,
+                   reinforcement, undermining, control_progress,
+                   powers_list, conflict_progress,
+                   cp_decay
+            FROM pp_system_snapshots
+            WHERE power_state IN ('Contested', 'Acquisition')
+              AND powers_list ILIKE :attacker_pattern
+              {contested_stale_clause}
+            ORDER BY system_id, snapshot_time DESC
+        """), {"attacker_pattern": f"%{attacker}%"}).mappings().all()
 
-    # ── 2b. Contested systems — spec-correct query ────────────────────────────
-    # A system is a Contested Target when ALL THREE conditions hold:
-    #   1. power_state = 'Contested'  (not Acquisition or any other state)
-    #   2. The attacker power is in powers_list AND has progress > 0
-    #      in conflict_progress  (has actually earned merits there)
-    #   3. Data is fresh (spansh_updated_at within 7 days, or within 7 days via
-    #      snapshot_time when spansh_updated_at IS NULL per admin setting)
-    #
-    # Contested rows have power = NULL (set by ingestion), so they are NOT
-    # returned by the target_snap_rows query above.  We fetch them separately
-    # and merge them into snap_by_id so they participate in scoring.
-    #
-    # Both directions are surfaced:
-    #   - Our power attacking an enemy-held Contested system (common)
-    #   - Enemy attacking one of our Contested systems (defensive alert)
+        # Filter in Python: attacker + at least 1 other must have ≥ CONTESTED_MIN_CONTROL_POINTS
+        contested_sys_ids: set[int] = set()
+        contested_extra_snaps: dict[int, object] = {}
+        for row in contested_snap_rows:
+            cp_str = row["conflict_progress"] or ""
+            qualifying_powers: list[str] = []
+            if cp_str:
+                try:
+                    for entry in _json.loads(cp_str):
+                        if isinstance(entry, dict) and (entry.get("progress") or 0) >= CONTESTED_MIN_CONTROL_POINTS:
+                            qualifying_powers.append(entry.get("power", ""))
+                except Exception:
+                    pass
+            # System qualifies if attacker + at least 1 other are above threshold
+            if attacker in qualifying_powers and len(qualifying_powers) >= 2:
+                contested_sys_ids.add(row["system_id"])
+                contested_extra_snaps[row["system_id"]] = row
 
-    null_ts_row = db.execute(
-        text("SELECT value FROM admin_settings WHERE key = 'contested_null_ts_is_stale' LIMIT 1")
-    ).fetchone()
-    null_ts_is_stale = (null_ts_row is None) or (null_ts_row[0].lower() not in ("false", "0", "no"))
-    contested_stale_clause = (
-        "AND spansh_updated_at > NOW() - INTERVAL '7 days'"
-        if null_ts_is_stale else _STALE_FILTER
-    )
+        target_sys_ids = [r["system_id"] for r in target_snap_rows]
+        # Merge Contested system IDs — these have power=NULL so they won't clash
+        # with target_snap_rows (which only fetches power = ANY(:powers) rows)
+        all_fetch_ids = list(set(target_sys_ids) | set(contested_extra_snaps.keys()))
+        target_systems_orm = db.query(PPSystem).filter(
+            PPSystem.id.in_(all_fetch_ids)
+        ).all()
+        sys_by_id = {s.id: s for s in target_systems_orm}
+        snap_by_id: dict = {r["system_id"]: r for r in target_snap_rows}
+        # Add Contested rows; if a system appears in both lists the target-power row
+        # takes precedence (it has richer data), otherwise add the Contested row.
+        for sid, crow in contested_extra_snaps.items():
+            if sid not in snap_by_id:
+                snap_by_id[sid] = crow
 
-    contested_snap_rows = db.execute(text(f"""
-        SELECT DISTINCT ON (system_id)
-               system_id, power, power_state,
-               reinforcement, undermining, control_progress,
-               powers_list, conflict_progress,
-               cp_decay
-        FROM pp_system_snapshots
-        WHERE power_state IN ('Contested', 'Acquisition')
-          AND powers_list ILIKE :attacker_pattern
-          {contested_stale_clause}
-        ORDER BY system_id, snapshot_time DESC
-    """), {"attacker_pattern": f"%{attacker}%"}).mappings().all()
+        # ── 3. Get progress trends for all target systems ─────────────────────────
+        # Include both regular target and contested system IDs so contested
+        # systems also get trend data instead of always showing "unknown".
+        all_trend_ids = list(set(target_sys_ids) | set(contested_extra_snaps.keys()))
+        trend_rows = db.execute(text("""
+            SELECT system_id,
+                   control_progress,
+                   snapshot_time,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY system_id
+                       ORDER BY snapshot_time DESC
+                   ) AS rn
+            FROM pp_system_snapshots
+            WHERE system_id = ANY(:ids)
+              AND control_progress IS NOT NULL
+            ORDER BY system_id, snapshot_time DESC
+        """), {"ids": all_trend_ids}).mappings().all()
 
-    # Filter in Python: attacker + at least 1 other must have ≥ CONTESTED_MIN_CONTROL_POINTS
-    contested_sys_ids: set[int] = set()
-    contested_extra_snaps: dict[int, object] = {}
-    for row in contested_snap_rows:
-        cp_str = row["conflict_progress"] or ""
-        qualifying_powers: list[str] = []
-        if cp_str:
-            try:
-                for entry in _json.loads(cp_str):
-                    if isinstance(entry, dict) and (entry.get("progress") or 0) >= CONTESTED_MIN_CONTROL_POINTS:
-                        qualifying_powers.append(entry.get("power", ""))
-            except Exception:
-                pass
-        # System qualifies if attacker + at least 1 other are above threshold
-        if attacker in qualifying_powers and len(qualifying_powers) >= 2:
-            contested_sys_ids.add(row["system_id"])
-            contested_extra_snaps[row["system_id"]] = row
-
-    target_sys_ids = [r["system_id"] for r in target_snap_rows]
-    # Merge Contested system IDs — these have power=NULL so they won't clash
-    # with target_snap_rows (which only fetches power = ANY(:powers) rows)
-    all_fetch_ids = list(set(target_sys_ids) | set(contested_extra_snaps.keys()))
-    target_systems_orm = db.query(PPSystem).filter(
-        PPSystem.id.in_(all_fetch_ids)
-    ).all()
-    sys_by_id = {s.id: s for s in target_systems_orm}
-    snap_by_id: dict = {r["system_id"]: r for r in target_snap_rows}
-    # Add Contested rows; if a system appears in both lists the target-power row
-    # takes precedence (it has richer data), otherwise add the Contested row.
-    for sid, crow in contested_extra_snaps.items():
-        if sid not in snap_by_id:
-            snap_by_id[sid] = crow
-
-    # ── 3. Get progress trends for all target systems ─────────────────────────
-    # Include both regular target and contested system IDs so contested
-    # systems also get trend data instead of always showing "unknown".
-    all_trend_ids = list(set(target_sys_ids) | set(contested_extra_snaps.keys()))
-    trend_rows = db.execute(text("""
-        SELECT system_id,
-               control_progress,
-               snapshot_time,
-               ROW_NUMBER() OVER (
-                   PARTITION BY system_id
-                   ORDER BY snapshot_time DESC
-               ) AS rn
-        FROM pp_system_snapshots
-        WHERE system_id = ANY(:ids)
-          AND control_progress IS NOT NULL
-        ORDER BY system_id, snapshot_time DESC
-    """), {"ids": all_trend_ids}).mappings().all()
-
-    # Build dict: system_id -> list of (progress, time) newest-first, max 3
-    trend_map: dict[int, list] = {}
-    for row in trend_rows:
-        sid = row["system_id"]
-        if row["rn"] <= 3:
-            trend_map.setdefault(sid, []).append(
-                (row["control_progress"], row["snapshot_time"])
-            )
-
-    def _trend(sid: int) -> str:
-        pts = trend_map.get(sid, [])
-        if len(pts) < 2:
-            return "unknown"
-        p_new, p_old = pts[0][0], pts[1][0]
-        if p_new < p_old - 0.01:
-            return "worsening"
-        if p_new > p_old + 0.01:
-            return "improving"
-        return "stable"
-
-    # ── 4. Score each target system ───────────────────────────────────────────
-    items: list[TargetAnalysisItem] = []
-
-    for sid, snap in snap_by_id.items():
-        system = sys_by_id.get(sid)
-        if system is None:
-            continue
-
-        power_state = snap["power_state"]
-        is_contested = sid in contested_sys_ids
-
-        if power_state not in ("Stronghold", "Fortified", "Exploited", "Contested"):
-            continue   # skip Unoccupied — nothing to undermine
-
-        progress   = snap["control_progress"] or 0.5
-        rein       = snap["reinforcement"] or 0
-        under      = snap["undermining"]   or 0
-        sx, sy, sz = system.x or 0.0, system.y or 0.0, system.z or 0.0
-
-        # Base score by state tier (or Contested override)
-        if is_contested:
-            base = score_contested
-        elif power_state == "Stronghold":
-            base = score_stronghold
-        elif power_state == "Fortified":
-            base = score_fortified
-        else:
-            base = score_exploited
-
-        # Progress bonus: the closer to 0 the more vulnerable
-        # progress ≤0 → full bonus; progress ≥1 → no bonus
-        prog_clamped = max(0.0, min(1.0, progress))
-        progress_bonus = prog_bonus_max * (1.0 - prog_clamped)
-
-        # Proximity bonus
-        dist_from_attacker: Optional[float] = None
-        prox_bonus = 0.0
-        if attacker_coords:
-            dist_from_attacker = min(
-                _dist3(sx, sy, sz, ax, ay, az)
-                for ax, ay, az in attacker_coords
-            )
-            if dist_from_attacker <= dist_max_ly:
-                prox_bonus = prox_bonus_max * max(
-                    0.0, 1.0 - dist_from_attacker / dist_max_ly
+        # Build dict: system_id -> list of (progress, time) newest-first, max 3
+        trend_map: dict[int, list] = {}
+        for row in trend_rows:
+            sid = row["system_id"]
+            if row["rn"] <= 3:
+                trend_map.setdefault(sid, []).append(
+                    (row["control_progress"], row["snapshot_time"])
                 )
 
-        score = round(base + progress_bonus + prox_bonus, 1)
+        def _trend(sid: int) -> str:
+            pts = trend_map.get(sid, [])
+            if len(pts) < 2:
+                return "unknown"
+            p_new, p_old = pts[0][0], pts[1][0]
+            if p_new < p_old - 0.01:
+                return "worsening"
+            if p_new > p_old + 0.01:
+                return "improving"
+            return "stable"
 
-        # Days to downgrade estimate — use actual state for correct band width
-        days = _estimate_days_to_downgrade(progress, rein, under, power_state)
+        # ── 4. Score each target system ───────────────────────────────────────────
+        items: list[TargetAnalysisItem] = []
 
-        # Build reason list
-        reasons: list[str] = []
-        if is_contested:
-            reasons.append("⚔ Contested — your power already has a foothold here")
-        elif power_state == "Stronghold":
-            reasons.append("Stronghold — high-value undermine target")
-        elif power_state == "Fortified":
-            reasons.append("Fortified — mid-value undermine target")
-        else:
-            reasons.append("Exploited — low-value undermine target")
+        for sid, snap in snap_by_id.items():
+            system = sys_by_id.get(sid)
+            if system is None:
+                continue
 
-        if progress <= 0.0:
-            reasons.append("🚨 Already at downgrade threshold — one more push drops it")
-        elif progress < prog_critical:
-            reasons.append(f"CRITICAL vulnerability ({progress:.1%} progress — near collapse)")
-        elif progress < prog_high:
-            reasons.append(f"HIGH vulnerability ({progress:.1%} progress)")
-        elif progress < prog_medium:
-            reasons.append(f"Moderate vulnerability ({progress:.1%} progress)")
-        elif progress >= 1.0:
-            reasons.append(f"Progress at {progress:.1%} — recently reinforced, harder to drop")
+            power_state = snap["power_state"]
+            is_contested = sid in contested_sys_ids
 
-        if days is not None and days == 0.0:
-            reasons.append("Downgrade happening NOW this cycle")
-        elif days is not None and days < 2.0:
-            reasons.append(f"~{days:.1f}d to downgrade at current rate")
-        elif days is not None and days < 7.0:
-            reasons.append(f"~{days:.1f}d to downgrade — apply pressure now")
+            if power_state not in ("Stronghold", "Fortified", "Exploited", "Contested"):
+                continue   # skip Unoccupied — nothing to undermine
 
-        if dist_from_attacker is not None:
-            if dist_from_attacker <= 5.0:
-                reasons.append(f"Extremely close to your territory ({dist_from_attacker:.1f} LY)")
-            elif dist_from_attacker <= 15.0:
-                reasons.append(f"Close to your territory ({dist_from_attacker:.1f} LY)")
+            progress   = snap["control_progress"] or 0.5
+            rein       = snap["reinforcement"] or 0
+            under      = snap["undermining"]   or 0
+            sx, sy, sz = system.x or 0.0, system.y or 0.0, system.z or 0.0
 
-        trend = _trend(sid)
+            # Base score by state tier (or Contested override)
+            if is_contested:
+                base = score_contested
+            elif power_state == "Stronghold":
+                base = score_stronghold
+            elif power_state == "Fortified":
+                base = score_fortified
+            else:
+                base = score_exploited
 
-        # Derive controlling_power: for contested systems power is NULL,
-        # so build a label from powers_list (same as get_contested_systems endpoint).
-        ctrl_power = snap["power"]
-        if ctrl_power is None:
-            pl = (snap["powers_list"] or "") if "powers_list" in snap.keys() else ""
-            powers = [p.strip() for p in pl.split(",") if p.strip()]
-            ctrl_power = "Multiple" if len(powers) > 1 else (powers[0] if powers else "Unknown")
+            # Progress bonus: the closer to 0 the more vulnerable
+            # progress ≤0 → full bonus; progress ≥1 → no bonus
+            prog_clamped = max(0.0, min(1.0, progress))
+            progress_bonus = prog_bonus_max * (1.0 - prog_clamped)
 
-        items.append(TargetAnalysisItem(
-            system_id64=system.system_id64,
-            system_name=system.name,
-            controlling_power=ctrl_power,
-            power_state=power_state,
-            control_progress=progress,
-            reinforcement=rein if rein > 0 else None,
-            undermining=under if under > 0 else None,
-            score=score,
-            reasons=reasons,
-            distance_from_attacker=dist_from_attacker,
-            days_to_downgrade=days,
-            trend=trend,
-            contested=is_contested,
-            cp_decay=snap.get("cp_decay"),
-        ))
+            # Proximity bonus
+            dist_from_attacker: Optional[float] = None
+            prox_bonus = 0.0
+            if attacker_coords:
+                dist_from_attacker = min(
+                    _dist3(sx, sy, sz, ax, ay, az)
+                    for ax, ay, az in attacker_coords
+                )
+                if dist_from_attacker <= dist_max_ly:
+                    prox_bonus = prox_bonus_max * max(
+                        0.0, 1.0 - dist_from_attacker / dist_max_ly
+                    )
 
-    # Sort by control_progress ascending (lowest = most vulnerable) before
-    # truncating to max_results.  This ensures the cap keeps the most
-    # actionable targets rather than simply the highest-scored ones.
-    # The frontend re-sorts by any column the user clicks afterwards.
-    items.sort(key=lambda x: (x.control_progress if x.control_progress is not None else 1.0))
+            score = round(base + progress_bonus + prox_bonus, 1)
 
-    return TargetAnalysisResponse(
-        targets=items[:max_results],
-        attacker_power=attacker,
-        target_powers=targets,
-        progress_thresholds={
-            "critical": prog_critical,
-            "high":     prog_high,
-            "medium":   prog_medium,
-        },
-    )
+            # Days to downgrade estimate — use actual state for correct band width
+            days = _estimate_days_to_downgrade(progress, rein, under, power_state)
+
+            # Build reason list
+            reasons: list[str] = []
+            if is_contested:
+                reasons.append("⚔ Contested — your power already has a foothold here")
+            elif power_state == "Stronghold":
+                reasons.append("Stronghold — high-value undermine target")
+            elif power_state == "Fortified":
+                reasons.append("Fortified — mid-value undermine target")
+            else:
+                reasons.append("Exploited — low-value undermine target")
+
+            if progress <= 0.0:
+                reasons.append("🚨 Already at downgrade threshold — one more push drops it")
+            elif progress < prog_critical:
+                reasons.append(f"CRITICAL vulnerability ({progress:.1%} progress — near collapse)")
+            elif progress < prog_high:
+                reasons.append(f"HIGH vulnerability ({progress:.1%} progress)")
+            elif progress < prog_medium:
+                reasons.append(f"Moderate vulnerability ({progress:.1%} progress)")
+            elif progress >= 1.0:
+                reasons.append(f"Progress at {progress:.1%} — recently reinforced, harder to drop")
+
+            if days is not None and days == 0.0:
+                reasons.append("Downgrade happening NOW this cycle")
+            elif days is not None and days < 2.0:
+                reasons.append(f"~{days:.1f}d to downgrade at current rate")
+            elif days is not None and days < 7.0:
+                reasons.append(f"~{days:.1f}d to downgrade — apply pressure now")
+
+            if dist_from_attacker is not None:
+                if dist_from_attacker <= 5.0:
+                    reasons.append(f"Extremely close to your territory ({dist_from_attacker:.1f} LY)")
+                elif dist_from_attacker <= 15.0:
+                    reasons.append(f"Close to your territory ({dist_from_attacker:.1f} LY)")
+
+            trend = _trend(sid)
+
+            # Derive controlling_power: for contested systems power is NULL,
+            # so build a label from powers_list (same as get_contested_systems endpoint).
+            ctrl_power = snap["power"]
+            if ctrl_power is None:
+                pl = (snap["powers_list"] or "") if "powers_list" in snap.keys() else ""
+                powers = [p.strip() for p in pl.split(",") if p.strip()]
+                ctrl_power = "Multiple" if len(powers) > 1 else (powers[0] if powers else "Unknown")
+
+            items.append(TargetAnalysisItem(
+                system_id64=system.system_id64,
+                system_name=system.name,
+                controlling_power=ctrl_power,
+                power_state=power_state,
+                control_progress=progress,
+                reinforcement=rein if rein > 0 else None,
+                undermining=under if under > 0 else None,
+                score=score,
+                reasons=reasons,
+                distance_from_attacker=dist_from_attacker,
+                days_to_downgrade=days,
+                trend=trend,
+                contested=is_contested,
+                cp_decay=snap.get("cp_decay"),
+            ))
+
+        # Sort by control_progress ascending (lowest = most vulnerable) before
+        # truncating to max_results.  This ensures the cap keeps the most
+        # actionable targets rather than simply the highest-scored ones.
+        # The frontend re-sorts by any column the user clicks afterwards.
+        items.sort(key=lambda x: (x.control_progress if x.control_progress is not None else 1.0))
+
+        return TargetAnalysisResponse(
+            targets=items[:max_results],
+            attacker_power=attacker,
+            target_powers=targets,
+            progress_thresholds={
+                "critical": prog_critical,
+                "high":     prog_high,
+                "medium":   prog_medium,
+            },
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("target_analysis failed")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ---------------------------------------------------------------------------
@@ -881,30 +917,36 @@ async def refresh_stale(
     db: Session = Depends(get_db),
 ) -> RefreshStaleResponse:
     """Trigger an async refresh of stale Power Play data for the given systems.
-    
+
     Accepts a list of system_id64 values. Returns immediately with 202 Accepted,
     while a background task fetches fresh data from Spansh and inserts new
     snapshot rows. The frontend should re-fetch the power systems after a delay
     to pick up the refreshed data.
     """
-    ids = body.system_ids
-    if not ids:
+    try:
+        ids = body.system_ids
+        if not ids:
+            return RefreshStaleResponse(
+                status="error", count=0,
+                message="No system IDs provided",
+            )
+
+        # Deduplicate
+        seen: set[int] = set()
+        unique_ids = [s for s in ids if not (s in seen or seen.add(s))]
+
+        background_tasks.add_task(_refresh_stale_sync, unique_ids)
+
         return RefreshStaleResponse(
-            status="error", count=0,
-            message="No system IDs provided",
+            status="refreshing",
+            count=len(unique_ids),
+            message=f"Queued {len(unique_ids)} system(s) for async refresh from Spansh",
         )
-
-    # Deduplicate
-    seen: set[int] = set()
-    unique_ids = [s for s in ids if not (s in seen or seen.add(s))]
-
-    background_tasks.add_task(_refresh_stale_sync, unique_ids)
-
-    return RefreshStaleResponse(
-        status="refreshing",
-        count=len(unique_ids),
-        message=f"Queued {len(unique_ids)} system(s) for async refresh from Spansh",
-    )
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("refresh_stale failed")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ---------------------------------------------------------------------------
@@ -929,103 +971,109 @@ def expand_debug(
 
     Sorted by merits_remaining ascending (closest to acquisition first).
     """
-    from services.scoring import (
-        get_latest_snapshots, load_weights,
-        MERIT_ACQUIRE, DEFAULTS as SC_DEFAULTS, _dist,
-    )
-    from models.models import PPSystem
+    try:
+        from services.scoring import (
+            get_latest_snapshots, load_weights,
+            MERIT_ACQUIRE, DEFAULTS as SC_DEFAULTS, _dist,
+        )
+        from models.models import PPSystem
 
-    weights   = load_weights(db)
-    snapshots = get_latest_snapshots(db)
+        weights   = load_weights(db)
+        snapshots = get_latest_snapshots(db)
 
-    fort_max = float(weights.get("expand_fortified_dist_ly",  SC_DEFAULTS["expand_fortified_dist_ly"]))
-    sh_max   = float(weights.get("expand_stronghold_dist_ly", SC_DEFAULTS["expand_stronghold_dist_ly"]))
+        fort_max = float(weights.get("expand_fortified_dist_ly",  SC_DEFAULTS["expand_fortified_dist_ly"]))
+        sh_max   = float(weights.get("expand_stronghold_dist_ly", SC_DEFAULTS["expand_stronghold_dist_ly"]))
 
-    # Identify this power's systems and their states
-    power_sys_ids = {sid for sid, s in snapshots.items() if s.get("power") == name}
-    if not power_sys_ids:
-        return {"error": f"No fresh snapshots found for power '{name}'", "systems": []}
+        # Identify this power's systems and their states
+        power_sys_ids = {sid for sid, s in snapshots.items() if s.get("power") == name}
+        if not power_sys_ids:
+            return {"error": f"No fresh snapshots found for power '{name}'", "systems": []}
 
-    power_systems = db.query(PPSystem).filter(PPSystem.id.in_(power_sys_ids)).all()
+        power_systems = db.query(PPSystem).filter(PPSystem.id.in_(power_sys_ids)).all()
 
-    fortified_coords:  list[tuple[float, float, float]] = []
-    stronghold_coords: list[tuple[float, float, float]] = []
-    for s in power_systems:
-        state = snapshots[s.id].get("power_state")
-        coord = (s.x or 0.0, s.y or 0.0, s.z or 0.0)
-        if state == "Fortified":
-            fortified_coords.append(coord)
-        elif state == "Stronghold":
-            stronghold_coords.append(coord)
+        fortified_coords:  list[tuple[float, float, float]] = []
+        stronghold_coords: list[tuple[float, float, float]] = []
+        for s in power_systems:
+            state = snapshots[s.id].get("power_state")
+            coord = (s.x or 0.0, s.y or 0.0, s.z or 0.0)
+            if state == "Fortified":
+                fortified_coords.append(coord)
+            elif state == "Stronghold":
+                stronghold_coords.append(coord)
 
-    power_coords = [(s.x or 0.0, s.y or 0.0, s.z or 0.0) for s in power_systems]
-    all_x = [c[0] for c in power_coords]
-    all_y = [c[1] for c in power_coords]
-    all_z = [c[2] for c in power_coords]
-    bbox_pad = max(fort_max, sh_max)
+        power_coords = [(s.x or 0.0, s.y or 0.0, s.z or 0.0) for s in power_systems]
+        all_x = [c[0] for c in power_coords]
+        all_y = [c[1] for c in power_coords]
+        all_z = [c[2] for c in power_coords]
+        bbox_pad = max(fort_max, sh_max)
 
-    candidates = db.query(PPSystem).filter(
-        PPSystem.x.between(min(all_x) - bbox_pad, max(all_x) + bbox_pad),
-        PPSystem.y.between(min(all_y) - bbox_pad, max(all_y) + bbox_pad),
-        PPSystem.z.between(min(all_z) - bbox_pad, max(all_z) + bbox_pad),
-        PPSystem.id.notin_(power_sys_ids),
-    ).all()
+        candidates = db.query(PPSystem).filter(
+            PPSystem.x.between(min(all_x) - bbox_pad, max(all_x) + bbox_pad),
+            PPSystem.y.between(min(all_y) - bbox_pad, max(all_y) + bbox_pad),
+            PPSystem.z.between(min(all_z) - bbox_pad, max(all_z) + bbox_pad),
+            PPSystem.id.notin_(power_sys_ids),
+        ).all()
 
-    results = []
-    for system in candidates:
-        snap = snapshots.get(system.id)
-        if snap is None:
-            continue  # no fresh data
-        if snap.get("power_state") != "Unoccupied":
-            continue  # must be Unoccupied
+        results = []
+        for system in candidates:
+            snap = snapshots.get(system.id)
+            if snap is None:
+                continue  # no fresh data
+            if snap.get("power_state") != "Unoccupied":
+                continue  # must be Unoccupied
 
-        sx, sy, sz = system.x or 0.0, system.y or 0.0, system.z or 0.0
-        dist_fort = min((_dist(sx, sy, sz, cx, cy, cz) for cx, cy, cz in fortified_coords), default=9999.0)
-        dist_sh   = min((_dist(sx, sy, sz, cx, cy, cz) for cx, cy, cz in stronghold_coords), default=9999.0)
-        in_fort   = dist_fort <= fort_max
-        in_sh     = dist_sh   <= sh_max
+            sx, sy, sz = system.x or 0.0, system.y or 0.0, system.z or 0.0
+            dist_fort = min((_dist(sx, sy, sz, cx, cy, cz) for cx, cy, cz in fortified_coords), default=9999.0)
+            dist_sh   = min((_dist(sx, sy, sz, cx, cy, cz) for cx, cy, cz in stronghold_coords), default=9999.0)
+            in_fort   = dist_fort <= fort_max
+            in_sh     = dist_sh   <= sh_max
 
-        if not (in_fort or in_sh):
-            continue
+            if not (in_fort or in_sh):
+                continue
 
-        progress     = float(snap.get("control_progress") or 0.0)
-        merit_pos    = round(progress * MERIT_ACQUIRE)
-        merits_left  = max(0, MERIT_ACQUIRE - merit_pos)
+            progress     = float(snap.get("control_progress") or 0.0)
+            merit_pos    = round(progress * MERIT_ACQUIRE)
+            merits_left  = max(0, MERIT_ACQUIRE - merit_pos)
 
-        if merits_left > merits_max:
-            continue
+            if merits_left > merits_max:
+                continue
 
-        spansh_ts   = snap.get("spansh_updated_at")
-        snapshot_ts = snap.get("snapshot_time")
+            spansh_ts   = snap.get("spansh_updated_at")
+            snapshot_ts = snap.get("snapshot_time")
 
-        results.append({
-            "system_name":      system.name,
-            "system_id64":      system.system_id64,
-            "power_state":      snap.get("power_state"),
-            "control_progress": round(progress, 4),
-            "merit_position":   merit_pos,
-            "merits_remaining": merits_left,
-            "in_fort_range":    in_fort,
-            "dist_fort_ly":     round(dist_fort, 2) if in_fort else None,
-            "in_sh_range":      in_sh,
-            "dist_sh_ly":       round(dist_sh, 2) if in_sh else None,
-            "anchor_type":      "both" if (in_fort and in_sh) else ("fortified" if in_fort else "stronghold"),
-            "allegiance":       system.allegiance,
-            "spansh_updated_at": str(spansh_ts) if spansh_ts else None,
-            "snapshot_time":     str(snapshot_ts) if snapshot_ts else None,
-        })
+            results.append({
+                "system_name":      system.name,
+                "system_id64":      system.system_id64,
+                "power_state":      snap.get("power_state"),
+                "control_progress": round(progress, 4),
+                "merit_position":   merit_pos,
+                "merits_remaining": merits_left,
+                "in_fort_range":    in_fort,
+                "dist_fort_ly":     round(dist_fort, 2) if in_fort else None,
+                "in_sh_range":      in_sh,
+                "dist_sh_ly":       round(dist_sh, 2) if in_sh else None,
+                "anchor_type":      "both" if (in_fort and in_sh) else ("fortified" if in_fort else "stronghold"),
+                "allegiance":       system.allegiance,
+                "spansh_updated_at": str(spansh_ts) if spansh_ts else None,
+                "snapshot_time":     str(snapshot_ts) if snapshot_ts else None,
+            })
 
-    results.sort(key=lambda r: r["merits_remaining"])
-    return {
-        "power": name,
-        "fort_max_ly": fort_max,
-        "sh_max_ly": sh_max,
-        "merits_max_filter": merits_max,
-        "fortified_anchor_count": len(fortified_coords),
-        "stronghold_anchor_count": len(stronghold_coords),
-        "total_candidates_returned": len(results),
-        "systems": results[:limit],
-    }
+        results.sort(key=lambda r: r["merits_remaining"])
+        return {
+            "power": name,
+            "fort_max_ly": fort_max,
+            "sh_max_ly": sh_max,
+            "merits_max_filter": merits_max,
+            "fortified_anchor_count": len(fortified_coords),
+            "stronghold_anchor_count": len(stronghold_coords),
+            "total_candidates_returned": len(results),
+            "systems": results[:limit],
+        }
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("expand_debug failed")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ---------------------------------------------------------------------------
@@ -1094,120 +1142,126 @@ def get_power_realtime(
     db: Session = Depends(get_db),
 ) -> dict:
     """Return effective (blended) values: Spansh base + EDDN realtime deltas.
-    
+
     For each system under this power's influence, returns:
     - Standard Spansh snapshot fields (reinforcement, undermining, control_progress)
     - Realtime delta fields (merits_since_spansh, cp_since_spansh)
     - Effective totals (effective_reinforcement, effective_undermining)
     - Live flag indicating whether realtime data is present
-    
+
     The realtime data comes from pp_realtime_state table, which is updated
     every 60 seconds by the realtime_accumulator service.
     """
-    # Get latest Spansh snapshots for this power
-    latest_sql = text(f"""
-        SELECT DISTINCT ON (system_id)
-               system_id, power, power_state,
-               reinforcement, undermining, control_progress,
-               snapshot_time, spansh_updated_at
-        FROM pp_system_snapshots
-        WHERE power = :power
-        {_STALE_FILTER}
-        ORDER BY system_id, snapshot_time DESC
-    """)
-    snap_rows = db.execute(latest_sql, {"power": name}).mappings().all()
-    
-    if not snap_rows:
-        return {"systems": [], "total_live_systems": 0}
-    
-    system_ids = [r["system_id"] for r in snap_rows]
-    snap_by_id = {r["system_id"]: r for r in snap_rows}
-    
-    # Get system details
-    systems = db.query(PPSystem).filter(PPSystem.id.in_(system_ids)).all()
-    sys_by_id = {s.id: s for s in systems}
-    
-    # Get realtime state for all these systems
-    realtime_rows = db.execute(
-        text("""
-            SELECT system_id64, merits_since_ts, cp_since_ts,
-                   cp_as_reinforcement, cp_as_undermining,
-                   latest_event_ts, refreshed_at
-            FROM pp_realtime_state
+    try:
+        # Get latest Spansh snapshots for this power
+        latest_sql = text(f"""
+            SELECT DISTINCT ON (system_id)
+                   system_id, power, power_state,
+                   reinforcement, undermining, control_progress,
+                   snapshot_time, spansh_updated_at
+            FROM pp_system_snapshots
             WHERE power = :power
-              AND system_id64 = ANY(:system_id64s)
-        """),
-        {
-            "power": name,
-            "system_id64s": [s.system_id64 for s in systems],
-        },
-    ).mappings().all()
+            {_STALE_FILTER}
+            ORDER BY system_id, snapshot_time DESC
+        """)
+        snap_rows = db.execute(latest_sql, {"power": name}).mappings().all()
     
-    realtime_by_id64 = {r["system_id64"]: r for r in realtime_rows}
+        if not snap_rows:
+            return {"systems": [], "total_live_systems": 0}
     
-    # Build response
-    results = []
-    total_live = 0
+        system_ids = [r["system_id"] for r in snap_rows]
+        snap_by_id = {r["system_id"]: r for r in snap_rows}
     
-    for sid, snap in snap_by_id.items():
-        system = sys_by_id.get(sid)
-        if system is None:
-            continue
+        # Get system details
+        systems = db.query(PPSystem).filter(PPSystem.id.in_(system_ids)).all()
+        sys_by_id = {s.id: s for s in systems}
+    
+        # Get realtime state for all these systems
+        realtime_rows = db.execute(
+            text("""
+                SELECT system_id64, merits_since_ts, cp_since_ts,
+                       cp_as_reinforcement, cp_as_undermining,
+                       latest_event_ts, refreshed_at
+                FROM pp_realtime_state
+                WHERE power = :power
+                  AND system_id64 = ANY(:system_id64s)
+            """),
+            {
+                "power": name,
+                "system_id64s": [s.system_id64 for s in systems],
+            },
+        ).mappings().all()
+    
+        realtime_by_id64 = {r["system_id64"]: r for r in realtime_rows}
+    
+        # Build response
+        results = []
+        total_live = 0
+    
+        for sid, snap in snap_by_id.items():
+            system = sys_by_id.get(sid)
+            if system is None:
+                continue
         
-        # Base Spansh values
-        base_reinforcement = snap["reinforcement"] or 0
-        base_undermining = snap["undermining"] or 0
-        base_control_progress = snap["control_progress"] or 0.0
+            # Base Spansh values
+            base_reinforcement = snap["reinforcement"] or 0
+            base_undermining = snap["undermining"] or 0
+            base_control_progress = snap["control_progress"] or 0.0
         
-        # Realtime delta (if available)
-        realtime = realtime_by_id64.get(system.system_id64)
+            # Realtime delta (if available)
+            realtime = realtime_by_id64.get(system.system_id64)
         
-        if realtime and realtime["merits_since_ts"] > 0:
-            # Has live data
-            cp_reinforcement = float(realtime["cp_as_reinforcement"] or 0)
-            cp_undermining = float(realtime["cp_as_undermining"] or 0)
+            if realtime and realtime["merits_since_ts"] > 0:
+                # Has live data
+                cp_reinforcement = float(realtime["cp_as_reinforcement"] or 0)
+                cp_undermining = float(realtime["cp_as_undermining"] or 0)
             
-            effective_reinforcement = base_reinforcement + cp_reinforcement
-            effective_undermining = base_undermining + cp_undermining
+                effective_reinforcement = base_reinforcement + cp_reinforcement
+                effective_undermining = base_undermining + cp_undermining
             
-            # Recompute control_progress with effective values
-            # This is a simplified calculation — full logic would use scoring.py
-            net_cp = effective_reinforcement - effective_undermining
-            effective_control_progress = max(0.0, base_control_progress + (net_cp / 1000.0))
+                # Recompute control_progress with effective values
+                # This is a simplified calculation — full logic would use scoring.py
+                net_cp = effective_reinforcement - effective_undermining
+                effective_control_progress = max(0.0, base_control_progress + (net_cp / 1000.0))
             
-            is_live = True
-            total_live += 1
-        else:
-            # No live data
-            effective_reinforcement = base_reinforcement
-            effective_undermining = base_undermining
-            effective_control_progress = base_control_progress
-            is_live = False
-            cp_reinforcement = 0.0
-            cp_undermining = 0.0
+                is_live = True
+                total_live += 1
+            else:
+                # No live data
+                effective_reinforcement = base_reinforcement
+                effective_undermining = base_undermining
+                effective_control_progress = base_control_progress
+                is_live = False
+                cp_reinforcement = 0.0
+                cp_undermining = 0.0
         
-        results.append({
-            "system_id64": system.system_id64,
-            "name": system.name,
-            "power_state": snap["power_state"],
-            "base_reinforcement": base_reinforcement,
-            "base_undermining": base_undermining,
-            "base_control_progress": base_control_progress,
-            "realtime": {
-                "merits_since_spansh": realtime["merits_since_ts"] if realtime else 0,
-                "cp_since_spansh": float(realtime["cp_since_ts"]) if realtime else 0.0,
-                "cp_as_reinforcement": cp_reinforcement,
-                "cp_as_undermining": cp_undermining,
-                "latest_event_at": realtime["latest_event_ts"].isoformat() if realtime and realtime["latest_event_ts"] else None,
-                "refreshed_at": realtime["refreshed_at"].isoformat() if realtime and realtime["refreshed_at"] else None,
-            } if realtime else None,
-            "effective_reinforcement": effective_reinforcement,
-            "effective_undermining": effective_undermining,
-            "effective_control_progress": effective_control_progress,
-            "is_live": is_live,
-        })
+            results.append({
+                "system_id64": system.system_id64,
+                "name": system.name,
+                "power_state": snap["power_state"],
+                "base_reinforcement": base_reinforcement,
+                "base_undermining": base_undermining,
+                "base_control_progress": base_control_progress,
+                "realtime": {
+                    "merits_since_spansh": realtime["merits_since_ts"] if realtime else 0,
+                    "cp_since_spansh": float(realtime["cp_since_ts"]) if realtime else 0.0,
+                    "cp_as_reinforcement": cp_reinforcement,
+                    "cp_as_undermining": cp_undermining,
+                    "latest_event_at": realtime["latest_event_ts"].isoformat() if realtime and realtime["latest_event_ts"] else None,
+                    "refreshed_at": realtime["refreshed_at"].isoformat() if realtime and realtime["refreshed_at"] else None,
+                } if realtime else None,
+                "effective_reinforcement": effective_reinforcement,
+                "effective_undermining": effective_undermining,
+                "effective_control_progress": effective_control_progress,
+                "is_live": is_live,
+            })
     
-    return {
-        "systems": results,
-        "total_live_systems": total_live,
-    }
+        return {
+            "systems": results,
+            "total_live_systems": total_live,
+        }
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("get_power_realtime failed")
+        raise HTTPException(status_code=500, detail="Internal server error")

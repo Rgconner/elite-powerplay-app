@@ -181,22 +181,28 @@ def update_settings(
     admin: AdminUserDep,
     db: Session = Depends(get_db),
 ) -> list[AdminSettingSchema]:
-    for update in updates:
-        existing = db.query(AdminSetting).filter(AdminSetting.key == update.key).first()
-        old_value = existing.value if existing else None
-        if existing:
-            existing.value = update.value
-        else:
-            db.add(AdminSetting(key=update.key, value=update.value))
-        db.add(AuditLog(
-            admin_email=admin["email"],
-            action="setting_update",
-            resource_key=update.key,
-            old_value=old_value,
-            new_value=update.value,
-        ))
-    db.commit()
-    return db.query(AdminSetting).all()
+    try:
+        for update in updates:
+            existing = db.query(AdminSetting).filter(AdminSetting.key == update.key).first()
+            old_value = existing.value if existing else None
+            if existing:
+                existing.value = update.value
+            else:
+                db.add(AdminSetting(key=update.key, value=update.value))
+            db.add(AuditLog(
+                admin_email=admin["email"],
+                action="setting_update",
+                resource_key=update.key,
+                old_value=old_value,
+                new_value=update.value,
+            ))
+        db.commit()
+        return db.query(AdminSetting).all()
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("update_settings failed")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/ingest/spansh")
@@ -206,22 +212,28 @@ async def trigger_spansh_ingest(
     db: Session = Depends(get_db),
 ) -> dict:
     """Kick off a Spansh Power Play ingest in the background."""
-    _cleanup_old_jobs()
-    job_id = str(uuid4())
-    BACKGROUND_JOBS[job_id] = {
-        "status": "pending",
-        "error": None,
-        "started_at": datetime.now(tz=timezone.utc),
-    }
-    background_tasks.add_task(run_spansh_ingest_task, job_id)
-    db.add(AuditLog(
-        admin_email=admin["email"],
-        action="ingest_spansh",
-        resource_key="spansh",
-    ))
-    db.commit()
-    logger.info("Spansh PP ingest triggered manually by %s", admin["email"])
-    return {"message": "Spansh PP ingest started in background", "job_id": job_id}
+    try:
+        _cleanup_old_jobs()
+        job_id = str(uuid4())
+        BACKGROUND_JOBS[job_id] = {
+            "status": "pending",
+            "error": None,
+            "started_at": datetime.now(tz=timezone.utc),
+        }
+        background_tasks.add_task(run_spansh_ingest_task, job_id)
+        db.add(AuditLog(
+            admin_email=admin["email"],
+            action="ingest_spansh",
+            resource_key="spansh",
+        ))
+        db.commit()
+        logger.info("Spansh PP ingest triggered manually by %s", admin["email"])
+        return {"message": "Spansh PP ingest started in background", "job_id": job_id}
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("trigger_spansh_ingest failed")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/ingest/status/{job_id}")
@@ -256,24 +268,30 @@ def get_audit_log(
     db: Session = Depends(get_db),
 ) -> list[dict]:
     """Return the 200 most recent audit log entries, newest first."""
-    rows = (
-        db.query(AuditLog)
-        .order_by(AuditLog.timestamp.desc())
-        .limit(200)
-        .all()
-    )
-    return [
-        {
-            "id": r.id,
-            "admin_email": r.admin_email,
-            "action": r.action,
-            "resource_key": r.resource_key,
-            "old_value": r.old_value,
-            "new_value": r.new_value,
-            "timestamp": r.timestamp.isoformat(),
-        }
-        for r in rows
-    ]
+    try:
+        rows = (
+            db.query(AuditLog)
+            .order_by(AuditLog.timestamp.desc())
+            .limit(200)
+            .all()
+        )
+        return [
+            {
+                "id": r.id,
+                "admin_email": r.admin_email,
+                "action": r.action,
+                "resource_key": r.resource_key,
+                "old_value": r.old_value,
+                "new_value": r.new_value,
+                "timestamp": r.timestamp.isoformat(),
+            }
+            for r in rows
+        ]
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("get_audit_log failed")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ---------------------------------------------------------------------------
@@ -315,17 +333,23 @@ def change_password(
     bcrypt-hashed before storage (same pipeline as the initial account
     creation in create_admin.py).
     """
-    user = db.query(AdminUser).filter(AdminUser.id == admin["id"]).first()
-    if user is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Admin user not found.")
+    try:
+        user = db.query(AdminUser).filter(AdminUser.id == admin["id"]).first()
+        if user is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Admin user not found.")
 
-    if not verify_password(body.current_password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Current password is incorrect.",
-        )
+        if not verify_password(body.current_password, user.hashed_password):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Current password is incorrect.",
+            )
 
-    user.hashed_password = hash_password(body.new_password)
-    db.commit()
-    logger.info("Password changed for admin %s", user.email)
-    return {"message": "Password changed successfully."}
+        user.hashed_password = hash_password(body.new_password)
+        db.commit()
+        logger.info("Password changed for admin %s", user.email)
+        return {"message": "Password changed successfully."}
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("change_password failed")
+        raise HTTPException(status_code=500, detail="Internal server error")

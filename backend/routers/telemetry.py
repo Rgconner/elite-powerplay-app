@@ -13,7 +13,7 @@ import logging
 import os
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -132,170 +132,176 @@ def get_telemetry(
     Requires admin JWT.  Returns green/yellow/red status per feed plus
     raw metrics for the dashboard to render.
     """
-    # ── 1. Spansh ingest (last run) ───────────────────────────────────────────
-    from models.models import IngestionRun
-    spansh_run = (
-        db.query(IngestionRun)
-        .filter(IngestionRun.source == "spansh_pp")
-        .order_by(IngestionRun.started_at.desc())
-        .first()
-    )
-    spansh_last = _run_row(spansh_run)
-
-    # Last 5 runs for history panel
-    spansh_history = [
-        _run_row(r)
-        for r in db.query(IngestionRun)
-        .filter(IngestionRun.source == "spansh_pp")
-        .order_by(IngestionRun.started_at.desc())
-        .limit(5)
-        .all()
-    ]
-
-    # Next scheduled run (from APScheduler)
-    spansh_next: str | None = None
     try:
-        scheduler = getattr(request.app.state, "scheduler", None)
-        if scheduler:
-            job = scheduler.get_job("spansh_ingest")
-            if job and job.next_run_time:
-                spansh_next = job.next_run_time.isoformat()
-    except Exception:
-        pass
+        # ── 1. Spansh ingest (last run) ───────────────────────────────────────────
+        from models.models import IngestionRun
+        spansh_run = (
+            db.query(IngestionRun)
+            .filter(IngestionRun.source == "spansh_pp")
+            .order_by(IngestionRun.started_at.desc())
+            .first()
+        )
+        spansh_last = _run_row(spansh_run)
 
-    # ── 2. EDSM sync (last run) ───────────────────────────────────────────────
-    edsm_run = (
-        db.query(IngestionRun)
-        .filter(IngestionRun.source == "edsm")
-        .order_by(IngestionRun.started_at.desc())
-        .first()
-    )
-    edsm_last = _run_row(edsm_run)
+        # Last 5 runs for history panel
+        spansh_history = [
+            _run_row(r)
+            for r in db.query(IngestionRun)
+            .filter(IngestionRun.source == "spansh_pp")
+            .order_by(IngestionRun.started_at.desc())
+            .limit(5)
+            .all()
+        ]
 
-    edsm_history = [
-        _run_row(r)
-        for r in db.query(IngestionRun)
-        .filter(IngestionRun.source == "edsm")
-        .order_by(IngestionRun.started_at.desc())
-        .limit(5)
-        .all()
-    ]
-
-    edsm_next: str | None = None
-    try:
-        if scheduler:
-            job = scheduler.get_job("edsm_sync")
-            if job and job.next_run_time:
-                edsm_next = job.next_run_time.isoformat()
-    except Exception:
-        pass
-
-    # ── 3. EDDN feed stats (singleton) ───────────────────────────────────────
-    eddn_row = db.execute(
-        text("SELECT * FROM eddn_feed_stats WHERE id = 1")
-    ).mappings().first()
-
-    eddn_data: dict = {}
-    if eddn_row:
-        import json as _json
-        top_schemas: dict = {}
+        # Next scheduled run (from APScheduler)
+        spansh_next: str | None = None
         try:
-            raw_schemas = eddn_row.get("top_schemas")
-            if raw_schemas:
-                top_schemas = _json.loads(raw_schemas)
+            scheduler = getattr(request.app.state, "scheduler", None)
+            if scheduler:
+                job = scheduler.get_job("spansh_ingest")
+                if job and job.next_run_time:
+                    spansh_next = job.next_run_time.isoformat()
         except Exception:
             pass
 
-        eddn_data = {
-            "recorded_at":              _fmt(eddn_row["recorded_at"]),
-            "listener_started_at":      _fmt(eddn_row["listener_started_at"]),
-            "events_total":             eddn_row["events_total"],
-            "events_last_5min":         eddn_row["events_last_5min"],
-            "dedup_rejected":           eddn_row["dedup_rejected"],
-            "decode_errors":            eddn_row["decode_errors"],
-            "last_event_ts":            _fmt(eddn_row["last_event_ts"]),
-            "messages_received_total":  eddn_row.get("messages_received_total", 0) or 0,
-            "bytes_received_total":     eddn_row.get("bytes_received_total", 0) or 0,
-            "skipped_schema_total":     eddn_row.get("skipped_schema_total", 0) or 0,
-            "skipped_event_total":      eddn_row.get("skipped_event_total", 0) or 0,
-            "messages_per_min":         eddn_row.get("messages_per_min"),
-            "top_schemas":              top_schemas,
-        }
-
-    # ── 4. Enrichment stats (today) ───────────────────────────────────────────
-    today_enrich = db.execute(
-        text("""
-            SELECT cache_hits, cache_misses, api_calls, api_errors, total_fetch_ms
-            FROM enrichment_stats
-            WHERE stat_date = DATE_TRUNC('day', NOW())
-        """)
-    ).mappings().first()
-
-    total_cached_row = db.execute(
-        text("SELECT COUNT(*) AS cnt FROM spansh_enrichment")
-    ).fetchone()
-    total_cached: int = total_cached_row[0] if total_cached_row else 0
-
-    enrich_data: dict = {
-        "total_cached": total_cached,
-        "today": None,
-    }
-    if today_enrich:
-        hits  = today_enrich["cache_hits"]
-        total = hits + today_enrich["cache_misses"]
-        hit_rate = round(hits / total * 100, 1) if total > 0 else None
-        avg_ms   = (
-            round(today_enrich["total_fetch_ms"] / today_enrich["api_calls"], 1)
-            if today_enrich["api_calls"] > 0 else None
+        # ── 2. EDSM sync (last run) ───────────────────────────────────────────────
+        edsm_run = (
+            db.query(IngestionRun)
+            .filter(IngestionRun.source == "edsm")
+            .order_by(IngestionRun.started_at.desc())
+            .first()
         )
-        enrich_data["today"] = {
-            "cache_hits":     hits,
-            "cache_misses":   today_enrich["cache_misses"],
-            "hit_rate_pct":   hit_rate,
-            "api_calls":      today_enrich["api_calls"],
-            "api_errors":     today_enrich["api_errors"],
-            "avg_fetch_ms":   avg_ms,
-            "bytes_fetched":  today_enrich.get("bytes_fetched", 0) or 0,
+        edsm_last = _run_row(edsm_run)
+
+        edsm_history = [
+            _run_row(r)
+            for r in db.query(IngestionRun)
+            .filter(IngestionRun.source == "edsm")
+            .order_by(IngestionRun.started_at.desc())
+            .limit(5)
+            .all()
+        ]
+
+        edsm_next: str | None = None
+        try:
+            if scheduler:
+                job = scheduler.get_job("edsm_sync")
+                if job and job.next_run_time:
+                    edsm_next = job.next_run_time.isoformat()
+        except Exception:
+            pass
+
+        # ── 3. EDDN feed stats (singleton) ───────────────────────────────────────
+        eddn_row = db.execute(
+            text("SELECT * FROM eddn_feed_stats WHERE id = 1")
+        ).mappings().first()
+
+        eddn_data: dict = {}
+        if eddn_row:
+            import json as _json
+            top_schemas: dict = {}
+            try:
+                raw_schemas = eddn_row.get("top_schemas")
+                if raw_schemas:
+                    top_schemas = _json.loads(raw_schemas)
+            except Exception:
+                pass
+
+            eddn_data = {
+                "recorded_at":              _fmt(eddn_row["recorded_at"]),
+                "listener_started_at":      _fmt(eddn_row["listener_started_at"]),
+                "events_total":             eddn_row["events_total"],
+                "events_last_5min":         eddn_row["events_last_5min"],
+                "dedup_rejected":           eddn_row["dedup_rejected"],
+                "decode_errors":            eddn_row["decode_errors"],
+                "last_event_ts":            _fmt(eddn_row["last_event_ts"]),
+                "messages_received_total":  eddn_row.get("messages_received_total", 0) or 0,
+                "bytes_received_total":     eddn_row.get("bytes_received_total", 0) or 0,
+                "skipped_schema_total":     eddn_row.get("skipped_schema_total", 0) or 0,
+                "skipped_event_total":      eddn_row.get("skipped_event_total", 0) or 0,
+                "messages_per_min":         eddn_row.get("messages_per_min"),
+                "top_schemas":              top_schemas,
+            }
+
+        # ── 4. Enrichment stats (today) ───────────────────────────────────────────
+        today_enrich = db.execute(
+            text("""
+                SELECT cache_hits, cache_misses, api_calls, api_errors, total_fetch_ms
+                FROM enrichment_stats
+                WHERE stat_date = DATE_TRUNC('day', NOW())
+            """)
+        ).mappings().first()
+
+        total_cached_row = db.execute(
+            text("SELECT COUNT(*) AS cnt FROM spansh_enrichment")
+        ).fetchone()
+        total_cached: int = total_cached_row[0] if total_cached_row else 0
+
+        enrich_data: dict = {
+            "total_cached": total_cached,
+            "today": None,
         }
+        if today_enrich:
+            hits  = today_enrich["cache_hits"]
+            total = hits + today_enrich["cache_misses"]
+            hit_rate = round(hits / total * 100, 1) if total > 0 else None
+            avg_ms   = (
+                round(today_enrich["total_fetch_ms"] / today_enrich["api_calls"], 1)
+                if today_enrich["api_calls"] > 0 else None
+            )
+            enrich_data["today"] = {
+                "cache_hits":     hits,
+                "cache_misses":   today_enrich["cache_misses"],
+                "hit_rate_pct":   hit_rate,
+                "api_calls":      today_enrich["api_calls"],
+                "api_errors":     today_enrich["api_errors"],
+                "avg_fetch_ms":   avg_ms,
+                "bytes_fetched":  today_enrich.get("bytes_fetched", 0) or 0,
+            }
 
-    # ── Compute status colours ────────────────────────────────────────────────
-    spansh_status = _ingest_status(spansh_last, _SPANSH_YELLOW_H, _SPANSH_RED_H)
-    edsm_status   = _ingest_status(edsm_last,   _EDSM_YELLOW_H,   _EDSM_RED_H)
-    eddn_status   = _eddn_status(
-        eddn_row["last_event_ts"] if eddn_row else None,
-        eddn_row["recorded_at"]   if eddn_row else None,
-    )
-    enrich_status = _enrich_status(
-        enrich_data.get("today"), total_cached
-    )
+        # ── Compute status colours ────────────────────────────────────────────────
+        spansh_status = _ingest_status(spansh_last, _SPANSH_YELLOW_H, _SPANSH_RED_H)
+        edsm_status   = _ingest_status(edsm_last,   _EDSM_YELLOW_H,   _EDSM_RED_H)
+        eddn_status   = _eddn_status(
+            eddn_row["last_event_ts"] if eddn_row else None,
+            eddn_row["recorded_at"]   if eddn_row else None,
+        )
+        enrich_status = _enrich_status(
+            enrich_data.get("today"), total_cached
+        )
 
-    return {
-        "generated_at": datetime.utcnow().isoformat(),
-        "feeds": {
-            "spansh_ingest": {
-                "status":    spansh_status,
-                "last_run":  spansh_last,
-                "history":   spansh_history,
-                "next_run_at": spansh_next,
-                "interval_hours": _SPANSH_INTERVAL_H,
+        return {
+            "generated_at": datetime.utcnow().isoformat(),
+            "feeds": {
+                "spansh_ingest": {
+                    "status":    spansh_status,
+                    "last_run":  spansh_last,
+                    "history":   spansh_history,
+                    "next_run_at": spansh_next,
+                    "interval_hours": _SPANSH_INTERVAL_H,
+                },
+                "edsm_sync": {
+                    "status":    edsm_status,
+                    "last_run":  edsm_last,
+                    "history":   edsm_history,
+                    "next_run_at": edsm_next,
+                    "interval_hours": _EDSM_INTERVAL_H,
+                },
+                "eddn_stream": {
+                    "status": eddn_status,
+                    **eddn_data,
+                },
+                "enrichment": {
+                    "status": enrich_status,
+                    **enrich_data,
+                },
             },
-            "edsm_sync": {
-                "status":    edsm_status,
-                "last_run":  edsm_last,
-                "history":   edsm_history,
-                "next_run_at": edsm_next,
-                "interval_hours": _EDSM_INTERVAL_H,
-            },
-            "eddn_stream": {
-                "status": eddn_status,
-                **eddn_data,
-            },
-            "enrichment": {
-                "status": enrich_status,
-                **enrich_data,
-            },
-        },
-    }
+        }
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("get_telemetry failed")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/history")
@@ -312,79 +318,85 @@ def get_telemetry_history(
       - eddn: events_last_5min is a point-in-time snapshot, so we report the current
               events_total broken down by uptime instead of per-day.
     """
-    from models.models import IngestionRun
+    try:
+        from models.models import IngestionRun
 
-    # ── Daily ingestion aggregate (last N days) ───────────────────────────────
-    ingest_rows = db.execute(
-        text("""
-            SELECT
-                DATE_TRUNC('day', started_at)   AS day,
-                source,
-                COUNT(*)                         AS run_count,
-                SUM(records_processed)           AS total_records,
-                SUM(bytes_downloaded)            AS total_bytes,
-                SUM(pages_fetched)               AS total_pages,
-                AVG(duration_seconds)            AS avg_duration_s,
-                SUM(api_errors)                  AS total_api_errors
-            FROM ingestion_runs
-            WHERE started_at >= NOW() - INTERVAL ':days days'
-              AND status IN ('completed', 'failed')
-            GROUP BY DATE_TRUNC('day', started_at), source
-            ORDER BY day DESC, source
-        """).bindparams(days=days)
-    ).mappings().all()
+        # ── Daily ingestion aggregate (last N days) ───────────────────────────────
+        ingest_rows = db.execute(
+            text("""
+                SELECT
+                    DATE_TRUNC('day', started_at)   AS day,
+                    source,
+                    COUNT(*)                         AS run_count,
+                    SUM(records_processed)           AS total_records,
+                    SUM(bytes_downloaded)            AS total_bytes,
+                    SUM(pages_fetched)               AS total_pages,
+                    AVG(duration_seconds)            AS avg_duration_s,
+                    SUM(api_errors)                  AS total_api_errors
+                FROM ingestion_runs
+                WHERE started_at >= NOW() - INTERVAL ':days days'
+                  AND status IN ('completed', 'failed')
+                GROUP BY DATE_TRUNC('day', started_at), source
+                ORDER BY day DESC, source
+            """).bindparams(days=days)
+        ).mappings().all()
 
-    ingest_by_day: dict = {}
-    for r in ingest_rows:
-        day_key = r["day"].date().isoformat() if r["day"] else "unknown"
-        if day_key not in ingest_by_day:
-            ingest_by_day[day_key] = {}
-        ingest_by_day[day_key][r["source"]] = {
-            "run_count":        r["run_count"],
-            "total_records":    r["total_records"],
-            "total_bytes":      r["total_bytes"] or 0,
-            "total_pages":      r["total_pages"] or 0,
-            "avg_duration_s":   round(float(r["avg_duration_s"]), 1) if r["avg_duration_s"] else None,
-            "total_api_errors": r["total_api_errors"] or 0,
+        ingest_by_day: dict = {}
+        for r in ingest_rows:
+            day_key = r["day"].date().isoformat() if r["day"] else "unknown"
+            if day_key not in ingest_by_day:
+                ingest_by_day[day_key] = {}
+            ingest_by_day[day_key][r["source"]] = {
+                "run_count":        r["run_count"],
+                "total_records":    r["total_records"],
+                "total_bytes":      r["total_bytes"] or 0,
+                "total_pages":      r["total_pages"] or 0,
+                "avg_duration_s":   round(float(r["avg_duration_s"]), 1) if r["avg_duration_s"] else None,
+                "total_api_errors": r["total_api_errors"] or 0,
+            }
+
+        # ── Daily enrichment stats (last N days) ─────────────────────────────────
+        enrich_rows = db.execute(
+            text("""
+                SELECT
+                    stat_date::date AS day,
+                    cache_hits, cache_misses,
+                    api_calls, api_errors,
+                    total_fetch_ms, bytes_fetched
+                FROM enrichment_stats
+                WHERE stat_date >= NOW() - (INTERVAL '1 day' * :days)
+                ORDER BY stat_date DESC
+            """),
+            {"days": days},
+        ).mappings().all()
+
+        enrich_history = []
+        for r in enrich_rows:
+            total = (r["cache_hits"] or 0) + (r["cache_misses"] or 0)
+            hit_rate = round(r["cache_hits"] / total * 100, 1) if total > 0 else None
+            avg_ms   = (
+                round(r["total_fetch_ms"] / r["api_calls"], 1)
+                if r["api_calls"] and r["api_calls"] > 0 else None
+            )
+            enrich_history.append({
+                "day":          r["day"].isoformat() if r["day"] else "unknown",
+                "cache_hits":   r["cache_hits"] or 0,
+                "cache_misses": r["cache_misses"] or 0,
+                "hit_rate_pct": hit_rate,
+                "api_calls":    r["api_calls"] or 0,
+                "api_errors":   r["api_errors"] or 0,
+                "avg_fetch_ms": avg_ms,
+                "bytes_fetched": r["bytes_fetched"] or 0,
+            })
+
+        return {
+            "generated_at": datetime.utcnow().isoformat(),
+            "days": days,
+            "ingest_by_day": ingest_by_day,
+            "enrichment_history": enrich_history,
         }
-
-    # ── Daily enrichment stats (last N days) ─────────────────────────────────
-    enrich_rows = db.execute(
-        text("""
-            SELECT
-                stat_date::date AS day,
-                cache_hits, cache_misses,
-                api_calls, api_errors,
-                total_fetch_ms, bytes_fetched
-            FROM enrichment_stats
-            WHERE stat_date >= NOW() - (INTERVAL '1 day' * :days)
-            ORDER BY stat_date DESC
-        """),
-        {"days": days},
-    ).mappings().all()
-
-    enrich_history = []
-    for r in enrich_rows:
-        total = (r["cache_hits"] or 0) + (r["cache_misses"] or 0)
-        hit_rate = round(r["cache_hits"] / total * 100, 1) if total > 0 else None
-        avg_ms   = (
-            round(r["total_fetch_ms"] / r["api_calls"], 1)
-            if r["api_calls"] and r["api_calls"] > 0 else None
-        )
-        enrich_history.append({
-            "day":          r["day"].isoformat() if r["day"] else "unknown",
-            "cache_hits":   r["cache_hits"] or 0,
-            "cache_misses": r["cache_misses"] or 0,
-            "hit_rate_pct": hit_rate,
-            "api_calls":    r["api_calls"] or 0,
-            "api_errors":   r["api_errors"] or 0,
-            "avg_fetch_ms": avg_ms,
-            "bytes_fetched": r["bytes_fetched"] or 0,
-        })
-
-    return {
-        "generated_at": datetime.utcnow().isoformat(),
-        "days": days,
-        "ingest_by_day": ingest_by_day,
-        "enrichment_history": enrich_history,
-    }
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("get_telemetry_history failed")
+        raise HTTPException(status_code=500, detail="Internal server error")

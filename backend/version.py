@@ -132,7 +132,11 @@ Version history:
                        unhandled endpoint errors now log method/path/exception
                        and return structured JSON 500 instead of a bare traceback
                        (#7). Safety net under per-handler try/except (#5).
+    2.1.3  2026-08-16  IO hardening (2/5): every FastAPI route handler body now
+                       runs inside try/except — DB/network failures are logged
+                       with handler context and returned as JSON 500; HTTPException
+                       paths unchanged (#5). 27 handlers across 7 routers.
  """
 
-BACKEND_VERSION      = "2.1.2"
+BACKEND_VERSION      = "2.1.3"
 BACKEND_RELEASE_DATE = "2026-08-16T17:02:48Z"

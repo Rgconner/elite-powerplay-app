@@ -408,117 +408,123 @@ async def enrich_batch(
     This is useful after deploying detection fixes to invalidate
     stale cache entries.
     """
-    ids = body.system_ids
-    if not ids:
-        return BatchEnrichResponse(results={})
+    try:
+        ids = body.system_ids
+        if not ids:
+            return BatchEnrichResponse(results={})
 
-    # Deduplicate and preserve order
-    seen: set[int] = set()
-    unique_ids: list[int] = []
-    for sid in ids:
-        if sid not in seen:
-            seen.add(sid)
-            unique_ids.append(sid)
+        # Deduplicate and preserve order
+        seen: set[int] = set()
+        unique_ids: list[int] = []
+        for sid in ids:
+            if sid not in seen:
+                seen.add(sid)
+                unique_ids.append(sid)
 
-    results: dict[int, EnrichResult] = {}
-    need_fetch: list[int] = []
+        results: dict[int, EnrichResult] = {}
+        need_fetch: list[int] = []
 
-    # --- Phase 1: Check cache (unless force_refresh) ---
-    if body.force_refresh:
-        need_fetch = unique_ids
-    else:
-        rows = db.execute(
-            text("""
-                SELECT system_id64, has_platinum, has_boom, has_pristine
-                FROM spansh_enrichment
-                WHERE system_id64 = ANY(:ids)
-            """),
-            {"ids": unique_ids},
-        ).mappings().all()
-
-        cache_map: dict[int, dict] = {r["system_id64"]: r for r in rows}
-        for sid in unique_ids:
-            cached = cache_map.get(sid)
-            if cached is not None:
-                # Cache hit — use persisted data regardless of age
-                results[sid] = EnrichResult(
-                    has_platinum=cached["has_platinum"],
-                    has_boom=cached["has_boom"],
-                    has_pristine=cached.get("has_pristine", False),
-                )
-            else:
-                need_fetch.append(sid)
-
-    # Telemetry counters for this batch
-    cache_hits = len(unique_ids) - len(need_fetch)
-    fetch_api_calls = 0
-    fetch_api_errors = 0
-    fetch_total_ms = 0.0
-    fetch_bytes = 0
-
-    # --- Phase 2: Fetch missing from Spansh (first-access) ---
-    if need_fetch:
-        logger.info("Fetching Spansh enrichment for %d system(s)", len(need_fetch))
-
-        # Look up system names from pp_systems for the bodies/search API.
-        # This enables the more reliable bodies/search enrichment path.
-        name_rows = db.execute(
-            text("""
-                SELECT system_id64, name
-                FROM pp_systems
-                WHERE system_id64 = ANY(:ids)
-            """),
-            {"ids": need_fetch},
-        ).mappings().all()
-        name_map: dict[int, str] = {r["system_id64"]: r["name"] for r in name_rows}
-
-        for i, sid in enumerate(need_fetch):
-            if i > 0:
-                await asyncio.sleep(BATCH_DELAY_MS / 1000.0)  # rate limit
-
-            sys_name = name_map.get(sid)
-            t0 = time.perf_counter()
-            try:
-                has_platinum, has_boom, has_pristine = await _enrich_system(sid, sys_name)
-                fetch_api_calls += 1
-            except Exception:
-                fetch_api_errors += 1
-                fetch_api_calls += 1
-                has_platinum = has_boom = has_pristine = False
-            fetch_total_ms += (time.perf_counter() - t0) * 1000.0
-
-            # Upsert into cache (first-access persistence)
-            db.execute(
+        # --- Phase 1: Check cache (unless force_refresh) ---
+        if body.force_refresh:
+            need_fetch = unique_ids
+        else:
+            rows = db.execute(
                 text("""
-                    INSERT INTO spansh_enrichment (system_id64, has_platinum, has_boom, has_pristine, cached_at)
-                    VALUES (:sid, :plat, :boom, :prist, NOW())
-                    ON CONFLICT (system_id64) DO UPDATE SET
-                        has_platinum = EXCLUDED.has_platinum,
-                        has_boom = EXCLUDED.has_boom,
-                        has_pristine = EXCLUDED.has_pristine,
-                        cached_at = EXCLUDED.cached_at
+                    SELECT system_id64, has_platinum, has_boom, has_pristine
+                    FROM spansh_enrichment
+                    WHERE system_id64 = ANY(:ids)
                 """),
-                {"sid": sid, "plat": has_platinum, "boom": has_boom, "prist": has_pristine},
+                {"ids": unique_ids},
+            ).mappings().all()
+
+            cache_map: dict[int, dict] = {r["system_id64"]: r for r in rows}
+            for sid in unique_ids:
+                cached = cache_map.get(sid)
+                if cached is not None:
+                    # Cache hit — use persisted data regardless of age
+                    results[sid] = EnrichResult(
+                        has_platinum=cached["has_platinum"],
+                        has_boom=cached["has_boom"],
+                        has_pristine=cached.get("has_pristine", False),
+                    )
+                else:
+                    need_fetch.append(sid)
+
+        # Telemetry counters for this batch
+        cache_hits = len(unique_ids) - len(need_fetch)
+        fetch_api_calls = 0
+        fetch_api_errors = 0
+        fetch_total_ms = 0.0
+        fetch_bytes = 0
+
+        # --- Phase 2: Fetch missing from Spansh (first-access) ---
+        if need_fetch:
+            logger.info("Fetching Spansh enrichment for %d system(s)", len(need_fetch))
+
+            # Look up system names from pp_systems for the bodies/search API.
+            # This enables the more reliable bodies/search enrichment path.
+            name_rows = db.execute(
+                text("""
+                    SELECT system_id64, name
+                    FROM pp_systems
+                    WHERE system_id64 = ANY(:ids)
+                """),
+                {"ids": need_fetch},
+            ).mappings().all()
+            name_map: dict[int, str] = {r["system_id64"]: r["name"] for r in name_rows}
+
+            for i, sid in enumerate(need_fetch):
+                if i > 0:
+                    await asyncio.sleep(BATCH_DELAY_MS / 1000.0)  # rate limit
+
+                sys_name = name_map.get(sid)
+                t0 = time.perf_counter()
+                try:
+                    has_platinum, has_boom, has_pristine = await _enrich_system(sid, sys_name)
+                    fetch_api_calls += 1
+                except Exception:
+                    fetch_api_errors += 1
+                    fetch_api_calls += 1
+                    has_platinum = has_boom = has_pristine = False
+                fetch_total_ms += (time.perf_counter() - t0) * 1000.0
+
+                # Upsert into cache (first-access persistence)
+                db.execute(
+                    text("""
+                        INSERT INTO spansh_enrichment (system_id64, has_platinum, has_boom, has_pristine, cached_at)
+                        VALUES (:sid, :plat, :boom, :prist, NOW())
+                        ON CONFLICT (system_id64) DO UPDATE SET
+                            has_platinum = EXCLUDED.has_platinum,
+                            has_boom = EXCLUDED.has_boom,
+                            has_pristine = EXCLUDED.has_pristine,
+                            cached_at = EXCLUDED.cached_at
+                    """),
+                    {"sid": sid, "plat": has_platinum, "boom": has_boom, "prist": has_pristine},
+                )
+                db.commit()
+
+                results[sid] = EnrichResult(
+                    has_platinum=has_platinum, has_boom=has_boom, has_pristine=has_pristine,
+                )
+
+        # Record telemetry for this batch (fire-and-forget, errors are swallowed)
+        if cache_hits or need_fetch:
+            _record_enrichment_stats(
+                db,
+                hits=cache_hits,
+                misses=len(need_fetch),
+                api_calls=fetch_api_calls,
+                api_errors=fetch_api_errors,
+                total_fetch_ms=fetch_total_ms,
+                bytes_fetched=fetch_bytes,
             )
-            db.commit()
 
-            results[sid] = EnrichResult(
-                has_platinum=has_platinum, has_boom=has_boom, has_pristine=has_pristine,
-            )
-
-    # Record telemetry for this batch (fire-and-forget, errors are swallowed)
-    if cache_hits or need_fetch:
-        _record_enrichment_stats(
-            db,
-            hits=cache_hits,
-            misses=len(need_fetch),
-            api_calls=fetch_api_calls,
-            api_errors=fetch_api_errors,
-            total_fetch_ms=fetch_total_ms,
-            bytes_fetched=fetch_bytes,
-        )
-
-    return BatchEnrichResponse(results=results)
+        return BatchEnrichResponse(results=results)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("enrich_batch failed")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/enrich/cache")
@@ -531,20 +537,32 @@ def clear_enrich_cache(
     After clearing, the next batch request will re-fetch fresh data from
     Spansh on first access for each system.
     """
-    result = db.execute(text("DELETE FROM spansh_enrichment"))
-    db.commit()
-    deleted = result.rowcount
-    logger.info("Cleared %d rows from spansh_enrichment cache", deleted)
-    return {"deleted": deleted}
+    try:
+        result = db.execute(text("DELETE FROM spansh_enrichment"))
+        db.commit()
+        deleted = result.rowcount
+        logger.info("Cleared %d rows from spansh_enrichment cache", deleted)
+        return {"deleted": deleted}
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("clear_enrich_cache failed")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/enrich/status", response_model=EnrichStatus)
 def enrich_status(db: Session = Depends(get_db)) -> EnrichStatus:
     """Return total cached enrichment count."""
-    total = db.execute(
-        text("SELECT COUNT(*) FROM spansh_enrichment")
-    ).scalar() or 0
-    return EnrichStatus(total_cached=total)
+    try:
+        total = db.execute(
+            text("SELECT COUNT(*) FROM spansh_enrichment")
+        ).scalar() or 0
+        return EnrichStatus(total_cached=total)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("enrich_status failed")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/enrich/validate", response_model=ValidateResponse)
@@ -557,78 +575,84 @@ async def validate_enrich_cache(
     For each cached entry, re-fetches from Spansh and compares results.
     Mismatches are auto-corrected in the database.
     """
-    rows = db.execute(
-        text("SELECT system_id64, has_platinum, has_boom, has_pristine FROM spansh_enrichment")
-    ).mappings().all()
-
-    mismatches: list[ValidateMismatch] = []
-    total_checked = 0
-
-    # Look up system names for display
-    all_ids = [r["system_id64"] for r in rows]
-    name_map: dict[int, str] = {}
-    if all_ids:
-        name_rows = db.execute(
-            text("SELECT system_id64, name FROM pp_systems WHERE system_id64 = ANY(:ids)"),
-            {"ids": all_ids},
+    try:
+        rows = db.execute(
+            text("SELECT system_id64, has_platinum, has_boom, has_pristine FROM spansh_enrichment")
         ).mappings().all()
-        name_map = {r["system_id64"]: r["name"] for r in name_rows}
 
-    for i, row in enumerate(rows):
-        if i > 0:
-            await asyncio.sleep(BATCH_DELAY_MS / 1000.0)  # rate limit
+        mismatches: list[ValidateMismatch] = []
+        total_checked = 0
 
-        sid = row["system_id64"]
-        sys_name = name_map.get(sid)
-        total_checked += 1
+        # Look up system names for display
+        all_ids = [r["system_id64"] for r in rows]
+        name_map: dict[int, str] = {}
+        if all_ids:
+            name_rows = db.execute(
+                text("SELECT system_id64, name FROM pp_systems WHERE system_id64 = ANY(:ids)"),
+                {"ids": all_ids},
+            ).mappings().all()
+            name_map = {r["system_id64"]: r["name"] for r in name_rows}
 
-        live_plat, live_boom, live_prist = await _enrich_system(sid, sys_name)
-        cached_plat = row["has_platinum"]
-        cached_boom = row["has_boom"]
-        cached_prist = row.get("has_pristine", False)
+        for i, row in enumerate(rows):
+            if i > 0:
+                await asyncio.sleep(BATCH_DELAY_MS / 1000.0)  # rate limit
 
-        has_mismatch = False
+            sid = row["system_id64"]
+            sys_name = name_map.get(sid)
+            total_checked += 1
 
-        if cached_plat != live_plat:
-            mismatches.append(ValidateMismatch(
-                system_id64=sid, system_name=sys_name,
-                field="has_platinum", cached=cached_plat, live=live_plat,
-            ))
-            has_mismatch = True
+            live_plat, live_boom, live_prist = await _enrich_system(sid, sys_name)
+            cached_plat = row["has_platinum"]
+            cached_boom = row["has_boom"]
+            cached_prist = row.get("has_pristine", False)
 
-        if cached_boom != live_boom:
-            mismatches.append(ValidateMismatch(
-                system_id64=sid, system_name=sys_name,
-                field="has_boom", cached=cached_boom, live=live_boom,
-            ))
-            has_mismatch = True
+            has_mismatch = False
 
-        if cached_prist != live_prist:
-            mismatches.append(ValidateMismatch(
-                system_id64=sid, system_name=sys_name,
-                field="has_pristine", cached=cached_prist, live=live_prist,
-            ))
-            has_mismatch = True
+            if cached_plat != live_plat:
+                mismatches.append(ValidateMismatch(
+                    system_id64=sid, system_name=sys_name,
+                    field="has_platinum", cached=cached_plat, live=live_plat,
+                ))
+                has_mismatch = True
 
-        # Auto-correct mismatches
-        if has_mismatch:
-            db.execute(
-                text("""
-                    UPDATE spansh_enrichment
-                    SET has_platinum = :plat, has_boom = :boom, has_pristine = :prist, cached_at = NOW()
-                    WHERE system_id64 = :sid
-                """),
-                {"sid": sid, "plat": live_plat, "boom": live_boom, "prist": live_prist},
-            )
-            db.commit()
-            logger.info("Corrected enrichment for system %d (%s)", sid, sys_name)
+            if cached_boom != live_boom:
+                mismatches.append(ValidateMismatch(
+                    system_id64=sid, system_name=sys_name,
+                    field="has_boom", cached=cached_boom, live=live_boom,
+                ))
+                has_mismatch = True
 
-    logger.info(
-        "Enrichment validation complete: %d checked, %d mismatches found",
-        total_checked, len(mismatches),
-    )
-    return ValidateResponse(
-        total_checked=total_checked,
-        mismatches_found=len(mismatches),
-        mismatches=mismatches,
-    )
+            if cached_prist != live_prist:
+                mismatches.append(ValidateMismatch(
+                    system_id64=sid, system_name=sys_name,
+                    field="has_pristine", cached=cached_prist, live=live_prist,
+                ))
+                has_mismatch = True
+
+            # Auto-correct mismatches
+            if has_mismatch:
+                db.execute(
+                    text("""
+                        UPDATE spansh_enrichment
+                        SET has_platinum = :plat, has_boom = :boom, has_pristine = :prist, cached_at = NOW()
+                        WHERE system_id64 = :sid
+                    """),
+                    {"sid": sid, "plat": live_plat, "boom": live_boom, "prist": live_prist},
+                )
+                db.commit()
+                logger.info("Corrected enrichment for system %d (%s)", sid, sys_name)
+
+        logger.info(
+            "Enrichment validation complete: %d checked, %d mismatches found",
+            total_checked, len(mismatches),
+        )
+        return ValidateResponse(
+            total_checked=total_checked,
+            mismatches_found=len(mismatches),
+            mismatches=mismatches,
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("validate_enrich_cache failed")
+        raise HTTPException(status_code=500, detail="Internal server error")

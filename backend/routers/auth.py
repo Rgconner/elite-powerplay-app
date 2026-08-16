@@ -2,6 +2,7 @@
 
 import hashlib
 import base64
+import logging
 import os
 from datetime import datetime, timedelta, timezone
 
@@ -11,6 +12,8 @@ from sqlalchemy.orm import Session
 
 from db.session import get_db
 from models.models import AdminUser
+
+logger = logging.getLogger(__name__)
 
 from jose import jwt
 from pydantic import BaseModel
@@ -63,19 +66,25 @@ def login(
     and ``password`` — matching the OAuth2 password flow convention used by
     the frontend.
     """
-    user = db.query(AdminUser).filter(AdminUser.email == username).first()
-    if not user or not verify_password(password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    expire = datetime.now(timezone.utc) + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
-    payload = {
-        "sub": str(user.id),
-        "email": user.email,
-        "is_admin": True,
-        "exp": expire,
-    }
-    token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
-    return TokenResponse(access_token=token, token_type="bearer")
+    try:
+        user = db.query(AdminUser).filter(AdminUser.email == username).first()
+        if not user or not verify_password(password, user.hashed_password):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        expire = datetime.now(timezone.utc) + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
+        payload = {
+            "sub": str(user.id),
+            "email": user.email,
+            "is_admin": True,
+            "exp": expire,
+        }
+        token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+        return TokenResponse(access_token=token, token_type="bearer")
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("login failed")
+        raise HTTPException(status_code=500, detail="Internal server error")
