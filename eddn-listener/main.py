@@ -39,7 +39,14 @@ DATABASE_URL = _raw_url.replace(
 ).replace(
     "postgresql+psycopg2://", "postgresql+psycopg://", 1
 )
-engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,
+    # Long-lived daemon over TCP to Postgres: bound the pool checkout wait and
+    # the TCP connect so an unreachable DB cannot hang the listener forever.
+    pool_timeout=int(os.getenv("DB_POOL_TIMEOUT", "10")),
+    connect_args={"connect_timeout": int(os.getenv("DB_CONNECT_TIMEOUT", "10"))},
+)
 SessionLocal = sessionmaker(bind=engine)
 
 # EDDN connection - env-configurable with defaults
