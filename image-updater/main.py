@@ -413,7 +413,7 @@ def load_k8s_client() -> tuple[client.AppsV1Api, client.CoreV1Api]:
 
 def get_deployment_image(apps: client.AppsV1Api, namespace: str, name: str, container_name: str) -> str:
     """Return the current `image:` string for the named container of a Deployment."""
-    dep = apps.read_namespaced_deployment(name, namespace)
+    dep = apps.read_namespaced_deployment(name, namespace, _request_timeout=(5, 30))
     containers = dep.spec.template.spec.containers
     for c in containers:
         if c.name == container_name:
@@ -442,7 +442,7 @@ def patch_deployment_image(
             }
         }
     }
-    apps.patch_namespaced_deployment(name, namespace, body)
+    apps.patch_namespaced_deployment(name, namespace, body, _request_timeout=(5, 30))
     log.info("Patched Deployment/%s container=%s image=%s", name, container_name, new_image)
 
 
@@ -460,7 +460,7 @@ def wait_for_rollout(
     deadline = time.monotonic() + timeout_seconds
     poll_every = 2.0
     while time.monotonic() < deadline:
-        dep = apps.read_namespaced_deployment(name, namespace)
+        dep = apps.read_namespaced_deployment(name, namespace, _request_timeout=(5, 30))
         status = dep.status
         spec = dep.spec
         desired = spec.replicas or 1
@@ -692,13 +692,21 @@ _HEARTBEAT_FILE = "/tmp/image-updater-heartbeat"
 
 
 def main() -> int:
-    cfg = UpdaterConfig.from_env()
+    try:
+        cfg = UpdaterConfig.from_env()
+    except Exception:
+        log.exception("Failed to load image-updater configuration")
+        return 1
     log.info(
         "image-updater starting: namespace=%s registry=%s owner=%s poll=%ds auth=%s",
         cfg.namespace, cfg.registry, cfg.owner, cfg.poll_interval_seconds,
         "PAT" if cfg.github_token else "anonymous",
     )
-    apps, _ = load_k8s_client()
+    try:
+        apps, _ = load_k8s_client()
+    except Exception:
+        log.exception("Failed to load in-cluster Kubernetes config")
+        return 1
     while True:
         # Write heartbeat before every pass so the liveness probe can detect
         # a stalled loop (the probe checks file mtime, not process existence).
@@ -709,7 +717,8 @@ def main() -> int:
 
         # Create a fresh httpx.Client per pass — avoids stale connections
         # that ghcr.io resets after idle periods (RemoteProtocolError).
-        with httpx.Client() as http:
+        # Default timeout so no call can hang even if a call site omits one.
+        with httpx.Client(timeout=10.0) as http:
             try:
                 updated = reconcile_once(cfg, apps, http)
                 if updated:
