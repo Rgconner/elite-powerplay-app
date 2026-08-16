@@ -17,7 +17,11 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 from db.session import Base, engine  # noqa: E402
-import models.models  # noqa: F401
+import models.models  # noqa: E402  (side-effect import: registers ORM models on Base.metadata)
+
+# pyflakes cannot see the side effect above; reference the module and guard the
+# invariant create_all depends on: models must share db.session's Base.
+assert models.models.Base is Base, "models.models must share db.session.Base"
 from sqlalchemy import text as _text  # noqa: E402
 
 try:

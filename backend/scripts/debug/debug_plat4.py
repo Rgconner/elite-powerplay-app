@@ -1,4 +1,4 @@
-import urllib.request, json, sys
+import urllib.request, json
 
 def get_json(url):
     req = urllib.request.Request(url)
@@ -56,10 +56,10 @@ for b in bodies:
                 for item in items:
                     name = item.get("name", "") if isinstance(item, dict) else str(item)
                     if "platinum" in name.lower():
-                        print(f"  >>> FOUND PLATINUM!")
+                        print("  >>> FOUND PLATINUM!")
                         has_plat = True
     else:
-        print(f"  No 'signals' key in body response")
+        print("  No 'signals' key in body response")
         # Print first 500 chars to see what's there
         body_str = json.dumps(body)
         print(f"  Body data: {body_str[:300]}")
@@ -73,5 +73,5 @@ for b in bodies:
                 print(f"  >>> FOUND PLATINUM in ring: {mname}={mval}")
                 has_plat = True
 
-print(f"\n=== FINAL ===")
+print("\n=== FINAL ===")
 print(f"has_plat={has_plat}, has_boom={has_boom}")

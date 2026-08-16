@@ -1,4 +1,4 @@
-import requests, json
+import requests
 
 # Understand the control_progress field as a threshold indicator
 # Key observations so far:

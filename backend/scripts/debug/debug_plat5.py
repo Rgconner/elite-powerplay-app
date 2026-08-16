@@ -1,4 +1,4 @@
-import urllib.request, json, sys
+import urllib.request, json
 
 def get_json(url):
     req = urllib.request.Request(url)

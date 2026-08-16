@@ -1,4 +1,4 @@
-import gzip, io, json, requests
+import gzip, json, requests
 
 # systems_populated.json.gz is only 4.1 MB — download and fully scan it
 url = "https://downloads.spansh.co.uk/systems_populated.json.gz"

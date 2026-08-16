@@ -90,6 +90,6 @@ for b in bodies:
                     print(f"  >>> FOUND PLATINUM in ring materials list: {m}")
                     has_plat = True
 
-print(f"\n=== FINAL ===")
+print("\n=== FINAL ===")
 print(f"has_platinum={has_plat}")
 print(f"has_boom={has_boom}")

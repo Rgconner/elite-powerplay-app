@@ -1,4 +1,4 @@
-import asyncio, json, httpx, sys
+import asyncio, httpx, sys
 
 SPANSH_SYSTEM_URL = "https://spansh.co.uk/api/system/{}"
 

@@ -74,7 +74,7 @@ def main() -> None:
         print("⚠ Top-level structure: OBJECT  →  ijson prefix is NOT 'item'")
         # Try to find the array key
         try:
-            partial = json.loads(text + "]}")  # may fail, just try
+            json.loads(text + "]}")  # may fail, just try
         except Exception:
             pass
         # Show first key

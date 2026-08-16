@@ -9,8 +9,6 @@ PP 2.0 states stored in pp_system_snapshots.power_state:
   Contested  | Expansion | InPrepareRadius | Prepared | HomeSystem
 """
 
-from datetime import datetime
-
 from sqlalchemy import (
     BigInteger,
     Boolean,

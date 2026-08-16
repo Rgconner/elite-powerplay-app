@@ -7,10 +7,8 @@ Run with: pytest  (from the backend/ directory)
 import pytest
 from services.decay import (
     MERIT_ACQUIRE,
-    MERIT_FORTIFIED,
     MERIT_STRONGHOLD,
     BAND_EXPLOITED,
-    BAND_FORTIFIED,
     BAND_STRONGHOLD,
     _decay_rate,
     compute_cp_decay,

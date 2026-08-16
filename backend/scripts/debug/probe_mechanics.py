@@ -1,4 +1,4 @@
-import requests, json
+import requests
 
 # Deep-dive into PP 2.0 mechanics via the Spansh API
 # Goal: understand what the reinforcement/undermining numbers mean

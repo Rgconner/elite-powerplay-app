@@ -1,4 +1,4 @@
-import requests, json
+import requests
 
 # Probe the correct Spansh API endpoints for PP data
 # Based on Spansh documentation and known working patterns

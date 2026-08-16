@@ -148,7 +148,14 @@ Version history:
                        (DB_CONNECT_TIMEOUT, default 10s) and runaway queries
                        (statement_timeout: DB_STATEMENT_TIMEOUT_MS 30s web /
                        DB_INGEST_STATEMENT_TIMEOUT_MS 600s ingest) (#9).
+    2.1.7  2026-08-16  CI unblock (#14/#15): missing HTTPException imports in
+                       powers.py + spansh.py (NameError on any handler failure —
+                       introduced with the try/except wrapping), models.models
+                       side-effect import made pyflakes-visible with a Base
+                       identity assert, unused imports/f-strings cleared so
+                       `pyflakes backend/` exits 0. Frontend 2.1.2: TelemetryRunSummary
+                       gains bytes_downloaded/pages_fetched to match backend payload.
  """
 
-BACKEND_VERSION      = "2.1.6"
+BACKEND_VERSION      = "2.1.7"
 BACKEND_RELEASE_DATE = "2026-08-16T17:02:48Z"

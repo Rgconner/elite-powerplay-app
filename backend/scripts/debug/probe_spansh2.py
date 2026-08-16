@@ -7,7 +7,6 @@ Run from backend/ with venv active:
 """
 import gzip
 import io
-import json
 import sys
 
 import requests

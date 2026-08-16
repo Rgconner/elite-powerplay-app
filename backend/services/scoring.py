@@ -77,7 +77,7 @@ from typing import Optional
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from models.models import AdminSetting, PPSystem, PPSystemSnapshot
+from models.models import AdminSetting, PPSystem
 from models.schemas import RecommendationItem
 
 logger = logging.getLogger(__name__)

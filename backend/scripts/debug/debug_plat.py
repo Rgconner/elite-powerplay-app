@@ -76,7 +76,7 @@ for b in bodies:
             for item in items:
                 name = item.get('name', '') if isinstance(item, dict) else str(item)
                 if 'platinum' in name.lower():
-                    print(f'    >>> FOUND PLATINUM!')
+                    print('    >>> FOUND PLATINUM!')
                     has_plat = True
     else:
         # Maybe signals is a dict or signals are elsewhere
@@ -88,6 +88,6 @@ for b in bodies:
         rings = body_data.get('rings', [])
         print(f'  rings: {len(rings)}')
 
-print(f'\n=== FINAL RESULT ===')
+print('\n=== FINAL RESULT ===')
 print(f'has_platinum: {has_plat}')
 print(f'has_boom: {has_boom}')

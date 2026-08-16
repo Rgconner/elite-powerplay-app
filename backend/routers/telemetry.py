@@ -319,8 +319,6 @@ def get_telemetry_history(
               events_total broken down by uptime instead of per-day.
     """
     try:
-        from models.models import IngestionRun
-
         # ── Daily ingestion aggregate (last N days) ───────────────────────────────
         ingest_rows = db.execute(
             text("""
