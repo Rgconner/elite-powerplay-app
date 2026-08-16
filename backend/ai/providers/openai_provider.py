@@ -24,6 +24,8 @@ class OpenAIProvider(AIProvider):
         self.client = OpenAI(
             api_key=os.getenv("AI_API_KEY"),
             base_url=base_url,  # None uses the default OpenAI endpoint
+            # Explicit cap — SDK default is 600s, far too long for a request-path call.
+            timeout=float(os.getenv("AI_TIMEOUT_SECONDS", "30")),
         )
 
     def summarize_recommendations(

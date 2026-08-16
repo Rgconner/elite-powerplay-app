@@ -140,7 +140,11 @@ Version history:
                        incremental migrations) now guarded — failures log the
                        attempted operation and exit(1) instead of dying with a raw
                        traceback (#6). Fail-fast behaviour preserved.
+    2.1.5  2026-08-16  IO hardening (4/5): OpenAI client now constructed with an
+                       explicit timeout (AI_TIMEOUT_SECONDS, default 30s) — the SDK
+                       default of 600s could hang a recommendations request for ten
+                       minutes (#8).
  """
 
-BACKEND_VERSION      = "2.1.4"
+BACKEND_VERSION      = "2.1.5"
 BACKEND_RELEASE_DATE = "2026-08-16T17:02:48Z"
