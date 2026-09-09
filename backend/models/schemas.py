@@ -162,6 +162,26 @@ class RecommendationItem(BaseModel):
     conflict_progress: Optional[str] = None
     # Estimated CP merit decay this cycle (merits), None if not applicable
     cp_decay: Optional[int] = None
+    # Canonical state from services.state_classification — the six-state
+    # model (Unoccupied/Expansion/Contested/Exploited/Fortified/Stronghold)
+    # confirmed against inara.cz, distinct from the raw power_state column.
+    state: Optional[str] = None
+    # For fortify items: "attack" | "neglect" | "none" — see services.fortify_cause.
+    # Same buffer erosion, different cause: attack means a rival is actively
+    # undermining faster than anyone reinforces; neglect means nobody's
+    # attacking, the buffer just eroded from nobody reinforcing it.
+    cause: Optional[str] = None
+    # For expand/EXPANSION items: are we behind the leading rival by a
+    # closeable margin? See services.state_classification.compute_expansion_signal.
+    # This is a tactical read only — whether a snipable system is worth
+    # fighting for beyond the numbers is a human call, not made here.
+    snipable: Optional[bool] = None
+    gap_to_lead: Optional[float] = None
+    leading_rival: Optional[str] = None
+    # True if within local_radius_ly of the reference system passed to
+    # compute_recommendations (the "what's around me" persona view);
+    # None if no reference system was given.
+    is_local: Optional[bool] = None
 
 
 class RecommendationsResponse(BaseModel):

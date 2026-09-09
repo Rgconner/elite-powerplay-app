@@ -79,6 +79,8 @@ from sqlalchemy.orm import Session
 
 from models.models import AdminSetting, PPSystem
 from models.schemas import RecommendationItem
+from services.fortify_cause import classify_fortify_cause
+from services.state_classification import SystemState, compute_expansion_signal
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +135,12 @@ DEFAULTS: dict[str, float] = {
     "target_progress_high":        0.25,  # ≤ this % → HIGH vulnerability
     "target_progress_medium":      0.50,  # ≤ this % → MEDIUM vulnerability
     # (above target_progress_medium → LOW)
+
+    # ── Persona locality — "what's around me" view ────────────────────────────
+    # Radius used to flag a recommendation as is_local=True when a reference
+    # system is provided. Matches the lone-pilot/squad-leader persona: show
+    # what's nearby first, everything else is "elsewhere worth a look".
+    "local_radius_ly":            25.0,
 
     # ── Staleness — NULL spansh_updated_at behaviour ──────────────────────────
     # When "true" (default): rows where spansh_updated_at IS NULL are treated
@@ -702,6 +710,13 @@ def compute_fortify_scores(
         p_val = control_progress if control_progress is not None else 0.5
         mf = _merit_fields(power_state, p_val)
 
+        # Attack vs. neglect — same buffer erosion, different cause; see
+        # services.fortify_cause for why this distinction matters to a player.
+        fortify_risk = classify_fortify_cause(control_progress, reinforcement, undermining)
+
+        local_radius = float(weights.get("local_radius_ly", DEFAULTS["local_radius_ly"]))
+        is_local = distance_from_center <= local_radius if distance_from_center is not None else None
+
         items.append(RecommendationItem(
             system_id64=system.system_id64,
             system_name=system.name,
@@ -721,6 +736,9 @@ def compute_fortify_scores(
             merits_to_safety=mf["merits_to_safety"],
             merits_to_upgrade=mf["merits_to_upgrade"],
             cp_decay=cp_decay_val,
+            state=power_state,
+            cause=fortify_risk.cause.value,
+            is_local=is_local,
         ))
 
     items.sort(key=lambda x: x.score, reverse=True)
@@ -810,7 +828,7 @@ def compute_expand_scores(
                snapshot_time, spansh_updated_at, conflict_progress,
                powers_list
         FROM pp_system_snapshots
-        WHERE power_state IN ('Contested', 'Acquisition')
+        WHERE power_state = 'Contested'
           AND powers_list ILIKE :pattern
           {_STALE}
         ORDER BY system_id, snapshot_time DESC
@@ -957,6 +975,25 @@ def compute_expand_scores(
             cx2, cy2, cz2 = center_coords
             distance_from_center = _dist(sx, sy, sz, cx2, cy2, cz2)
 
+        local_radius = float(weights.get("local_radius_ly", DEFAULTS["local_radius_ly"]))
+        is_local = distance_from_center <= local_radius if distance_from_center is not None else None
+
+        # Snipable / gap-to-lead — see services.state_classification for why
+        # this is a tactical read only, not a verdict on whether the system
+        # is worth fighting for. Every system compute_expand_scores returns
+        # is some flavor of acquisition race, so it's always EXPANSION state
+        # (confirmed against inara.cz/elite/power-contested/4/, which uses
+        # "Expansion" for both solo and multi-power rows — there's no
+        # separate "Contested" state value, just this page's own filter).
+        expansion_signal = compute_expansion_signal(power_name, snap.get("conflict_progress"))
+        if expansion_signal is not None:
+            reasons.append(
+                f"Race: us {expansion_signal.our_progress:.1%} vs. "
+                f"{expansion_signal.leading_rival or 'no rival'} "
+                f"{expansion_signal.leading_rival_progress:.1%}"
+                + (" — snipable" if expansion_signal.snipable else "")
+            )
+
         items.append(RecommendationItem(
             system_id64=system.system_id64,
             system_name=system.name,
@@ -973,6 +1010,11 @@ def compute_expand_scores(
             merits_to_upgrade=merits_left,
             anchor_type=anchor_type,
             conflict_progress=snap.get("conflict_progress"),
+            state=SystemState.EXPANSION.value,
+            snipable=expansion_signal.snipable if expansion_signal else None,
+            gap_to_lead=expansion_signal.gap_to_lead if expansion_signal else None,
+            leading_rival=expansion_signal.leading_rival if expansion_signal else None,
+            is_local=is_local,
         ))
 
     # Sort: score descending (highest acquisition progress first)

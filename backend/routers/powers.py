@@ -281,7 +281,7 @@ def get_contested_systems(
                    control_progress, reinforcement, undermining,
                    powers_list, conflict_progress, spansh_updated_at
             FROM pp_system_snapshots
-            WHERE power_state IN ('Contested', 'Acquisition')
+            WHERE power_state = 'Contested'
               AND powers_list ILIKE :power_pattern
               {stale_clause}
             ORDER BY system_id, snapshot_time DESC
@@ -528,7 +528,7 @@ def target_analysis(
                    powers_list, conflict_progress,
                    cp_decay
             FROM pp_system_snapshots
-            WHERE power_state IN ('Contested', 'Acquisition')
+            WHERE power_state = 'Contested'
               AND powers_list ILIKE :attacker_pattern
               {contested_stale_clause}
             ORDER BY system_id, snapshot_time DESC
