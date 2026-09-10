@@ -74,8 +74,14 @@ spec:
 
 # ── Service (LoadBalancer) ────────────────────────────────────────────────────
 # Exposes the frontend externally via the MetalLB / cloud LoadBalancer.
-# loadBalancerIP pins the assigned address to 192.168.11.5 — the IP must be
+# loadBalancerIP pins the assigned address to 192.168.11.13 — the IP must be
 # within a range advertised by your load-balancer controller (e.g. MetalLB pool).
+# NOTE: originally pinned to .5, but this Service had never actually been
+# applied to the cluster (only the Deployment was live) — by the time it
+# was applied, .5 had since been claimed by an unrelated service
+# (aikb/traefik), and MetalLB correctly refused the collision rather than
+# silently reassigning. .13 confirmed free against the live cluster as of
+# 2026-09-09.
 apiVersion: v1
 kind: Service
 metadata:
@@ -88,7 +94,7 @@ spec:
   selector:
     app: frontend
   type: LoadBalancer
-  loadBalancerIP: 192.168.11.5
+  loadBalancerIP: 192.168.11.13
   ports:
     - name: http
       port: 80
