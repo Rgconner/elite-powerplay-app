@@ -115,13 +115,19 @@ async def _fetch_body(body_id64: int) -> tuple[dict | None, int]:
 
 def _check_body_for_platinum(body: dict) -> bool:
     """
-    Check a single body (unwrapped) for a Platinum signal in a metallic ring.
+    Check a single body (unwrapped) for a Platinum signal in a Metal Rich ring.
 
     Platinum is found in the ring signals:
       rings[].signals[]  →  each entry is a dict with { name: str, count: int }
 
-    Only metallic rings are checked — icy/rocky rings with platinum signals
-    are excluded (PLAT badge requires both platinum AND metallic ring type).
+    Only "Metal Rich" rings are checked — this was previously "Metallic",
+    which is backwards: real ED mining mechanics put Platinum/Painite/
+    precious-metal signals on Metal Rich rings, not Metallic ones (Metallic
+    rings run more Palladium/Gold-type materials). Confirmed against real
+    Spansh data 2026-09-09: Borann — a well-known real Platinum mining
+    system — has its Platinum signal on a ring Spansh types "Metal Rich";
+    the old "metallic" filter would have silently excluded it. No test
+    coverage existed to catch this before now.
 
     Confirmed via Spansh API (July 2026):
       GET /api/body/{id64}  →  body.rings[].signals[]
@@ -136,7 +142,7 @@ def _check_body_for_platinum(body: dict) -> bool:
         rings = body.get("rings") or []
         for ring in rings:
             ring_type = (ring.get("type") or "").lower()
-            if ring_type != "metallic":
+            if ring_type != "metal rich":
                 continue
             ring_signals = ring.get("signals") or []
             for sig in ring_signals:
