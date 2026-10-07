@@ -1,0 +1,208 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# image-updater.yaml  —  in-cluster auto-updater for backend + frontend images
+#
+# Resources:
+#   • ServiceAccount   image-updater
+#   • Role             image-updater   (namespace-scoped)
+#   • RoleBinding      image-updater   (binds SA to Role)
+#   • ConfigMap        image-updater-config
+#   • Deployment       image-updater
+#
+# The Role grants EXACTLY:
+#   • get/list/watch  on  deployments
+#   • get/list/watch  on  pods            (readiness / rollout status)
+#   • patch           on  deployments
+#   • create/get      on  events          (for clean log correlation)
+# No cluster-wide access.  No secrets, no ConfigMaps, no exec, no nodes.
+#
+# Apply:
+#   kubectl apply -f k8s/image-updater.yaml
+# Or via kustomize (added to kustomization.yaml resources list).
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── ServiceAccount ───────────────────────────────────────────────────────────
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: image-updater
+  namespace: elite-powerplay
+  labels:
+    app.kubernetes.io/name: elite-powerplay
+    app.kubernetes.io/component: image-updater
+automountServiceAccountToken: true   # required for in-cluster k8s API calls
+---
+# ── Role  (least-privilege, namespace-scoped) ────────────────────────────────
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: image-updater
+  namespace: elite-powerplay
+  labels:
+    app.kubernetes.io/name: elite-powerplay
+    app.kubernetes.io/component: image-updater
+rules:
+  # Read & patch the four Deployments we manage.
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames:
+      - backend
+      - frontend
+      - eddn-listener
+      - image-updater
+    verbs: ["get", "list", "watch", "patch"]
+  # Read pods for rollout-status calculation.
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  # Emit events so the controller's actions show up in `kubectl get events`.
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch", "update"]
+---
+# ── RoleBinding ──────────────────────────────────────────────────────────────
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: image-updater
+  namespace: elite-powerplay
+  labels:
+    app.kubernetes.io/name: elite-powerplay
+    app.kubernetes.io/component: image-updater
+subjects:
+  - kind: ServiceAccount
+    name: image-updater
+    namespace: elite-powerplay
+roleRef:
+  kind: Role
+  name: image-updater
+  apiGroup: rbac.authorization.k8s.io
+---
+# ── ConfigMap  (controller configuration) ────────────────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: image-updater-config
+  namespace: elite-powerplay
+  labels:
+    app.kubernetes.io/name: elite-powerplay
+    app.kubernetes.io/component: image-updater
+data:
+  # ghcr.io owner / org.  Must match the docker-publish workflow.
+  OWNER: "rgconner"
+  # Image registry (no protocol, no trailing slash).
+  REGISTRY: "ghcr.io"
+  # Namespace the controller manages (also where it runs).
+  NAMESPACE: "elite-powerplay"
+  # How often to check for new :latest digest.
+  POLL_INTERVAL_SECONDS: "60"
+  # How long to wait for a Deployment rollout before failing the reconcile.
+  ROLLOUT_TIMEOUT_SECONDS: "300"
+  # Version-gate timing — how aggressively to poll the backend /version
+  # endpoint after a backend rollout before giving up.
+  VERSION_POLL_INTERVAL_SECONDS: "5"
+  VERSION_POLL_TIMEOUT_SECONDS: "300"
+  # In-cluster DNS name of the backend service.  Used for the version gate.
+  BACKEND_SERVICE_URL: "http://backend.elite-powerplay.svc.cluster.local"
+  BACKEND_SERVICE_PORT: "8000"
+  LOG_LEVEL: "INFO"
+---
+# ── Secret  (GitHub PAT for authenticated ghcr.io token exchange) ─────────────
+# Apply once with:
+#   kubectl create secret generic image-updater-ghcr-token \
+#     --namespace elite-powerplay \
+#     --from-literal=GITHUB_TOKEN=<PAT with read:packages>
+#
+# The PAT only needs the `read:packages` scope.  It is used by the image-updater
+# to exchange for a bearer token when fetching OCI manifests and config blobs
+# from ghcr.io — preventing anonymous rate-limiting and 401s on blob fetches.
+#
+# This stub is a placeholder so kustomize / kubectl apply does not error if the
+# Secret is absent.  Replace the empty value with the real PAT before applying,
+# or manage it via a secrets manager (External Secrets, Sealed Secrets, etc.).
+apiVersion: v1
+kind: Secret
+metadata:
+  name: image-updater-ghcr-token
+  namespace: elite-powerplay
+  labels:
+    app.kubernetes.io/name: elite-powerplay
+    app.kubernetes.io/component: image-updater
+type: Opaque
+stringData:
+  GITHUB_TOKEN: ""   # <-- set this before applying, or use a secrets manager
+---
+# ── Deployment ───────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: image-updater
+  namespace: elite-powerplay
+  labels:
+    app.kubernetes.io/name: elite-powerplay
+    app.kubernetes.io/component: image-updater
+spec:
+  replicas: 1
+  # Recreate because we only have 1 replica and a rolling update would
+  # briefly leave us with 0 controllers (no harm but unnecessary churn).
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: image-updater
+  template:
+    metadata:
+      labels:
+        app: image-updater
+        app.kubernetes.io/name: elite-powerplay
+        app.kubernetes.io/component: image-updater
+    spec:
+      serviceAccountName: image-updater
+      # Don't keep restarting on transient API blips — give it time.
+      terminationGracePeriodSeconds: 30
+      imagePullSecrets:
+        - name: ghcr-pull
+
+      # Pin to a specific SHA in production; :latest is fine for dev clusters.
+      # Override with `kubectl set image deployment/image-updater ...` or via
+      # kustomize image transformer.
+      containers:
+        - name: image-updater
+          image: ghcr.io/rgconner/elite-powerplay-image-updater:latest
+          imagePullPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: image-updater-config
+            - secretRef:
+                name: image-updater-ghcr-token
+                optional: true   # controller falls back to anonymous if absent
+          resources:
+            requests:
+              cpu:    "20m"
+              memory: "64Mi"
+            limits:
+              cpu:    "200m"
+              memory: "256Mi"
+
+          # Liveness: the main loop writes /tmp/image-updater-heartbeat at the
+          # start of every pass.  If the file is absent or older than 3× the
+          # poll interval (180s) the loop has stalled — restart the container.
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "test $(( $(date +%s) - $(date +%s -r /tmp/image-updater-heartbeat 2>/dev/null || echo 0) )) -lt 180"
+            initialDelaySeconds: 90
+            periodSeconds: 60
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          # Startup grace: the first reconcile pass can take 30+ s while
+          # it resolves manifests and reads the deployments.
+          startupProbe:
+            exec:
+              command: ["test", "-f", "/tmp/image-updater-heartbeat"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30   # 5 min total startup window

@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+.env
+
+# Node / Frontend
+node_modules/
+dist/
+.DS_Store
+
+# Environment files (never commit real secrets)
+.env
+*.env.local
+
+# Kubernetes secrets with real values � covers all *.local.yaml files:
+#   k8s/secrets.local.yaml
+#   k8s/overlays/local-db/postgres-secrets.local.yaml
+#   (and any future *.local.yaml anywhere under k8s/)
+k8s/*.local.yaml
+k8s/**/*.local.yaml
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Database
+*.db
+*.sqlite
+
+# Logs
+*.log
+
+# ── Lockfiles are TRACKED, do NOT ignore ────────────────────────────────────
+# package-lock.json       (frontend, npm)
+# requirements.lock.txt   (backend, pip)
+# These are checked in to guarantee byte-for-byte reproducible builds.
+# Remove this block only if you have a good reason.
+
+

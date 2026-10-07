@@ -1,0 +1,21 @@
+#!/bin/sh
+# pre-push hook — runs TypeScript type-check before every push.
+# Prevents TS6133 / type errors from reaching CI or Docker build.
+#
+# Installed by: sh scripts/install-hooks.sh
+# To bypass in emergencies: git push --no-verify
+
+set -e
+
+FRONTEND_DIR="$(git rev-parse --show-toplevel)/frontend"
+
+if [ ! -d "$FRONTEND_DIR/node_modules" ]; then
+  echo "[pre-push] node_modules not found — skipping tsc check (run 'npm install' in frontend/ first)"
+  exit 0
+fi
+
+echo "[pre-push] Running tsc --noEmit in frontend/ ..."
+cd "$FRONTEND_DIR"
+npx tsc --noEmit
+
+echo "[pre-push] TypeScript OK — push proceeding."

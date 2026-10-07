@@ -1,0 +1,51 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# kustomization.yaml  —  BASE Kustomize entry point
+#
+# This is the shared base.  Do NOT apply this directly — use one of the
+# overlays instead:
+#
+#   With a local in-cluster PostgreSQL:
+#     kubectl apply -k k8s/overlays/local-db/
+#
+#   With an external PostgreSQL cluster (RDS, Supabase, self-hosted, etc.):
+#     kubectl apply -k k8s/overlays/external-db/
+#
+# Secrets must be applied separately (never committed):
+#   kubectl apply -f k8s/secrets.local.yaml
+#   kubectl apply -f k8s/overlays/local-db/secrets.local.yaml   # (local-db only)
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: elite-powerplay
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - backend.yaml
+  - frontend.yaml
+  - image-updater.yaml
+  - eddn-listener.yaml      # EDDN ZeroMQ subscriber (isolated deployment)
+  - ingress.yaml            # nginx-ingress controller
+
+# ── Image tags ────────────────────────────────────────────────────────────────
+# Override the :latest tag here to pin to a specific build SHA.
+# Get the SHA from: ghcr.io/rgconner/elite-powerplay-backend and
+#                   ghcr.io/rgconner/elite-powerplay-frontend
+# Example:
+#   images:
+#     - name: ghcr.io/rgconner/elite-powerplay-backend
+#       newTag: sha-5483e57
+#     - name: ghcr.io/rgconner/elite-powerplay-frontend
+#       newTag: sha-5483e57
+images:
+  - name: ghcr.io/rgconner/elite-powerplay-backend
+    newTag: latest
+  - name: ghcr.io/rgconner/elite-powerplay-frontend
+    newTag: latest
+  # image-updater pulls its own image from the registry at runtime — no
+  # override needed; the controller itself owns its update cycle.
+  - name: ghcr.io/rgconner/elite-powerplay-image-updater
+    newTag: latest
+  - name: ghcr.io/rgconner/elite-powerplay-eddn-listener
+    newTag: latest

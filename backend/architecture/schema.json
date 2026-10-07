@@ -1,0 +1,218 @@
+{
+  "version": "1.0.0",
+  "last_updated": "2026-07-24",
+  "description": "Architecture graph for the Elite Dangerous Power Play Analyzer. Updated whenever services, tables, or data flows change.",
+  "nodes": [
+    {
+      "id": "spansh-ingest",
+      "type": "service",
+      "label": "Spansh Ingest",
+      "description": "Polls Spansh search API every 24h for all 12 powers. Stores PP snapshots (reinforcement, undermining, control_progress) per system. Also fetches multi-power Unoccupied (Contested) systems in a second pass.",
+      "source_file": "backend/services/ingestion.py",
+      "schedule": "every 24 hours (configurable via SPANSH_INGEST_INTERVAL_HOURS)",
+      "tags": ["batch", "spansh", "ingestion"]
+    },
+    {
+      "id": "eddn-listener",
+      "type": "service",
+      "label": "EDDN Listener",
+      "description": "Subscribes to EDDN ZeroMQ relay (tcp://eddn.edcd.io:9500), filters for PowerplayMerits journal events. Deduplicates by messageID, resolves system_id64 from pp_systems, inserts raw events into pp_powerplay_events. Runs as isolated k8s deployment.",
+      "source_file": "eddn-listener/main.py",
+      "schedule": "continuous (event-driven)",
+      "tags": ["realtime", "eddn", "zmq", "stream"]
+    },
+    {
+      "id": "realtime-accumulator",
+      "type": "service",
+      "label": "Realtime Accumulator",
+      "description": "Runs every 60s via APScheduler. For each (power, system) pair, sums EDDN merits received since the last Spansh snapshot boundary. Converts merits to CPs at 4:1 ratio. Determines orientation (reinforcement vs undermining) based on controlling power. UPSERTs pp_realtime_state.",
+      "source_file": "backend/services/realtime_accumulator.py",
+      "schedule": "every 60 seconds",
+      "tags": ["realtime", "aggregation", "scheduler"]
+    },
+    {
+      "id": "scoring-engine",
+      "type": "service",
+      "label": "Scoring Engine",
+      "description": "Computes fortify/expand recommendations from Spansh snapshots + optional realtime deltas. Uses urgency model (days-to-failure, progress thresholds) for fortify scoring. Merit-proximity scoring for expand targets. Weights configurable via admin_settings.",
+      "source_file": "backend/services/scoring.py",
+      "tags": ["scoring", "recommendations", "fortify", "expand"]
+    },
+    {
+      "id": "decay-service",
+      "type": "service",
+      "label": "CP Decay Service",
+      "description": "Computes estimated CP merit decay once per cycle per system. Only for Stronghold/Fortified/Exploited states. Decay is stored in pp_system_snapshots.cp_decay.",
+      "source_file": "backend/services/decay.py",
+      "tags": ["decay", "cycle", "computation"]
+    },
+    {
+      "id": "edsm-sync",
+      "type": "service",
+      "label": "EDSM Sync",
+      "description": "Syncs faction influence data from EDSM API for systems already in the DB. Rate-limited to 1 req/sec.",
+      "source_file": "backend/services/edsm_sync.py",
+      "schedule": "every 6 hours (configurable)",
+      "tags": ["batch", "edsm", "factions"]
+    },
+    {
+      "id": "pp_systems",
+      "type": "table",
+      "label": "pp_systems",
+      "description": "One row per unique star system. Upserted each ingest by system_id64. Stores name, coordinates (x/y/z), allegiance, population.",
+      "source_file": "backend/models/models.py",
+      "columns": ["id", "system_id64", "name", "x", "y", "z", "allegiance", "population"]
+    },
+    {
+      "id": "pp_system_snapshots",
+      "type": "table",
+      "label": "pp_system_snapshots",
+      "description": "Insert-only time-series of Spansh PP data per system per ingest run. Never updated — each run appends new rows. Contains reinforcement, undermining, control_progress, power_state, spansh_updated_at, cp_decay.",
+      "source_file": "backend/models/models.py",
+      "columns": ["id", "system_id", "ingestion_run_id", "snapshot_time", "spansh_updated_at", "power", "power_state", "reinforcement", "undermining", "control_progress", "powers_list", "conflict_progress", "cp_decay", "decay_cycle_start"]
+    },
+    {
+      "id": "pp_powerplay_events",
+      "type": "table",
+      "label": "pp_powerplay_events",
+      "description": "Raw EDDN PowerplayMerits events (insert-only). Each row is a single player merit-earning event. Deduplicated by message_id. 30-day retention policy.",
+      "source_file": "backend/models/models.py",
+      "columns": ["id", "message_id", "uploader_id", "event_timestamp", "gateway_ts", "ingested_at", "schema_ref", "power", "system_name", "system_id64", "merits", "star_pos_x", "star_pos_y", "star_pos_z"]
+    },
+    {
+      "id": "pp_realtime_state",
+      "type": "table",
+      "label": "pp_realtime_state",
+      "description": "Accumulated real-time CP deltas per (power, system). UPSERTed every 60s by the accumulator. Stores merits since last Spansh boundary, CPs converted at 4:1, split into reinforcement/undermining based on orientation.",
+      "source_file": "backend/models/models.py",
+      "columns": ["power", "system_id64", "controlling_power", "state_at_boundary", "boundary_ts", "merits_since_ts", "cp_since_ts", "cp_as_reinforcement", "cp_as_undermining", "latest_event_ts", "refreshed_at"]
+    },
+    {
+      "id": "spansh_enrichment",
+      "type": "table",
+      "label": "spansh_enrichment",
+      "description": "Cached Spansh body/faction enrichment data per system. has_platinum, has_boom, has_pristine. First-access cache, no TTL.",
+      "source_file": "backend/models/models.py",
+      "columns": ["system_id64", "has_platinum", "has_boom", "has_pristine", "cached_at"]
+    },
+    {
+      "id": "ingestion_runs",
+      "type": "table",
+      "label": "ingestion_runs",
+      "description": "Audit log for each Spansh/EDSM ingestion job. Tracks source, status, started_at, completed_at, records_processed.",
+      "source_file": "backend/models/models.py",
+      "columns": ["id", "source", "started_at", "completed_at", "status", "records_processed"]
+    },
+    {
+      "id": "admin_settings",
+      "type": "table",
+      "label": "admin_settings",
+      "description": "Key/value store for scoring weights and app configuration. Tunable via admin panel.",
+      "source_file": "backend/models/models.py",
+      "columns": ["id", "key", "value"]
+    },
+    {
+      "id": "admin_users",
+      "type": "table",
+      "label": "admin_users",
+      "description": "Admin accounts for JWT-gated admin panel.",
+      "source_file": "backend/models/models.py",
+      "columns": ["id", "email", "hashed_password", "created_at"]
+    },
+    {
+      "id": "spansh-api",
+      "type": "external",
+      "label": "Spansh API",
+      "description": "https://spansh.co.uk/api/systems/search — PP system data with controlling_power filter. Also /api/system/{id64}, /api/body/{id64}, /api/dump/{id64}, /api/bodies/search for enrichment.",
+      "tags": ["external", "spansh", "api"]
+    },
+    {
+      "id": "eddn-relay",
+      "type": "external",
+      "label": "EDDN ZeroMQ Relay",
+      "description": "tcp://eddn.edcd.io:9500 — Public EDDN relay. Schema: journal/1. Forwards all ED journal events including PowerplayMerits.",
+      "tags": ["external", "eddn", "zmq", "stream"]
+    },
+    {
+      "id": "edsm-api",
+      "type": "external",
+      "label": "EDSM API",
+      "description": "https://www.edsm.net/api-v1/system — Faction influence and PP state per system. Rate-limited ~1 req/sec.",
+      "tags": ["external", "edsm", "api"]
+    },
+    {
+      "id": "api-powers",
+      "type": "endpoint",
+      "label": "GET /api/powers/{name}",
+      "description": "Returns all systems for a power with latest PP state, recommendations, contested systems, and realtime data.",
+      "source_file": "backend/routers/powers.py",
+      "tags": ["api", "read"]
+    },
+    {
+      "id": "api-realtime",
+      "type": "endpoint",
+      "label": "GET /api/powers/{name}/realtime",
+      "description": "Returns effective (blended) values: Spansh base + EDDN realtime deltas. Includes live flag and EST badge data.",
+      "source_file": "backend/routers/powers.py",
+      "tags": ["api", "read", "realtime"]
+    },
+    {
+      "id": "api-architecture",
+      "type": "endpoint",
+      "label": "GET /api/architecture/schema",
+      "description": "Returns the full architecture graph JSON. Admin-only.",
+      "source_file": "backend/routers/architecture.py",
+      "tags": ["api", "admin", "architecture"]
+    },
+    {
+      "id": "api-admin",
+      "type": "endpoint",
+      "label": "POST /api/admin/ingest/spansh",
+      "description": "Manually trigger Spansh ingestion. Admin-only. Runs as background task.",
+      "source_file": "backend/routers/admin.py",
+      "tags": ["api", "admin", "ingestion"]
+    },
+    {
+      "id": "api-spansh-enrich",
+      "type": "endpoint",
+      "label": "POST /api/spansh/enrich/batch",
+      "description": "Batch enrichment: returns cached PLAT/BOOM/PRISTINE data, fetching from Spansh on cache miss.",
+      "source_file": "backend/routers/spansh.py",
+      "tags": ["api", "enrichment"]
+    },
+    {
+      "id": "frontend",
+      "type": "service",
+      "label": "React Frontend",
+      "description": "React + TypeScript + Vite SPA. Views: TableView, TargetListView, Map2D, Map3D, AdminPage, ArchitecturePage. Served via nginx.",
+      "source_file": "frontend/src/",
+      "tags": ["frontend", "ui"]
+    }
+  ],
+  "edges": [
+    { "from": "spansh-api", "to": "spansh-ingest", "label": "HTTP POST (systems/search)", "type": "data_fetch" },
+    { "from": "spansh-ingest", "to": "pp_systems", "label": "UPSERT systems", "type": "write" },
+    { "from": "spansh-ingest", "to": "pp_system_snapshots", "label": "INSERT snapshots", "type": "write" },
+    { "from": "spansh-ingest", "to": "ingestion_runs", "label": "INSERT/UPDATE run status", "type": "write" },
+    { "from": "eddn-relay", "to": "eddn-listener", "label": "ZMQ SUB (journal/1)", "type": "stream" },
+    { "from": "eddn-listener", "to": "pp_powerplay_events", "label": "INSERT events", "type": "write" },
+    { "from": "eddn-listener", "to": "pp_systems", "label": "READ system_id64 lookup", "type": "read" },
+    { "from": "pp_powerplay_events", "to": "realtime-accumulator", "label": "READ events since boundary", "type": "read" },
+    { "from": "pp_system_snapshots", "to": "realtime-accumulator", "label": "READ boundary timestamps", "type": "read" },
+    { "from": "realtime-accumulator", "to": "pp_realtime_state", "label": "UPSERT CP deltas", "type": "write" },
+    { "from": "pp_system_snapshots", "to": "scoring-engine", "label": "READ base PP data", "type": "read" },
+    { "from": "pp_realtime_state", "to": "scoring-engine", "label": "READ live CP deltas", "type": "read" },
+    { "from": "admin_settings", "to": "scoring-engine", "label": "READ scoring weights", "type": "read" },
+    { "from": "scoring-engine", "to": "api-powers", "label": "recommendations data", "type": "api" },
+    { "from": "pp_realtime_state", "to": "api-realtime", "label": "READ realtime state", "type": "read" },
+    { "from": "pp_system_snapshots", "to": "api-realtime", "label": "READ base snapshots", "type": "read" },
+    { "from": "edsm-api", "to": "edsm-sync", "label": "HTTP GET (system data)", "type": "data_fetch" },
+    { "from": "spansh-api", "to": "api-spansh-enrich", "label": "HTTP GET (system/body/dump)", "type": "data_fetch" },
+    { "from": "api-spansh-enrich", "to": "spansh_enrichment", "label": "READ/WRITE cache", "type": "read_write" },
+    { "from": "api-powers", "to": "frontend", "label": "JSON response", "type": "api" },
+    { "from": "api-realtime", "to": "frontend", "label": "JSON response", "type": "api" },
+    { "from": "api-architecture", "to": "frontend", "label": "JSON schema", "type": "api" },
+    { "from": "decay-service", "to": "pp_system_snapshots", "label": "WRITE cp_decay", "type": "write" },
+    { "from": "pp_system_snapshots", "to": "decay-service", "label": "READ state for decay calc", "type": "read" }
+  ]
+}

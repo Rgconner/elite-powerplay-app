@@ -1,0 +1,37 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# configmap.yaml  —  non-secret runtime configuration
+#
+# All values here are safe to commit.  Secrets (passwords, keys) live in
+# secrets.yaml.  Edit this file directly on the cluster with:
+#   kubectl edit configmap elite-powerplay-config -n elite-powerplay
+# or re-apply after changing this file.
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: elite-powerplay-config
+  namespace: elite-powerplay
+  labels:
+    app.kubernetes.io/name: elite-powerplay
+data:
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
+  POSTGRES_DB:   "elite_powerplay"
+  POSTGRES_USER: "pp_user"
+
+  # ── AI / LLM ────────────────────────────────────────────────────────────────
+  # Set to "true" to enable LLM recommendation summaries.
+  # Requires ai-api-key to be set in the Secret.
+  LLM_ENABLED:   "false"
+  AI_PROVIDER:   "openai"
+  # Uncomment and set for a custom OpenAI-compatible endpoint:
+  # AI_BASE_URL:  "https://your-server:port/api/v1"
+  # AI_MODEL:     "your-model-name"
+  # AI_MAX_TOKENS: "512"
+
+  # ── Ingestion schedule ───────────────────────────────────────────────────────
+  # How often (in hours) to re-pull the Spansh bulk Power Play dataset.
+  # The dataset updates roughly every 24 h; lower values waste bandwidth.
+  SPANSH_INGEST_INTERVAL_HOURS: "24"
+
+  # How often (in hours) to run the EDSM supplemental sync (reserved).
+  EDSM_SYNC_INTERVAL_HOURS: "6"

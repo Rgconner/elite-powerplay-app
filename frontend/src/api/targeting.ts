@@ -1,0 +1,50 @@
+/** Target Analysis API client. */
+
+import { handleFetchError } from "./errors";
+
+export interface TargetAnalysisItem {
+  system_id64: number;
+  system_name: string;
+  controlling_power: string | null;
+  power_state: string | null;
+  control_progress: number | null;
+  reinforcement: number | null;
+  undermining: number | null;
+  score: number;
+  reasons: string[];
+  distance_from_attacker: number | null;
+  days_to_downgrade: number | null;
+  trend: "worsening" | "improving" | "stable" | "unknown";
+  /** True when our power already has a foothold in this system */
+  contested: boolean;
+  /** Estimated CP merit decay this cycle (merits) */
+  cp_decay: number | null;
+}
+
+export interface TargetAnalysisResponse {
+  targets: TargetAnalysisItem[];
+  attacker_power: string;
+  target_powers: string[];
+  /** Calibrated progress thresholds returned from backend (0.0–1.0 fractions) */
+  progress_thresholds: {
+    critical: number;
+    high: number;
+    medium: number;
+  };
+}
+
+export async function getTargetAnalysis(
+  attackerPower: string,
+  targetPowers: string[],
+): Promise<TargetAnalysisResponse> {
+  const res = await fetch("/api/powers/target-analysis", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      attacker_power: attackerPower,
+      target_powers: targetPowers,
+    }),
+  });
+  if (!res.ok) await handleFetchError(res);
+  return res.json() as Promise<TargetAnalysisResponse>;
+}

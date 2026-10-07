@@ -1,0 +1,118 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# CI — fast checks that run on every push / PR
+#
+# Jobs:
+#   frontend-typecheck  TypeScript compile check (tsc --noEmit)
+#                       Catches TS6133 unused vars, type errors, etc.
+#   frontend-build      Full Vite production build (catches bundler errors)
+#   backend-lint        Python syntax + unused-import check (pyflakes)
+#
+# These run in parallel and typically finish in ~2 minutes.
+# docker-publish.yml only fires after ALL jobs here pass (workflow_run gate).
+#
+# NOTE: package-lock.json must be committed to the repo for `npm ci` to work.
+# If it is missing, `npm install` is used as a fallback and the lockfile is
+# uploaded as an artifact so it can be committed.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  # ── TypeScript type-check ─────────────────────────────────────────────────
+  frontend-typecheck:
+    name: TypeScript type-check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v5
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          # NOTE: no cache: here — package-lock.json is not committed, so
+          # cache-dependency-path would crash the job. Install is fast enough.
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm install
+
+      - name: Type-check (tsc --noEmit)
+        # tsconfig.json has noUnusedLocals + noUnusedParameters = true,
+        # so this catches TS6133 unused variables before Docker even starts.
+        working-directory: frontend
+        run: npx tsc --noEmit
+
+  # ── Full Vite production build ────────────────────────────────────────────
+  frontend-build:
+    name: Vite production build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v5
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          # NOTE: no cache: here — package-lock.json is not committed
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm install
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+          retention-days: 3
+
+      # Upload generated lockfile as artifact so it can be committed to the repo
+      # (only runs when lockfile was missing — skipped when package-lock.json exists)
+      - name: Upload lockfile artifact (if newly generated)
+        if: ${{ !hashFiles('frontend/package-lock.json') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-lock-json
+          path: frontend/package-lock.json
+          retention-days: 7
+
+  # ── Python backend lint ───────────────────────────────────────────────────
+  backend-lint:
+    name: Python lint (pyflakes)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v5
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pyflakes
+        run: pip install pyflakes
+
+      - name: Run pyflakes on backend
+        # Exits non-zero on any unused import, undefined name, etc.
+        run: python -m pyflakes backend/
+
+      - name: Syntax check (py_compile)
+        # Catches bare SyntaxErrors that pyflakes might miss
+        run: |
+          find backend -name "*.py" | xargs python -m py_compile
+          echo "All backend .py files compile OK"

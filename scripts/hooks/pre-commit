@@ -1,0 +1,50 @@
+#!/bin/sh
+# pre-commit hook — runs TS type-check + Python syntax check before every commit.
+# Catches TS6133 unused vars and Python errors at your desk, not in CI.
+#
+# Installed by: sh scripts/install-hooks.sh
+# To bypass in emergencies: git commit --no-verify
+
+set -e
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+FRONTEND_DIR="$REPO_ROOT/frontend"
+
+# ── TypeScript type-check ────────────────────────────────────────────────────
+if [ -d "$FRONTEND_DIR/node_modules" ]; then
+  echo "[pre-commit] TypeScript: running tsc --noEmit ..."
+  cd "$FRONTEND_DIR"
+  npx tsc --noEmit
+  echo "[pre-commit] TypeScript: OK"
+  cd "$REPO_ROOT"
+else
+  echo "[pre-commit] TypeScript: node_modules not found — skipping (run 'npm install' in frontend/ first)"
+fi
+
+# ── Python syntax check ──────────────────────────────────────────────────────
+if command -v python3 >/dev/null 2>&1 || command -v python >/dev/null 2>&1; then
+  PYTHON=$(command -v python3 || command -v python)
+
+  # Only check staged .py files (fast — not the whole tree)
+  STAGED_PY=$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$' || true)
+
+  if [ -n "$STAGED_PY" ]; then
+    echo "[pre-commit] Python: syntax-checking staged .py files ..."
+    echo "$STAGED_PY" | xargs $PYTHON -m py_compile
+    echo "[pre-commit] Python syntax: OK"
+
+    if $PYTHON -c "import pyflakes" >/dev/null 2>&1; then
+      echo "[pre-commit] pyflakes: checking staged .py files ..."
+      echo "$STAGED_PY" | xargs $PYTHON -m pyflakes
+      echo "[pre-commit] pyflakes: OK"
+    else
+      echo "[pre-commit] pyflakes: not installed — skipping (pip install pyflakes to enable)"
+    fi
+  else
+    echo "[pre-commit] Python: no .py files staged — skipping"
+  fi
+else
+  echo "[pre-commit] Python: not found — skipping Python checks"
+fi
+
+echo "[pre-commit] All checks passed."

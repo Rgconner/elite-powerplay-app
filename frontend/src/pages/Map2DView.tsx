@@ -1,0 +1,322 @@
+import { useState, useEffect, useRef, useMemo } from "react";
+import * as d3 from "d3";
+import { getPowerSystems, PPSystemEntry } from "../api/powers";
+import { getRecommendations, RecommendationsResponse } from "../api/recommendations";
+import { useSelectionState } from "../hooks/useSelectionState";
+import { ppStateColor, PP_STATE_LABELS, PP_STATES_ORDERED } from "../constants/ppColors";
+import PowerSelector from "../components/PowerSelector";
+import RefSystemSelector from "../components/RefSystemSelector";
+import SystemListInput from "../components/SystemListInput";
+import LayoutModeSelector, { LayoutMode } from "../components/LayoutModeSelector";
+
+type Axis = "xz" | "xy" | "yz";
+
+function project(sys: PPSystemEntry, axis: Axis): [number, number] {
+  if (axis === "xz") return [sys.x, sys.z];
+  if (axis === "xy") return [sys.x, sys.y];
+  return [sys.y, sys.z];
+}
+
+function axisLabels(axis: Axis): [string, string] {
+  if (axis === "xz") return ["X (left/right)", "Z (forward/back)"];
+  if (axis === "xy") return ["X (left/right)", "Y (up/down)"];
+  return ["Y (up/down)", "Z (forward/back)"];
+}
+
+function buildPositions(
+  systems: PPSystemEntry[], axis: Axis, mode: LayoutMode, centerIdx: number | null
+): Map<number, [number, number]> {
+  const pos = new Map<number, [number, number]>();
+
+  if (mode === "actual") {
+    systems.forEach((s) => pos.set(s.system_id64, project(s, axis)));
+    return pos;
+  }
+
+  if (mode === "radial") {
+    const center = centerIdx != null ? systems[centerIdx] : systems[0];
+    const [cx, cy] = center ? project(center, axis) : [0, 0];
+    systems.forEach((s, i) => {
+      const dist = s.distance_from_center ?? Math.hypot(project(s, axis)[0] - cx, project(s, axis)[1] - cy);
+      const angle = (2 * Math.PI * i) / systems.length;
+      pos.set(s.system_id64, [dist * Math.cos(angle), dist * Math.sin(angle)]);
+    });
+    return pos;
+  }
+
+  // Force-directed
+  const pts: [number, number][] = systems.map((s) => project(s, axis));
+  for (let iter = 0; iter < 80; iter++) {
+    const forces: [number, number][] = pts.map(() => [0, 0]);
+    for (let i = 0; i < pts.length; i++) {
+      for (let j = i + 1; j < pts.length; j++) {
+        const dx = pts[j][0] - pts[i][0];
+        const dy = pts[j][1] - pts[i][1];
+        const dist = Math.hypot(dx, dy) || 0.001;
+        const rep = 200 / (dist * dist);
+        forces[i][0] -= rep * dx / dist; forces[i][1] -= rep * dy / dist;
+        forces[j][0] += rep * dx / dist; forces[j][1] += rep * dy / dist;
+      }
+    }
+    pts.forEach((p, i) => { p[0] += forces[i][0] * 0.5; p[1] += forces[i][1] * 0.5; });
+  }
+  systems.forEach((s, i) => pos.set(s.system_id64, pts[i]));
+  return pos;
+}
+
+// ── Slider sub-component ────────────────────────────────────────────────────
+
+function FilterSlider({
+  label, value, min, max, step, unit, onChange, disabled,
+}: {
+  label: string; value: number; min: number; max: number; step: number;
+  unit: string; onChange: (v: number) => void; disabled?: boolean;
+}) {
+  const pct = ((value - min) / (max - min)) * 100;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 180 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#8b949e" }}>
+        <span>{label}</span>
+        <span style={{ color: disabled ? "#555" : "#e6edf3", fontWeight: 600 }}>
+          {value >= max ? `Any` : `≤ ${value}${unit}`}
+        </span>
+      </div>
+      <input
+        type="range" min={min} max={max} step={step} value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(Number(e.target.value))}
+        style={{
+          width: "100%", accentColor: "#3b82d4", cursor: disabled ? "not-allowed" : "pointer",
+          opacity: disabled ? 0.4 : 1,
+        }}
+      />
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#444" }}>
+        <span>{min}{unit}</span>
+        <span style={{ background: `linear-gradient(to right, #3b82d4 ${pct}%, #21262d ${pct}%)`, borderRadius: 2, padding: "0 3px", fontSize: 10, color: "transparent" }}>.</span>
+        <span>Any</span>
+      </div>
+    </div>
+  );
+}
+
+interface TooltipData { x: number; y: number; system: PPSystemEntry; recoType: "fortify" | "expand" | null; }
+
+export default function Map2DView() {
+  const { powerName, refSystem, systemList, setPower, setRef, setSystemList } = useSelectionState();
+  const [systems, setSystems] = useState<PPSystemEntry[]>([]);
+  const [recommendations, setRecommendations] = useState<RecommendationsResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [axis, setAxis] = useState<Axis>("xz");
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>("actual");
+  const [tooltip, setTooltip] = useState<TooltipData | null>(null);
+
+  // ── Two separate filter sliders ────────────────────────────────────────────
+  // Slider 1: Max distance from reference system (LY). Only active when a ref is set.
+  const [maxDistLY, setMaxDistLY] = useState<number>(500);
+  // Slider 2: Min undermine ratio threshold (%). Show systems at or above this threat.
+  const [minThreatPct, setMinThreatPct] = useState<number>(0);
+
+  const svgRef = useRef<SVGSVGElement>(null);
+  const W = 800, H = 600;
+
+  const fortifySet = useMemo(() => new Set((recommendations?.fortify ?? []).map((r) => r.system_name)), [recommendations]);
+  const expandSet  = useMemo(() => new Set((recommendations?.expand  ?? []).map((r) => r.system_name)), [recommendations]);
+  function recoType(name: string): "fortify" | "expand" | null {
+    return fortifySet.has(name) ? "fortify" : expandSet.has(name) ? "expand" : null;
+  }
+
+  useEffect(() => {
+    if (!powerName) { setSystems([]); setRecommendations(null); return; }
+    setLoading(true);
+    Promise.all([
+      getPowerSystems(powerName, refSystem?.id),
+      getRecommendations(powerName, refSystem?.id),
+    ])
+      .then(([sys, recs]) => { setSystems(sys); setRecommendations(recs); })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [powerName, refSystem?.id]);
+
+  const centerIdx = useMemo(() => {
+    if (!refSystem) return null;
+    const i = systems.findIndex((s) => s.system_id64 === refSystem.id);
+    return i >= 0 ? i : null;
+  }, [systems, refSystem?.id]);
+
+  // Apply filters before building positions
+  const filteredSystems = useMemo(() => {
+    // System list filter takes precedence if active
+    const base = systemList.length > 0
+      ? systems.filter(s => systemList.some(n => n.toLowerCase() === s.name.toLowerCase()))
+      : systems;
+    return base.filter((s) => {
+      // Distance filter (only when ref selected)
+      if (refSystem && maxDistLY < 500) {
+        const dist = s.distance_from_center;
+        if (dist != null && dist > maxDistLY) return false;
+      }
+      // Threat % filter
+      if (minThreatPct > 0) {
+        const ratio = s.undermine_ratio ?? 0;
+        if (ratio * 100 < minThreatPct) return false;
+      }
+      return true;
+    });
+  }, [systems, refSystem, maxDistLY, minThreatPct]);
+
+  const positions = useMemo(
+    () => buildPositions(filteredSystems, axis, layoutMode, centerIdx),
+    [filteredSystems, axis, layoutMode, centerIdx]
+  );
+
+  useEffect(() => {
+    if (!svgRef.current || filteredSystems.length === 0) return;
+    const svg = d3.select(svgRef.current);
+    const g = svg.select<SVGGElement>("g.zoom-layer");
+    const zoom = d3.zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.1, 20])
+      .on("zoom", (event) => g.attr("transform", event.transform));
+    svg.call(zoom);
+    svg.call(zoom.transform, d3.zoomIdentity);
+  }, [filteredSystems, axis, layoutMode]);
+
+  const [scaleX, scaleY] = useMemo(() => {
+    const vals = Array.from(positions.values());
+    if (vals.length === 0) return [null, null];
+    const margin = 48;
+    const xs = vals.map((v) => v[0]);
+    const ys = vals.map((v) => v[1]);
+    const sx = d3.scaleLinear().domain([Math.min(...xs), Math.max(...xs)]).range([margin, W - margin]).nice();
+    const sy = d3.scaleLinear().domain([Math.min(...ys), Math.max(...ys)]).range([H - margin, margin]).nice();
+    return [sx, sy];
+  }, [positions]);
+
+  const [labelH, labelV] = axisLabels(axis);
+  const hiddenCount = systems.length - filteredSystems.length;
+
+  return (
+    <div style={{ padding: "16px 20px", background: "#0d1117", minHeight: "calc(100vh - 44px)", fontFamily: '-apple-system,"Segoe UI",system-ui,sans-serif', color: "#e6edf3" }}>
+      {/* Row 1: Controls */}
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
+        <PowerSelector value={powerName} onChange={setPower} />
+        <RefSystemSelector value={refSystem} onChange={setRef} />
+        <SystemListInput value={systemList} onChange={setSystemList} powerName={powerName} />
+        <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+          <span style={{ fontSize: 12, color: "#57606a" }}>Axis:</span>
+          {(["xz", "xy", "yz"] as Axis[]).map((a) => (
+            <button key={a} onClick={() => setAxis(a)} style={{ padding: "4px 10px", fontSize: 12, borderRadius: 4, border: "1px solid #e5e7eb", background: axis === a ? "#3b82d4" : "#fff", color: axis === a ? "#fff" : "#57606a", cursor: "pointer", fontFamily: "inherit" }}>
+              {a.toUpperCase()}
+            </button>
+          ))}
+        </div>
+        <LayoutModeSelector value={layoutMode} onChange={setLayoutMode} />
+        {loading && <span style={{ fontSize: 13, color: "#57606a" }}>Loading…</span>}
+      </div>
+
+      {/* Row 2: Two separate filter sliders */}
+      <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 10, padding: "10px 14px", background: "#161b22", borderRadius: 8, border: "1px solid #30363d" }}>
+        <FilterSlider
+          label="Max Distance from Reference (LY)"
+          value={maxDistLY}
+          min={10} max={500} step={10}
+          unit=" LY"
+          onChange={setMaxDistLY}
+          disabled={!refSystem}
+        />
+        <FilterSlider
+          label="Min Threat Level (Undermine %)"
+          value={minThreatPct}
+          min={0} max={100} step={5}
+          unit="%"
+          onChange={setMinThreatPct}
+        />
+        {hiddenCount > 0 && (
+          <span style={{ fontSize: 12, color: "#57606a", alignSelf: "center" }}>
+            {hiddenCount} system{hiddenCount !== 1 ? "s" : ""} hidden by filters
+          </span>
+        )}
+        {(maxDistLY < 500 || minThreatPct > 0) && (
+          <button
+            onClick={() => { setMaxDistLY(500); setMinThreatPct(0); }}
+            style={{ padding: "4px 10px", fontSize: 11, borderRadius: 4, border: "1px solid #555", background: "#21262d", color: "#8b949e", cursor: "pointer", alignSelf: "center" }}
+          >
+            Reset Filters
+          </button>
+        )}
+      </div>
+
+      {/* Row 3: Legend */}
+      <div style={{ display: "flex", gap: 12, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
+        {PP_STATES_ORDERED.map((state) => (
+          <span key={state} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#57606a" }}>
+            <span style={{ width: 9, height: 9, borderRadius: "50%", background: ppStateColor(state), display: "inline-block", flexShrink: 0 }} />
+            {PP_STATE_LABELS[state] ?? state}
+          </span>
+        ))}
+        <span style={{ fontSize: 11, color: "#57606a", marginLeft: 4 }}>
+          · ⭐ center · <span style={{ color: "#D94A4A" }}>●</span> Fortify · <span style={{ color: "#4A90D9" }}>●</span> Expand
+        </span>
+        {systems.length > 0 && (
+          <span style={{ fontSize: 11, color: "#57606a", marginLeft: "auto" }}>
+            {systemList.length > 0
+              ? `${filteredSystems.length} of ${systemList.length} listed (${systems.length} total)`
+              : `${filteredSystems.length} / ${systems.length} systems shown`}
+          </span>
+        )}
+      </div>
+
+      {/* Map */}
+      <div style={{ position: "relative", border: "1px solid #e5e7eb", borderRadius: 8, background: "#0a0a1a", overflow: "hidden" }}>
+        <svg ref={svgRef} width={W} height={H} style={{ display: "block" }}>
+          <g className="zoom-layer">
+            {scaleX && scaleY && filteredSystems.map((sys) => {
+              const p = positions.get(sys.system_id64);
+              if (!p) return null;
+              const cx2 = scaleX(p[0]);
+              const cy2 = scaleY(p[1]);
+              const isCenter = sys.system_id64 === refSystem?.id;
+              const reco = recoType(sys.name);
+              const color = ppStateColor(sys.power_state);
+              const r = 6;
+              return (
+                <g key={sys.system_id64} transform={`translate(${cx2},${cy2})`} style={{ cursor: "pointer" }}
+                  onMouseEnter={(e) => {
+                    const rect = (e.currentTarget.closest("svg") as SVGSVGElement).getBoundingClientRect();
+                    setTooltip({ x: e.clientX - rect.left + 12, y: e.clientY - rect.top - 8, system: sys, recoType: reco });
+                  }}
+                  onMouseLeave={() => setTooltip(null)}
+                >
+                  {reco === "fortify" && <circle r={r + 4} fill="none" stroke="#D94A4A" strokeWidth={2} opacity={0.8} />}
+                  {reco === "expand"  && <circle r={r + 4} fill="none" stroke="#4A90D9" strokeWidth={2} opacity={0.8} />}
+                  {isCenter ? (
+                    <polygon points="0,-10 3,-3 10,-3 4,2 6,10 0,5 -6,10 -4,2 -10,-3 -3,-3" fill="#FFD700" stroke="#fff" strokeWidth={1} />
+                  ) : (
+                    <circle r={r} fill={color} stroke="rgba(255,255,255,0.4)" strokeWidth={0.8} />
+                  )}
+                </g>
+              );
+            })}
+          </g>
+          <text x={W / 2} y={H - 4} textAnchor="middle" fontSize={11} fill="#57606a">{labelH}</text>
+          <text x={10} y={H / 2} textAnchor="middle" fontSize={11} fill="#57606a" transform={`rotate(-90,10,${H / 2})`}>{labelV}</text>
+        </svg>
+
+        {tooltip && (
+          <div style={{ position: "absolute", left: tooltip.x, top: tooltip.y, background: "rgba(10,10,26,0.92)", color: "#fff", padding: "8px 12px", borderRadius: 6, fontSize: 12, pointerEvents: "none", border: "1px solid #3b82d4", maxWidth: 240, zIndex: 10 }}>
+            <div style={{ fontWeight: 700, marginBottom: 4 }}>{tooltip.system.name}</div>
+            {tooltip.system.power_state && <div>State: <span style={{ color: ppStateColor(tooltip.system.power_state) }}>{PP_STATE_LABELS[tooltip.system.power_state] ?? tooltip.system.power_state}</span></div>}
+            {tooltip.system.reinforcement != null && <div>Reinforcement: {tooltip.system.reinforcement.toLocaleString()}</div>}
+            {tooltip.system.undermining != null && <div style={{ color: tooltip.system.undermining > 0 ? "#D94A4A" : undefined }}>Undermining: {tooltip.system.undermining.toLocaleString()}</div>}
+            {tooltip.system.undermine_ratio != null && <div>Threat: {(tooltip.system.undermine_ratio * 100).toFixed(0)}%</div>}
+            {tooltip.system.distance_from_center != null && <div>Distance: {tooltip.system.distance_from_center.toFixed(1)} LY</div>}
+            {tooltip.recoType === "fortify" && <div style={{ color: "#D94A4A", marginTop: 4, fontWeight: 600 }}>⚠ Fortify Priority</div>}
+            {tooltip.recoType === "expand"  && <div style={{ color: "#4A90D9", marginTop: 4, fontWeight: 600 }}>➕ Expansion Target</div>}
+          </div>
+        )}
+      </div>
+
+      {!powerName && <p style={{ color: "#57606a", fontSize: 14, marginTop: 16 }}>Select a Power to render the 2D map.</p>}
+      {powerName && !loading && systems.length === 0 && <p style={{ color: "#57606a", fontSize: 14, marginTop: 16 }}>No system data found. Run a Spansh PP ingest first.</p>}
+    </div>
+  );
+}

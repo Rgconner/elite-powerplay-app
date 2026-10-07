@@ -1,0 +1,97 @@
+/** Powers API client — typed fetch wrappers for Power Play endpoints. */
+
+import { handleFetchError } from "./errors";
+
+export interface PPSystemEntry {
+  system_id64: number;
+  name: string;
+  x: number;
+  y: number;
+  z: number;
+  allegiance: string | null;
+  population: number | null;
+  power: string | null;
+  power_state: string | null;
+  reinforcement: number | null;
+  undermining: number | null;
+  control_progress: number | null;
+  snapshot_time: string | null;
+  distance_from_center: number | null;
+  /** undermining / reinforcement ratio 0.0–1.0; null if no data */
+  undermine_ratio: number | null;
+  /** Estimated CP merit decay this cycle (merits) */
+  cp_decay: number | null;
+}
+
+export async function listPowers(): Promise<string[]> {
+  const res = await fetch("/api/powers");
+  if (!res.ok) await handleFetchError(res);
+  const data = await res.json() as { powers: string[] };
+  return data.powers;
+}
+
+export async function searchPowers(q: string): Promise<string[]> {
+  const res = await fetch(`/api/powers/search?q=${encodeURIComponent(q)}`);
+  if (!res.ok) await handleFetchError(res);
+  const data = await res.json() as { powers: string[] };
+  return data.powers;
+}
+
+export async function getPowerSystems(
+  powerName: string,
+  refSystemId64?: number,
+): Promise<PPSystemEntry[]> {
+  const params = new URLSearchParams();
+  if (refSystemId64 != null) params.set("ref_id", String(refSystemId64));
+  const qs = params.size > 0 ? `?${params.toString()}` : "";
+  const res = await fetch(`/api/powers/${encodeURIComponent(powerName)}/systems${qs}`);
+  if (!res.ok) await handleFetchError(res);
+  return res.json() as Promise<PPSystemEntry[]>;
+}
+
+/** Trigger an async refresh of stale Power Play data for the given systems.
+ * Returns immediately; the backend refreshes in the background.
+ * The frontend should re-fetch getPowerSystems() after a short delay. */
+export async function refreshStaleSystems(systemIds: number[]): Promise<{ status: string; count: number; message: string }> {
+  const res = await fetch("/api/powers/refresh-stale", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ system_ids: systemIds }),
+  });
+  if (!res.ok) await handleFetchError(res);
+  return res.json();
+}
+
+/** Realtime system data from EDDN ZeroMQ stream */
+export interface RealtimeSystemData {
+  system_id64: number;
+  name: string;
+  power_state: string | null;
+  base_reinforcement: number;
+  base_undermining: number;
+  base_control_progress: number;
+  realtime: {
+    merits_since_spansh: number;
+    cp_since_spansh: number;
+    cp_as_reinforcement: number;
+    cp_as_undermining: number;
+    latest_event_at: string | null;
+    refreshed_at: string | null;
+  } | null;
+  effective_reinforcement: number;
+  effective_undermining: number;
+  effective_control_progress: number;
+  is_live: boolean;
+}
+
+export interface RealtimeResponse {
+  systems: RealtimeSystemData[];
+  total_live_systems: number;
+}
+
+/** Get realtime Power Play data blended with Spansh snapshots */
+export async function getPowerRealtime(powerName: string): Promise<RealtimeResponse> {
+  const res = await fetch(`/api/powers/${encodeURIComponent(powerName)}/realtime`);
+  if (!res.ok) await handleFetchError(res);
+  return res.json() as Promise<RealtimeResponse>;
+}
