@@ -56,7 +56,10 @@
  *                      Architecture visualization page (admin-only) with D3 graph.
  *                      Realtime endpoint GET /api/powers/{name}/realtime for blended
  *                      Spansh + EDDN data. EST badge shows live CP estimates.
+ *   2.1.3  2026-10-07  Power selector is now a dropdown of all Powers instead of a
+ *                      free-text search box, styled for the dark theme. Removed the
+ *                      unused searchPowers() API client.
  */
 
-export const FRONTEND_VERSION      = "2.1.1";
-export const FRONTEND_RELEASE_DATE = "2026-07-24T12:00:00Z";
+export const FRONTEND_VERSION      = "2.1.3";
+export const FRONTEND_RELEASE_DATE = "2026-10-07T16:00:00Z";

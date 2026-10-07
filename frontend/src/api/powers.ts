@@ -30,13 +30,6 @@ export async function listPowers(): Promise<string[]> {
   return data.powers;
 }
 
-export async function searchPowers(q: string): Promise<string[]> {
-  const res = await fetch(`/api/powers/search?q=${encodeURIComponent(q)}`);
-  if (!res.ok) await handleFetchError(res);
-  const data = await res.json() as { powers: string[] };
-  return data.powers;
-}
-
 export async function getPowerSystems(
   powerName: string,
   refSystemId64?: number,

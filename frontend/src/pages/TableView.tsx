@@ -687,7 +687,7 @@ export default function TableView() {
       {/* Empty states */}
       {!powerName && (
         <p style={{ color: "#8b949e", fontSize: 14, marginTop: 24 }}>
-          Search for a Power above to populate the table.
+          Select a Power above to populate the table.
         </p>
       )}
       {powerName && !loadingSystems && systems.length === 0 && (
