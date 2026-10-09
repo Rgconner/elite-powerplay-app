@@ -48,6 +48,12 @@ try:
         "ALTER TABLE pp_system_snapshots "
         "ADD COLUMN IF NOT EXISTS spansh_updated_at TIMESTAMP"
     ))
+    # Snapshots written outside a Spansh ingest run (EDDN live state from the
+    # eddn-listener, /refresh-stale) carry ingestion_run_id = NULL.
+    _conn.execute(_text(
+        "ALTER TABLE pp_system_snapshots "
+        "ALTER COLUMN ingestion_run_id DROP NOT NULL"
+    ))
 
     # ── Merit decay columns (PP2.0 CP decay mechanic) ──────────────────────
     _conn.execute(_text(

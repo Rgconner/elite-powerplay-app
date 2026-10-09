@@ -46,14 +46,16 @@ spec:
           limits:
             memory: "256Mi"
             cpu: "200m"
-        # Liveness: the main loop writes /tmp/eddn_heartbeat every iteration.
-        # If the file is missing or older than 120 s the loop has stalled.
+        # Liveness: /tmp/eddn_heartbeat is touched on every EDDN message
+        # received (not every loop pass), so this checks that data is flowing.
+        # The listener reconnects itself after WATCHDOG_SILENCE_SECONDS (120 s)
+        # of silence; if that has not restored the feed by 300 s, restart.
         livenessProbe:
           exec:
             command:
             - /bin/sh
             - -c
-            - "test $(( $(date +%s) - $(date +%s -r /tmp/eddn_heartbeat 2>/dev/null || echo 0) )) -lt 120"
+            - "test $(( $(date +%s) - $(date +%s -r /tmp/eddn_heartbeat 2>/dev/null || echo 0) )) -lt 300"
           initialDelaySeconds: 60
           periodSeconds: 30
           timeoutSeconds: 5

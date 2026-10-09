@@ -109,7 +109,8 @@ class PPSystemSnapshot(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     system_id = Column(Integer, ForeignKey("pp_systems.id"), nullable=False, index=True)
-    ingestion_run_id = Column(Integer, ForeignKey("ingestion_runs.id"), nullable=False, index=True)
+    # NULL for snapshots written outside a Spansh run (EDDN live state, refresh-stale)
+    ingestion_run_id = Column(Integer, ForeignKey("ingestion_runs.id"), nullable=True, index=True)
     snapshot_time = Column(DateTime, default=func.now(), nullable=False, index=True)
 
     # When Spansh last received a game-data update for this system.

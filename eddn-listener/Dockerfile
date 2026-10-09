@@ -1,3 +1,5 @@
+# Build context is the repo root (see .github/workflows/docker-publish.yml) so
+# the listener can share backend/services/decay.py instead of duplicating it.
 FROM python:3.13-slim
 
 WORKDIR /app
@@ -10,10 +12,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
-COPY requirements.txt ./
+COPY eddn-listener/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application source
-COPY main.py ./
+COPY backend/services/decay.py ./
+COPY eddn-listener/main.py ./
 
 CMD ["python", "main.py"]
