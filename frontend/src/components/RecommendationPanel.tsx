@@ -14,7 +14,12 @@ interface Props {
   loadingContested: boolean;
   enrichment?: Record<number, SpanshEnrichment>;
   enriching?: boolean;
+  /** Selected power — always shown in contested standings */
+  powerName?: string | null;
 }
+
+// Powers below this share of the leader's points are folded into one line
+const MINOR_SHARE_OF_LEADER = 0.05;
 
 // ── Urgency band helpers ───────────────────────────────────────────────────
 
@@ -338,7 +343,7 @@ function Section({ title, items, color, enrichment }: { title: string; items: Re
 
 // ── Contested Systems section ──────────────────────────────────────────────
 
-function ContestedRow({ item }: { item: ContestedSystemInfo }) {
+function ContestedRow({ item, powerName }: { item: ContestedSystemInfo; powerName?: string | null }) {
   const conflictEntries = parseConflictProgress(item);
   // progress is normalised 0–1+ where 1.0 = acquisition threshold (120,000 merits)
 
@@ -376,7 +381,11 @@ href={`https://inara.cz/elite/starsystem/?search=${encodeURIComponent(item.syste
           most points at cycle end wins, so the leader is the 100% reference */}
       {conflictEntries.length > 0 ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-          {rankConflict(conflictEntries).map((s) => {
+          {(() => {
+            const ranked = rankConflict(conflictEntries);
+            const shown = ranked.filter(s => s.isLeader || s.power === powerName || s.relative >= MINOR_SHARE_OF_LEADER);
+            const minor = ranked.filter(s => !shown.includes(s));
+            return <>{shown.map((s) => {
             const color = powerColor(s.power);
             const pastThreshold = s.progress >= 1.0;
             return (
@@ -404,6 +413,15 @@ href={`https://inara.cz/elite/starsystem/?search=${encodeURIComponent(item.syste
               </div>
             );
           })}
+            {minor.length > 0 && (
+              <div style={{ fontSize: 10, color: "#57606a" }}
+                   title={minor.map(s => `${s.power}: ${s.cp.toLocaleString()} CP`).join("\n")}>
+                +{minor.length} other{minor.length === 1 ? "" : "s"} under {(MINOR_SHARE_OF_LEADER * 100).toFixed(0)}% of leader
+                {" "}({minor.map(s => s.power).join(", ")})
+              </div>
+            )}
+            </>;
+          })()}
         </div>
       ) : (
         /* Fallback: simple single bar when no conflict data */
@@ -422,7 +440,7 @@ href={`https://inara.cz/elite/starsystem/?search=${encodeURIComponent(item.syste
   );
 }
 
-function ContestedSection({ items, loading }: { items: ContestedSystemInfo[]; loading: boolean }) {
+function ContestedSection({ items, loading, powerName }: { items: ContestedSystemInfo[]; loading: boolean; powerName?: string | null }) {
   if (!loading && items.length === 0) return null;
   return (
     <div style={{ flex: 1, minWidth: 280 }}>
@@ -438,12 +456,12 @@ function ContestedSection({ items, loading }: { items: ContestedSystemInfo[]; lo
         Systems with no serious rival are under Expansion Targets instead.
       </p>
       {loading && <p style={{ fontSize: 13, color: "#57606a", margin: 0 }}>Loading…</p>}
-      {!loading && items.slice(0, 20).map((item) => <ContestedRow key={item.system_id64} item={item} />)}
+      {!loading && items.slice(0, 20).map((item) => <ContestedRow key={item.system_id64} item={item} powerName={powerName} />)}
     </div>
   );
 }
 
-export default function RecommendationPanel({ recommendations, loading, contested, loadingContested, enrichment, enriching }: Props) {
+export default function RecommendationPanel({ recommendations, loading, contested, loadingContested, enrichment, enriching, powerName }: Props) {
   const [collapsed, setCollapsed] = useState(false);
 
   const criticalCount = recommendations?.fortify.filter(i => i.score >= 950 || i.days_to_failure === 0).length ?? 0;
@@ -516,7 +534,7 @@ export default function RecommendationPanel({ recommendations, loading, conteste
                   <Section title="Expansion Targets"  items={recommendations.expand}  color="#4A90D9" enrichment={enrichment} />
                 </>
               )}
-              <ContestedSection items={contested} loading={loadingContested} />
+              <ContestedSection items={contested} loading={loadingContested} powerName={powerName} />
             </div>
           )}
         </div>

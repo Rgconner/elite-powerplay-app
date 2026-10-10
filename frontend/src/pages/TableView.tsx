@@ -669,6 +669,7 @@ export default function TableView() {
         loadingContested={loadingContested}
         enrichment={enrichment}
         enriching={enriching}
+        powerName={powerName}
       />
 
       {/* Empty states */}
