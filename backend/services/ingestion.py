@@ -128,6 +128,42 @@ ALL_POWERS = [
 # ---------------------------------------------------------------------------
 
 
+# Spansh returns the odd 502/503 mid-ingest; without a retry one bad page
+# failed the whole run (several runs a month).
+RETRY_DELAYS = (5, 15, 30, 60)   # seconds before attempts 2..5
+
+
+def _post_search(payload: dict, label: str, metrics: Optional[dict] = None) -> dict:
+    """POST a Spansh systems/search query, retrying transient failures."""
+    if metrics is not None:
+        metrics["pages_fetched"] += 1
+    for attempt in range(len(RETRY_DELAYS) + 1):
+        if metrics is not None:
+            metrics["api_calls"] += 1
+        try:
+            resp = requests.post(SPANSH_SEARCH_URL, json=payload, timeout=60)
+            resp.raise_for_status()
+            if metrics is not None:
+                metrics["bytes_downloaded"] += len(resp.content)
+            return resp.json()
+        except Exception as exc:
+            if metrics is not None:
+                metrics["api_errors"] += 1
+                metrics["errors"].append(f"[{label} attempt={attempt + 1}] {exc}"[:256])
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            transient = (
+                isinstance(exc, (requests.ConnectionError, requests.Timeout))
+                or status == 429
+                or (status is not None and status >= 500)
+            )
+            if not transient or attempt == len(RETRY_DELAYS):
+                raise
+            delay = RETRY_DELAYS[attempt]
+            logger.warning("Spansh %s failed (%s); retrying in %ds", label, exc, delay)
+            time.sleep(delay)
+    raise RuntimeError("unreachable")
+
+
 def _fetch_page_by_power(power: str, page: int, metrics: Optional[dict] = None) -> dict:
     """Fetch one page of systems for a power (controlling_power filter)."""
     payload = {
@@ -138,21 +174,7 @@ def _fetch_page_by_power(power: str, page: int, metrics: Optional[dict] = None) 
         "page": page,
         "sort": [{"id64": {"direction": "asc"}}],
     }
-    if metrics is not None:
-        metrics["api_calls"] += 1
-        metrics["pages_fetched"] += 1
-    try:
-        resp = requests.post(SPANSH_SEARCH_URL, json=payload, timeout=60)
-        resp.raise_for_status()
-        if metrics is not None:
-            metrics["bytes_downloaded"] += len(resp.content)
-        return resp.json()
-    except Exception as exc:
-        if metrics is not None:
-            metrics["api_errors"] += 1
-            err_msg = f"[page_by_power power={power!r} page={page}] {exc}"
-            metrics["errors"].append(err_msg[:256])
-        raise
+    return _post_search(payload, f"page_by_power power={power!r} page={page}", metrics)
 
 
 def _fetch_page_unoccupied(page: int, metrics: Optional[dict] = None) -> dict:
@@ -171,21 +193,7 @@ def _fetch_page_unoccupied(page: int, metrics: Optional[dict] = None) -> dict:
         "page": page,
         "sort": [{"id64": {"direction": "asc"}}],
     }
-    if metrics is not None:
-        metrics["api_calls"] += 1
-        metrics["pages_fetched"] += 1
-    try:
-        resp = requests.post(SPANSH_SEARCH_URL, json=payload, timeout=60)
-        resp.raise_for_status()
-        if metrics is not None:
-            metrics["bytes_downloaded"] += len(resp.content)
-        return resp.json()
-    except Exception as exc:
-        if metrics is not None:
-            metrics["api_errors"] += 1
-            err_msg = f"[page_unoccupied page={page}] {exc}"
-            metrics["errors"].append(err_msg[:256])
-        raise
+    return _post_search(payload, f"page_unoccupied page={page}", metrics)
 
 
 def _iter_power_systems(power: str, metrics: Optional[dict] = None):
