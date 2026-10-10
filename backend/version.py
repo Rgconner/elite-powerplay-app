@@ -157,5 +157,5 @@ Version history:
                        gains bytes_downloaded/pages_fetched to match backend payload.
  """
 
-BACKEND_VERSION      = "2.2.1"
+BACKEND_VERSION      = "2.2.2"
 BACKEND_RELEASE_DATE = "2026-10-10T03:00:00Z"

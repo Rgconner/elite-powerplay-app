@@ -55,6 +55,14 @@ try:
         "ALTER TABLE pp_system_snapshots "
         "ALTER COLUMN ingestion_run_id DROP NOT NULL"
     ))
+    # The eddn-listener first stored multi-power Unoccupied systems under the
+    # journal's raw 'Unoccupied'; the ingest and all contested queries use
+    # 'Contested'.  Relabel those live rows (idempotent).
+    _conn.execute(_text(
+        "UPDATE pp_system_snapshots SET power_state = 'Contested' "
+        "WHERE ingestion_run_id IS NULL AND power IS NULL "
+        "AND power_state = 'Unoccupied'"
+    ))
 
     # ── Merit decay columns (PP2.0 CP decay mechanic) ──────────────────────
     _conn.execute(_text(

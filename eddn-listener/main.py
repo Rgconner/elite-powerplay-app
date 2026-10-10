@@ -346,6 +346,10 @@ def extract_pp_state(msg: dict) -> Optional[dict]:
     powers = msg.get("Powers") or []
     if controlling is None and len(powers) < 2:
         return None
+    if controlling is None:
+        # Multi-power Unoccupied: stored under the ingest's internal
+        # 'Contested' label, which every contested query filters on
+        power_state = "Contested"
 
     # Journal: [{"Power": .., "ConflictProgress": ..}]  ->  Spansh-style
     # [{"power": .., "progress": ..}] as stored by the ingest.
