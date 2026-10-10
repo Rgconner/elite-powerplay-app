@@ -164,119 +164,107 @@ def _post_search(payload: dict, label: str, metrics: Optional[dict] = None) -> d
     raise RuntimeError("unreachable")
 
 
-def _fetch_page_by_power(power: str, page: int, metrics: Optional[dict] = None) -> dict:
-    """Fetch one page of systems for a power (controlling_power filter)."""
-    payload = {
-        "filters": {
-            "controlling_power": {"value": [power], "comparison": "="}
-        },
-        "size": PAGE_SIZE,
-        "page": page,
-        "sort": [{"id64": {"direction": "asc"}}],
-    }
-    return _post_search(payload, f"page_by_power power={power!r} page={page}", metrics)
+# Spansh's search caps any query at this many results: "count" tops out at
+# 10,000 and pages past it fail.  A single Unoccupied query (~35,000 real
+# systems) once silently lost everything past the first 10k.  _iter_search
+# splits any query that reaches the cap into halves of its X-coordinate range
+# until every piece fits, so a power growing past 10k systems keeps working.
+SPANSH_MAX_RESULTS = 10_000
+X_EXTENT = 100_000.0      # ly; comfortably beyond the galaxy on either side of Sol
+MAX_SPLIT_DEPTH = 24      # 200k ly halved 24 times is ~0.01 ly
 
 
-def _fetch_page_unoccupied(power: str, page: int, metrics: Optional[dict] = None) -> dict:
-    """Fetch one page of Unoccupied systems that have *power* present.
+def _iter_search(filters: dict, label: str, metrics: Optional[dict] = None):
+    """Yield every Spansh search result for *filters*, each id64 once.
 
-    These are the 'contested' systems in PP2.0: power_state=Unoccupied but
-    power[] contains 2+ entries, indicating multiple powers vying for control.
-    Spansh does NOT have a 'Contested' state — the multi-power Unoccupied
-    state IS the contested representation.
+    Pages through the results; a query whose count reaches
+    SPANSH_MAX_RESULTS is split by X range (see above).  Range ends are
+    inclusive, so a system on a split boundary can appear twice and is
+    deduplicated here.
     """
-    payload = {
-        "filters": {
-            "power_state": {"value": ["Unoccupied"], "comparison": "="},
-            "power": {"value": [power], "comparison": "="},
-        },
-        "size": PAGE_SIZE,
-        "page": page,
-        "sort": [{"id64": {"direction": "asc"}}],
-    }
-    return _post_search(payload, f"page_unoccupied power={power!r} page={page}", metrics)
+    seen: set[int] = set()
+    yield from _iter_search_range(filters, label, metrics, -X_EXTENT, X_EXTENT, 0, seen)
 
 
-def _iter_power_systems(power: str, metrics: Optional[dict] = None):
-    """Yield all system dicts for a given power, paging through the API."""
+def _iter_search_range(filters, label, metrics, lo, hi, depth, seen):
+    ranged = {**filters, "x": {"value": [lo, hi], "comparison": "<=>"}}
     page = 0
-    total_reported = None
+    total = None
 
     while True:
-        logger.debug("Fetching page %d for power '%s'", page, power)
-        data = _fetch_page_by_power(power, page, metrics)
+        data = _post_search(
+            {"filters": ranged, "size": PAGE_SIZE, "page": page,
+             "sort": [{"id64": {"direction": "asc"}}]},
+            f"{label} x=[{lo:g},{hi:g}] page={page}", metrics,
+        )
 
-        if total_reported is None:
-            total_reported = data.get("count", 0)
-            logger.info("  Power '%s': %d systems reported by API", power, total_reported)
+        if total is None:
+            total = data.get("count", 0)
+            if depth == 0:
+                logger.info("  %s: %d systems reported by API", label, total)
+            if total >= SPANSH_MAX_RESULTS:
+                if depth < MAX_SPLIT_DEPTH:
+                    mid = (lo + hi) / 2
+                    logger.info("  %s x=[%g,%g] hit the %d-result cap; splitting at x=%g",
+                                label, lo, hi, SPANSH_MAX_RESULTS, mid)
+                    yield from _iter_search_range(filters, label, metrics, lo, mid, depth + 1, seen)
+                    yield from _iter_search_range(filters, label, metrics, mid, hi, depth + 1, seen)
+                    return
+                logger.warning("  %s x=[%g,%g] still at the %d-result cap after %d splits; "
+                               "systems past it are missing", label, lo, hi, SPANSH_MAX_RESULTS, depth)
 
         results = data.get("results", [])
         if not results:
             break
 
-        yield from results
-        page += 1
+        for r in results:
+            sid = r.get("id64")
+            if sid in seen:
+                continue
+            seen.add(sid)
+            yield r
 
-        # Stop if we've seen all systems (avoid infinite loop on API quirks)
-        if total_reported is not None and (page * PAGE_SIZE) >= total_reported:
+        page += 1
+        if (page * PAGE_SIZE) >= min(total, SPANSH_MAX_RESULTS):
             break
 
         time.sleep(REQUEST_DELAY)
 
 
-# Spansh's search caps any query at this many results: "count" tops out at
-# 10,000 and pages past it fail.  A single Unoccupied query (~35,000 real
-# systems) silently lost everything past the first 10k, so the pass is split
-# per power, each of which is well under the cap.
-SPANSH_MAX_RESULTS = 10_000
+def _iter_power_systems(power: str, metrics: Optional[dict] = None):
+    """Yield all systems a power controls."""
+    yield from _iter_search(
+        {"controlling_power": {"value": [power], "comparison": "="}},
+        f"Power '{power}'", metrics,
+    )
 
 
 def _iter_unoccupied_systems(metrics: Optional[dict] = None):
     """Yield each multi-power Unoccupied system from the Spansh API once.
 
-    PP2.0 contested systems appear as Unoccupied with a 'power' list containing
-    2+ power names and a 'power_conflict_progress' array.  Queried per power
-    (see SPANSH_MAX_RESULTS); a system with several powers shows up in several
-    queries and is yielded only the first time.
+    These are the 'contested' systems in PP2.0: power_state=Unoccupied but
+    power[] contains 2+ entries, indicating multiple powers vying for control.
+    Spansh does NOT have a 'Contested' state — the multi-power Unoccupied
+    state IS the contested representation.
+
+    Queried per power, which keeps each query small; a system with several
+    powers shows up in several queries and is yielded only the first time.
     """
     seen: set[int] = set()
 
     for power in ALL_POWERS:
-        page = 0
-        total_reported = None
-
-        while True:
-            logger.debug("Fetching Unoccupied systems for '%s' page %d", power, page)
-            data = _fetch_page_unoccupied(power, page, metrics)
-
-            if total_reported is None:
-                total_reported = data.get("count", 0)
-                logger.info("  Unoccupied systems with '%s': %d reported by API", power, total_reported)
-                if total_reported >= SPANSH_MAX_RESULTS:
-                    logger.warning(
-                        "  Unoccupied query for '%s' hit Spansh's %d-result cap; "
-                        "systems past it are missing", power, SPANSH_MAX_RESULTS,
-                    )
-
-            results = data.get("results", [])
-            if not results:
-                break
-
+        for r in _iter_search(
+            {"power_state": {"value": ["Unoccupied"], "comparison": "="},
+             "power": {"value": [power], "comparison": "="}},
+            f"Unoccupied with '{power}'", metrics,
+        ):
             # Only yield systems with 2+ powers (the genuinely contested ones)
             # to avoid ingesting tens of thousands of irrelevant Unoccupied rows.
-            for r in results:
-                raw_p = r.get("power")
-                sid = r.get("id64")
-                if isinstance(raw_p, list) and len(raw_p) >= 2 and sid not in seen:
-                    seen.add(sid)
-                    yield r
-
-            page += 1
-
-            if (page * PAGE_SIZE) >= min(total_reported, SPANSH_MAX_RESULTS):
-                break
-
-            time.sleep(REQUEST_DELAY)
+            raw_p = r.get("power")
+            sid = r.get("id64")
+            if isinstance(raw_p, list) and len(raw_p) >= 2 and sid not in seen:
+                seen.add(sid)
+                yield r
 
 
 # ---------------------------------------------------------------------------
