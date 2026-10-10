@@ -2,6 +2,7 @@
 import type { CSSProperties } from "react";
 import { ppStateColor, PP_STATE_LABELS } from "../constants/ppColors";
 import type { RecommendationItem } from "../api/recommendations";
+import { isPriorCycle } from "../utils/cycle";
 
 // ── PP State badge ─────────────────────────────────────────────────────────
 
@@ -134,13 +135,15 @@ export function PlatBadge() {
 
 // ── BOOM badge ────────────────────────────────────────────────────────────
 
-export function BoomBadge() {
+export function BoomBadge({ stations }: { stations?: number }) {
   return (
-    <span style={{
-      background: "#2a2000", color: "#D9A84A", border: "1px solid #D9A84A44",
-      borderRadius: 3, padding: "1px 6px", fontSize: 10, fontWeight: 700,
-    }}>
-      💥 BOOM
+    <span
+      title={stations ? `${stations} station${stations === 1 ? "" : "s"} with a booming controlling faction` : undefined}
+      style={{
+        background: "#2a2000", color: "#D9A84A", border: "1px solid #D9A84A44",
+        borderRadius: 3, padding: "1px 6px", fontSize: 10, fontWeight: 700,
+      }}>
+      💥 BOOM{stations && stations > 1 ? ` ×${stations}` : ""}
     </span>
   );
 }
@@ -217,6 +220,26 @@ export function TargetScoreBadge({ score }: { score: number }) {
         {score.toFixed(1)}
       </span>
     </div>
+  );
+}
+
+// ── Last-cycle badge ───────────────────────────────────────────────────────
+
+/** Shown when a system hasn't been observed since the cycle tick, so its
+ *  R/U figures are last cycle's (the game resets them at the tick). */
+export function PriorCycleBadge({ observedAt }: { observedAt: string | null | undefined }) {
+  if (!isPriorCycle(observedAt)) return null;
+  return (
+    <span
+      title={`Not observed since this cycle's Thursday tick (last seen ${observedAt} UTC). Reinforcement and undermining shown are from LAST cycle; nobody has visited the system since.`}
+      style={{
+        background: "#2d1a00", color: "#FF8C00", border: "1px solid #FF8C0044",
+        borderRadius: 3, padding: "1px 6px", fontSize: 10, fontWeight: 700,
+        cursor: "help", marginLeft: 6,
+      }}
+    >
+      LAST CYCLE
+    </span>
   );
 }
 

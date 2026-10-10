@@ -3,6 +3,7 @@
 import logging
 import os
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI, Request
@@ -88,6 +89,19 @@ try:
         "ALTER TABLE spansh_enrichment "
         "ADD COLUMN IF NOT EXISTS has_pristine BOOLEAN NOT NULL DEFAULT FALSE"
     ))
+    # boom_stations: per-station Boom count.  Everything cached before it
+    # existed is wrong (Metal Rich platinum, system-wide Boom, and failed
+    # fetches cached as all-False), so purge the cache once when adding it.
+    _has_boom_stations = _conn.execute(_text(
+        "SELECT 1 FROM information_schema.columns "
+        "WHERE table_name = 'spansh_enrichment' AND column_name = 'boom_stations'"
+    )).first()
+    if _has_boom_stations is None:
+        _conn.execute(_text(
+            "ALTER TABLE spansh_enrichment "
+            "ADD COLUMN boom_stations INTEGER NOT NULL DEFAULT 0"
+        ))
+        _conn.execute(_text("DELETE FROM spansh_enrichment"))
 
     # ── EDDN PowerplayMerits events table (insert-only, raw event store) ────
     _conn.execute(_text(
@@ -278,17 +292,44 @@ def run_realtime_accumulator_task():
         db.close()
 
 
+def _first_spansh_run_time() -> datetime:
+    """When the first scheduled Spansh ingest should run after startup.
+
+    An interval trigger alone counts from process start, so every restart
+    pushed the ingest back a full interval (a restart 14h before a due run
+    skipped that day entirely).  Anchor to the last completed run instead,
+    and run shortly after startup if one is overdue.
+    """
+    soon = datetime.now(timezone.utc) + timedelta(minutes=2)
+    try:
+        with engine.connect() as conn:
+            last = conn.execute(_text(
+                "SELECT MAX(started_at) FROM ingestion_runs "
+                "WHERE source = 'spansh_pp' AND status = 'completed'"
+            )).scalar()
+    except Exception:
+        logger.warning("Could not read last Spansh ingest time", exc_info=True)
+        return soon
+    if last is None:
+        return soon
+    due = last.replace(tzinfo=timezone.utc) + timedelta(hours=SPANSH_INGEST_INTERVAL_HOURS)
+    return max(due, soon)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     scheduler = BackgroundScheduler()
+    first_run = _first_spansh_run_time()
     scheduler.add_job(
         run_spansh_ingest_task,
         trigger="interval",
         hours=SPANSH_INGEST_INTERVAL_HOURS,
+        next_run_time=first_run,
         id="spansh_ingest",
         max_instances=1,
         coalesce=True,
     )
+    logger.info("First Spansh PP ingest at %s", first_run.isoformat())
     scheduler.add_job(
         run_realtime_accumulator_task,
         trigger="interval",

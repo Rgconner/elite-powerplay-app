@@ -173,9 +173,15 @@ POWER_ALLEGIANCE: dict[str, str] = {
 # Absolute merit thresholds (confirmed game constants)
 # ──────────────────────────────────────────────────────────────────────────────
 
-MERIT_ACQUIRE    = 120_000   # cumulative merits to acquire (Unoccupied → Exploited)
-MERIT_FORTIFIED  = 333_000   # cumulative merits for Fortified
-MERIT_STRONGHOLD = 667_000   # cumulative merits for Stronghold
+MERIT_ACQUIRE    = 120_000   # control points to acquire (Unoccupied → Exploited)
+
+# Control-point tier floors.  The tiers are Exploited 0–350k, Fortified
+# 350k–1M, Stronghold 1M–2M.  Measured 2026-10-10 from live journal data:
+# Δ(R−U)/Δcontrol_progress within a cycle is exactly 350,000 / 650,000 /
+# 1,000,000 per state (control_progress is the live fraction of the band).
+MERIT_EXPLOITED  = 0
+MERIT_FORTIFIED  = 350_000
+MERIT_STRONGHOLD = 1_000_000
 
 # Minimum control points for a power to be considered an active participant
 # in a contested system -- the real PowerPlay conflict threshold, the point
@@ -193,9 +199,9 @@ MERIT_STRONGHOLD = 667_000   # cumulative merits for Stronghold
 CONTESTED_MIN_CONTROL_POINTS: float = 30_000 / 120_000  # 0.25
 
 # Band widths — merits between downgrade and upgrade thresholds per state
-BAND_EXPLOITED   = MERIT_FORTIFIED  - MERIT_ACQUIRE    # 213,000
-BAND_FORTIFIED   = MERIT_STRONGHOLD - MERIT_FORTIFIED  # 334,000
-BAND_STRONGHOLD  = BAND_FORTIFIED                      # open-ended; use Fortified band as proxy
+BAND_EXPLOITED   = MERIT_FORTIFIED  - MERIT_EXPLOITED  # 350,000
+BAND_FORTIFIED   = MERIT_STRONGHOLD - MERIT_FORTIFIED  # 650,000
+BAND_STRONGHOLD  = 1_000_000                           # 1M → 2M
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Urgency model constants
@@ -260,10 +266,10 @@ def _band_width(power_state: Optional[str]) -> float:
 def _lower_threshold(power_state: Optional[str]) -> int:
     """Return the absolute lower merit threshold (downgrade boundary) for a state."""
     return {
-        "Exploited":  MERIT_ACQUIRE,
+        "Exploited":  MERIT_EXPLOITED,
         "Fortified":  MERIT_FORTIFIED,
         "Stronghold": MERIT_STRONGHOLD,
-    }.get(power_state or "", MERIT_ACQUIRE)
+    }.get(power_state or "", MERIT_EXPLOITED)
 
 
 def _merit_fields(
@@ -273,7 +279,7 @@ def _merit_fields(
     """Compute absolute merit context fields from progress + state.
 
     Returns a dict with:
-      merit_position    — absolute position on the 0→667k merit scale
+      merit_position    — absolute position on the 0→2M control-point scale
       buffer_merits     — merits above downgrade threshold (cushion)
       merits_to_safety  — additional merits needed to reach 50% progress (safe zone)
       merits_to_upgrade — additional merits needed to reach 100% (next state)

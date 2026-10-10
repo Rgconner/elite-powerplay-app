@@ -444,23 +444,12 @@ def record_pp_state(state: dict, db_session, cache: dict) -> bool:
         else:
             system_db_id = entry["system_db_id"]
 
-        # CP decay is computed once per cycle per system (mirrors ingestion.py)
+        # CP decay depends only on start-of-cycle progress (mirrors ingestion.py)
         cycle = current_cycle_start()
-        cp_decay_val = db_session.execute(
-            text("""
-                SELECT cp_decay FROM pp_system_snapshots
-                WHERE system_id = :sid
-                  AND decay_cycle_start = :cycle
-                  AND cp_decay IS NOT NULL
-                ORDER BY snapshot_time DESC
-                LIMIT 1
-            """),
-            {"sid": system_db_id, "cycle": cycle},
-        ).scalar()
-        if cp_decay_val is None:
-            cp_decay_val = compute_cp_decay(
-                state["power_state"], state["control_progress"], state["undermining"]
-            )
+        cp_decay_val = compute_cp_decay(
+            state["power_state"], state["control_progress"],
+            state["reinforcement"], state["undermining"],
+        )
 
         # spansh_updated_at means "when the game data was observed"; for a
         # live row that is the journal event time, so the stale filters and

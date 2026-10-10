@@ -3,6 +3,7 @@ import { RecommendationsResponse, RecommendationItem } from "../api/recommendati
 import { ContestedSystemInfo, parseConflictProgress } from "../api/contested";
 import { ppStateColor, PP_STATE_LABELS, powerColor, CP_DECAY_COLOR } from "../constants/ppColors";
 import { effectiveUndermining, netValue } from "../utils/decay";
+import { MERIT_FORTIFIED, MERIT_STRONGHOLD, MERIT_MAX } from "../utils/scoring";
 import type { SpanshEnrichment } from "../api/spansh";
 import { PlatBadge, BoomBadge, PristBadge } from "./SharedCells";
 
@@ -61,10 +62,6 @@ function DaysBar({ progress, daysToFailure }: { progress: number | null; daysToF
   );
 }
 
-// Absolute merit thresholds (must match backend scoring.py)
-const MERIT_ACQUIRE    = 120_000;
-const MERIT_FORTIFIED  = 333_000;
-const MERIT_STRONGHOLD = 667_000;
 
 function fmt(n: number): string {
   return n.toLocaleString();
@@ -143,9 +140,9 @@ function MeritBar({ item }: { item: RecommendationItem }) {
   if (item.merit_position == null || item.control_progress == null) return null;
   // Expand items use ExpandConflictBars instead
   if (item.type === "expand") return null;
-  // Fortify items: full 0 → 667k scale
+  // Fortify items: full 0 → 2M control-point scale
   const pos = item.merit_position;
-  const pct = Math.min(100, Math.max(0, (pos / MERIT_STRONGHOLD) * 100));
+  const pct = Math.min(100, Math.max(0, (pos / MERIT_MAX) * 100));
   const p = item.control_progress;
   const barColor = p <= 0   ? "#D94A4A"
                  : p < 0.25 ? "#FF4444"
@@ -159,8 +156,8 @@ function MeritBar({ item }: { item: RecommendationItem }) {
       {/* Scale bar */}
       <div style={{ position: "relative", height: 8, borderRadius: 4, background: "#21262d", overflow: "visible", marginBottom: 2 }}>
         {/* Threshold markers */}
-        <div style={{ position: "absolute", left: `${(MERIT_ACQUIRE / MERIT_STRONGHOLD) * 100}%`, top: -2, bottom: -2, width: 1, background: "#4A90D9", opacity: 0.6 }} title="Acquire threshold (120k)" />
-        <div style={{ position: "absolute", left: `${(MERIT_FORTIFIED / MERIT_STRONGHOLD) * 100}%`, top: -2, bottom: -2, width: 1, background: "#D9A84A", opacity: 0.6 }} title="Fortified threshold (333k)" />
+        <div style={{ position: "absolute", left: `${(MERIT_FORTIFIED / MERIT_MAX) * 100}%`, top: -2, bottom: -2, width: 1, background: "#D9A84A", opacity: 0.6 }} title="Fortified threshold (350k)" />
+        <div style={{ position: "absolute", left: `${(MERIT_STRONGHOLD / MERIT_MAX) * 100}%`, top: -2, bottom: -2, width: 1, background: "#4A90D9", opacity: 0.6 }} title="Stronghold threshold (1M)" />
         {/* Fill */}
         <div style={{ height: "100%", width: `${pct}%`, background: barColor, borderRadius: 4, transition: "width 0.3s" }} />
         {/* Position marker */}
@@ -169,9 +166,9 @@ function MeritBar({ item }: { item: RecommendationItem }) {
       {/* Labels */}
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "#555", marginBottom: 4 }}>
         <span>0</span>
-        <span style={{ color: "#4A90D9" }}>120k</span>
-        <span style={{ color: "#D9A84A" }}>333k</span>
-        <span>667k</span>
+        <span style={{ color: "#D9A84A" }}>350k</span>
+        <span style={{ color: "#4A90D9" }}>1M</span>
+        <span>2M</span>
       </div>
       {/* Merit figures */}
       <div style={{ display: "flex", gap: 12, fontSize: 11, flexWrap: "wrap" }}>
@@ -229,7 +226,7 @@ function ItemRow({ item, enrichment }: { item: RecommendationItem; enrichment?: 
         </a>
         {/* Enrichment badges */}
         {enc?.has_platinum && <PlatBadge />}
-        {enc?.has_boom && <BoomBadge />}
+        {enc?.has_boom && <BoomBadge stations={enc.boom_stations} />}
         {enc?.has_pristine && <PristBadge />}
         {item.power_state && (
           <span style={{

@@ -1,23 +1,27 @@
 /** Scoring utilities for the Target List tab. */
 
-// ── Merit thresholds per state (mirrors backend constants) ─────────────────
-export const MERIT_ACQUIRE   = 120_000;  // Unoccupied → Exploited (acquisition)
-export const MERIT_FORTIFIED = 333_000;  // Exploited → Fortified
-export const MERIT_STRONGHOLD= 667_000;  // Fortified → Stronghold
+// ── Control-point thresholds per state (mirrors backend/services/scoring.py) ─
+// Tiers are Exploited 0–350k, Fortified 350k–1M, Stronghold 1M–2M (measured
+// from live journal data: control_progress is the live fraction of the band).
+// Acquisition is a separate 0 → 120k scale for Unoccupied systems.
+export const MERIT_ACQUIRE   = 120_000;    // Unoccupied → Exploited (acquisition)
+export const MERIT_FORTIFIED = 350_000;    // Exploited → Fortified
+export const MERIT_STRONGHOLD= 1_000_000;  // Fortified → Stronghold
+export const MERIT_MAX       = 2_000_000;  // top of the Stronghold tier
 
-const BAND_UNOCCUPIED = MERIT_ACQUIRE;                        // 120_000 (0 → 120k)
-const BAND_EXPLOITED  = MERIT_FORTIFIED - MERIT_ACQUIRE;      // 213_000
-const BAND_FORTIFIED  = MERIT_STRONGHOLD - MERIT_FORTIFIED;   // 334_000
-const BAND_STRONGHOLD = MERIT_STRONGHOLD - MERIT_FORTIFIED;   // proxy (open-ended)
+const BAND_UNOCCUPIED = MERIT_ACQUIRE;                        // 120,000 (0 → 120k)
+const BAND_EXPLOITED  = MERIT_FORTIFIED;                      // 350,000 (0 → 350k)
+const BAND_FORTIFIED  = MERIT_STRONGHOLD - MERIT_FORTIFIED;   // 650,000
+const BAND_STRONGHOLD = MERIT_MAX - MERIT_STRONGHOLD;         // 1,000,000
 
 /** Return (merits earned, merits needed for next state) given state and progress.
  *
  *  State           Lower threshold   Band width    Next state
  *  ─────────────   ───────────────   ───────────   ──────────
  *  Unoccupied/null 0                 120,000       Exploited
- *  Exploited       120,000           213,000       Fortified
- *  Fortified       333,000           334,000       Stronghold
- *  Stronghold      667,000           334,000       (open-ended)
+ *  Exploited       0                 350,000       Fortified
+ *  Fortified       350,000           650,000       Stronghold
+ *  Stronghold      1,000,000         1,000,000     (top tier)
  */
 export function meritsToNextState(
   state: string | null,
@@ -25,8 +29,7 @@ export function meritsToNextState(
 ): { meritsEarned: number; meritsNeeded: number; meritsRemaining: number } {
   const lower = state === "Stronghold" ? MERIT_STRONGHOLD
                : state === "Fortified"  ? MERIT_FORTIFIED
-               : state === "Exploited"  ? MERIT_ACQUIRE
-               : 0;  // Unoccupied or null — acquisition starts at 0
+               : 0;  // Exploited tier and acquisition both start at 0
   const band  = state === "Stronghold" ? BAND_STRONGHOLD
                : state === "Fortified"  ? BAND_FORTIFIED
                : state === "Exploited"  ? BAND_EXPLOITED

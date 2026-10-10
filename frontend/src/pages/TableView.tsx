@@ -5,6 +5,8 @@ import { getContestedSystems, ContestedSystemInfo, parseConflictProgress, format
 import { useSelectionState } from "../hooks/useSelectionState";
 import { ppStateColor, PP_STATE_LABELS } from "../constants/ppColors";
 import { netValue } from "../utils/decay";
+import { getLastCycleReset, isPriorCycle } from "../utils/cycle";
+import { PriorCycleBadge } from "../components/SharedCells";
 import PowerSelector from "../components/PowerSelector";
 import RefSystemSelector from "../components/RefSystemSelector";
 import SystemListInput from "../components/SystemListInput";
@@ -13,22 +15,7 @@ import { useFilterSettings, FILTER_DEFAULTS } from "../hooks/useFilterSettings";
 import { getSpanshEnrichmentBatch, SpanshEnrichment } from "../api/spansh";
 
 // ── PP Cycle clock helpers ─────────────────────────────────────────────────
-// Cycles reset every Thursday at 07:00 UTC
-
-function getLastCycleReset(): Date {
-  const now = new Date();
-  // Thursday = day 4 (0=Sun)
-  const day = now.getUTCDay();
-  const daysSinceThurs = (day + 7 - 4) % 7;
-  const resetDate = new Date(Date.UTC(
-    now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - daysSinceThurs, 7, 0, 0
-  ));
-  // If reset is in the future (before 07:00 on Thursday), step back one week
-  if (resetDate > now) {
-    resetDate.setUTCDate(resetDate.getUTCDate() - 7);
-  }
-  return resetDate;
-}
+// Cycles reset every Thursday at 07:00 UTC (getLastCycleReset in utils/cycle)
 
 function getNextCycleReset(): Date {
   const last = getLastCycleReset();
@@ -753,6 +740,7 @@ href={`https://inara.cz/elite/starsystem/?search=${encodeURIComponent(sys.name)}
                       >
                         {sys.name}
                       </a>
+                      <PriorCycleBadge observedAt={sys.spansh_updated_at} />
                     </td>
 
                     {/* PP State */}
@@ -858,7 +846,7 @@ href={`https://inara.cz/elite/starsystem/?search=${encodeURIComponent(sys.name)}
                     const r   = item.reinforcement ?? 0;
                     const u   = item.undermining   ?? 0;
                     const net = r - u;
-                    const stale = isStale(item.spansh_updated_at);
+                    const stale = isStale(item.spansh_updated_at) || isPriorCycle(item.spansh_updated_at);
                     const rowBg = stale
                       ? (i % 2 === 0 ? "#1a1200" : "#201500")   // amber tint for stale
                       : (i % 2 === 0 ? "#120d00" : "#1a1200");

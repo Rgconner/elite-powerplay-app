@@ -501,7 +501,7 @@ href={`https://inara.cz/elite/starsystem/?search=${encodeURIComponent(row.name)}
                   {hasPlat && <PlatBadge />}
 
                   {/* BOOM badge */}
-                  {hasBoom && <BoomBadge />}
+                  {hasBoom && <BoomBadge stations={enc?.boom_stations} />}
 
                   {/* PRIST badge */}
                   {hasPrist && <PristBadge />}

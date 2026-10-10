@@ -867,7 +867,7 @@ def _refresh_stale_sync(system_ids: list[int]):
                 continue
 
             # Compute CP decay
-            cp_decay_val = compute_cp_decay(power_state, control_progress, undermining)
+            cp_decay_val = compute_cp_decay(power_state, control_progress, reinforcement, undermining)
 
             # Insert snapshot
             db.execute(

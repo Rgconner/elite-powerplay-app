@@ -3,8 +3,9 @@
 import { handleFetchError } from "./errors";
 
 export interface SpanshEnrichment {
-  has_platinum: boolean;
-  has_boom: boolean;
+  has_platinum: boolean;   // Platinum hotspot in a Metallic ring
+  has_boom: boolean;       // boom_stations > 0
+  boom_stations: number;   // market stations whose controlling faction is in Boom
   has_pristine: boolean;
 }
 
@@ -14,8 +15,8 @@ export interface BatchEnrichResponse {
 
 /**
  * Fetch cached PLAT/BOOM/PRISTINE enrichment for one or more system IDs.
- * Missing data is fetched from Spansh on the server side and cached
- * persistently (no TTL — data is pulled on first access and kept).
+ * Missing or expired data is fetched from Spansh on the server side and
+ * cached for 12 hours (Boom comes and goes, so it can't be kept forever).
  *
  * @param systemIds  Array of system_id64 values to enrich
  * @param forceRefresh  If true, bypass the cache and re-fetch from Spansh.

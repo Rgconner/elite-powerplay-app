@@ -1,35 +1,30 @@
-"""Power Play merit decay calculation.
+"""Power Play control-point decay calculation.
 
-PP 2.0 introduces a "merit decay" mechanic: at the start of each cycle
-(Thursday 07:00 UTC), a percentage of Control Points (CP) decays based on
-the system's power state and control progress. This estimated decay is
-subtracted from the undermining value to compute the "effective undermining"
-and thus the true Net (R − U_eff).
+At each cycle tick (Thursday 07:00 UTC) a system whose control progress is
+above 25% of its tier decays.  The game books that decay as undermining for
+the new cycle, so the journal's PowerplayStateUndermining already includes
+it; subtracting it back out gives the "effective undermining" from real
+opposing activity, and thus the true Net (R − U_eff).
 
-Decay rates (linear interpolation):
-  Below 25% progress: 0% decay (no decay at all)
+Measured 2026-10-10 from ~5,100 live journal observations (FSDJump/Location
+via EDDN + Spansh), as the floor of undermining against start-of-cycle
+progress.  The fit is exact — every progress bin and percentile gives the
+same constant:
 
-  Stronghold:
-    25.1% progress → 2.6% of CP
-    100% progress  → 15.6% of CP  (linear between)
+    decay = k × band × max(0, p0 − 0.25)
 
-  Fortified:
-    25.1% progress → 0.1% of CP
-    89% progress   → 10.9% of CP  (extrapolated to 100%)
+    state        band (CP)   k        decay at 100%
+    Exploited      350,000   1/12        21,875
+    Fortified      650,000   0.170833    83,281
+    Stronghold   1,000,000   5/24       156,250
 
-  Exploited:
-    25.1% progress → 0.1% of CP
-    89% progress   → 5.3% of CP   (extrapolated to 100%)
+p0 is the progress at the tick.  The journal's control_progress is live
+(it moves with this cycle's R and U), so:
 
-  Acquisition / Unoccupied / Contested: 0% decay
+    p0 = control_progress − (reinforcement − undermining) / band
 
-CP (Control Points) = absolute merit position:
-  CP = lower_threshold + (progress × band_width)
-
-CP_decay = CP × decay_rate
-effective_undermining = max(0, undermining − CP_decay)
-
-The decay is computed once per cycle per system and stored on the snapshot.
+Decay never takes a system below 25% of its tier, so it can't downgrade a
+system on its own.  Acquisition / Unoccupied systems don't decay.
 """
 
 from __future__ import annotations
@@ -41,37 +36,27 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Absolute merit thresholds (must match scoring.py)
+# Tier bands (control points; must match scoring.py) and decay slopes
 # ──────────────────────────────────────────────────────────────────────────────
 
-MERIT_ACQUIRE    = 120_000
-MERIT_FORTIFIED  = 333_000
-MERIT_STRONGHOLD = 667_000
+BAND_EXPLOITED  = 350_000     # 0 → 350k
+BAND_FORTIFIED  = 650_000     # 350k → 1M
+BAND_STRONGHOLD = 1_000_000   # 1M → 2M
 
-BAND_EXPLOITED  = MERIT_FORTIFIED  - MERIT_ACQUIRE    # 213,000
-BAND_FORTIFIED  = MERIT_STRONGHOLD - MERIT_FORTIFIED  # 334,000
-BAND_STRONGHOLD = BAND_FORTIFIED                      # 334,000 (proxy)
+_BANDS = {
+    "Exploited":  BAND_EXPLOITED,
+    "Fortified":  BAND_FORTIFIED,
+    "Stronghold": BAND_STRONGHOLD,
+}
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Decay rate endpoints  (min_progress, min_rate, max_progress, max_rate)
-# ──────────────────────────────────────────────────────────────────────────────
+# Decay per unit of band above the 25% floor
+_DECAY_SLOPE = {
+    "Exploited":  1 / 12,     # 0.083333
+    "Fortified":  0.170833,
+    "Stronghold": 5 / 24,     # 0.208333
+}
 
-# Stronghold: 2.6% at 25.1% → 15.6% at 100%
-_DECAY_STRONGHOLD = (0.251, 0.026, 1.0, 0.156)
-
-# Fortified: 0.1% at 25.1% → 10.9% at 89%, extrapolated to 100%
-# Slope = (0.109 - 0.001) / (0.89 - 0.251) = 0.108 / 0.639 = 0.16901
-# At 100%: 0.001 + (1.0 - 0.251) × 0.16901 = 0.001 + 0.12657 = 0.12757
-_FORT_SLOPE = (0.109 - 0.001) / (0.89 - 0.251)
-_FORT_MAX_100 = 0.001 + (1.0 - 0.251) * _FORT_SLOPE
-_DECAY_FORTIFIED = (0.251, 0.001, 1.0, round(_FORT_MAX_100, 6))
-
-# Exploited: 0.1% at 25.1% → 5.3% at 89%, extrapolated to 100%
-# Slope = (0.053 - 0.001) / (0.89 - 0.251) = 0.052 / 0.639 = 0.08138
-# At 100%: 0.001 + (1.0 - 0.251) × 0.08138 = 0.001 + 0.06095 = 0.06195
-_EXP_SLOPE = (0.053 - 0.001) / (0.89 - 0.251)
-_EXP_MAX_100 = 0.001 + (1.0 - 0.251) * _EXP_SLOPE
-_DECAY_EXPLOITED = (0.251, 0.001, 1.0, round(_EXP_MAX_100, 6))
+DECAY_FLOOR = 0.25
 
 # PP cycle reset: Thursday 07:00 UTC
 _RESET_WEEKDAY = 3          # Monday=0 … Thursday=3
@@ -103,109 +88,60 @@ def current_cycle_start(now: Optional[datetime] = None) -> datetime:
     return cycle
 
 
-def _lower_threshold(power_state: Optional[str]) -> int:
-    """Absolute lower merit threshold (downgrade boundary) for a state."""
-    return {
-        "Exploited":  MERIT_ACQUIRE,
-        "Fortified":  MERIT_FORTIFIED,
-        "Stronghold": MERIT_STRONGHOLD,
-    }.get(power_state or "", MERIT_ACQUIRE)
-
-
-def _band_width(power_state: Optional[str]) -> float:
-    """Merit band width for a given power state."""
-    return {
-        "Exploited":  float(BAND_EXPLOITED),
-        "Fortified":  float(BAND_FORTIFIED),
-        "Stronghold": float(BAND_STRONGHOLD),
-    }.get(power_state or "", float(BAND_EXPLOITED))
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Decay rate calculation
-# ──────────────────────────────────────────────────────────────────────────────
-
-
-def _decay_rate(power_state: Optional[str], progress: float) -> float:
-    """Compute the merit decay rate (0.0–1.0) for a system.
-
-    Returns a fraction (e.g. 0.026 = 2.6%) based on linear interpolation
-    between the min and max endpoints for the given power state.
-
-    Returns 0.0 for states that don't decay (Acquisition/Unoccupied/Contested)
-    or when progress is below 25%.
-    """
-    if progress < 0.251:
-        return 0.0
-
-    endpoints = {
-        "Stronghold": _DECAY_STRONGHOLD,
-        "Fortified":  _DECAY_FORTIFIED,
-        "Exploited":  _DECAY_EXPLOITED,
-    }.get(power_state or "")
-
-    if endpoints is None:
-        return 0.0
-
-    min_prog, min_rate, max_prog, max_rate = endpoints
-
-    # Clamp progress to [min_prog, max_prog]
-    p = max(min_prog, min(max_prog, progress))
-
-    # Linear interpolation
-    if max_prog == min_prog:
-        return min_rate
-
-    t = (p - min_prog) / (max_prog - min_prog)
-    return min_rate + t * (max_rate - min_rate)
-
-
 # ──────────────────────────────────────────────────────────────────────────────
 # Public API
 # ──────────────────────────────────────────────────────────────────────────────
 
 
+def start_of_cycle_progress(
+    power_state: Optional[str],
+    control_progress: Optional[float],
+    reinforcement: Optional[int],
+    undermining: Optional[int],
+) -> Optional[float]:
+    """Back out this cycle's R/U from the live progress to get progress at the tick."""
+    band = _BANDS.get(power_state or "")
+    if band is None or control_progress is None:
+        return None
+    return control_progress - ((reinforcement or 0) - (undermining or 0)) / band
+
+
 def compute_cp_decay(
     power_state: Optional[str],
     control_progress: Optional[float],
+    reinforcement: Optional[int],
     undermining: Optional[int],
 ) -> int:
-    """Compute the estimated CP merit decay for a system this cycle.
+    """Compute the control-point decay booked as undermining this cycle.
 
-    Returns the decay in raw merits (integer), capped at the undermining
-    value so effective_undermining never goes below 0.
+    Returns an integer, capped at the undermining value so effective
+    undermining never goes below 0.  Constant across a cycle for a given
+    system, since it depends only on the progress at the tick.
 
     Parameters
     ----------
     power_state : str or None
         The PP state: "Stronghold", "Fortified", "Exploited", etc.
     control_progress : float or None
-        Normalised progress 0.0–1.0+ within the current state band.
-    undermining : int or None
-        Total undermining merits delivered this cycle.
+        Live progress 0.0–1.0+ within the current tier band.
+    reinforcement, undermining : int or None
+        Control points delivered this cycle (undermining includes decay).
     """
-    if power_state not in ("Stronghold", "Fortified", "Exploited"):
+    slope = _DECAY_SLOPE.get(power_state or "")
+    if slope is None:
         return 0
 
-    p = control_progress if control_progress is not None else 0.0
-    u = undermining if undermining is not None else 0
-
+    u = undermining or 0
     if u <= 0:
         return 0
 
-    rate = _decay_rate(power_state, p)
-    if rate <= 0.0:
+    p0 = start_of_cycle_progress(power_state, control_progress, reinforcement, undermining)
+    if p0 is None or p0 <= DECAY_FLOOR:
         return 0
 
-    # Compute absolute CP
-    cp = _lower_threshold(power_state) + (p * _band_width(power_state))
-    cp = max(0.0, cp)
-
-    # Raw decay in merits
-    raw_decay = cp * rate
-
-    # Cap at undermining value (effective U floors at 0)
-    return min(int(raw_decay), u)
+    # No clamp at 1.0: Strongholds above 100% fit the same line
+    decay = slope * _BANDS[power_state] * (p0 - DECAY_FLOOR)
+    return min(int(round(decay)), u)
 
 
 def effective_undermining(

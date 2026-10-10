@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef, type CSSProperties } from "react";
 import { getTargetAnalysis, TargetAnalysisItem } from "../api/targeting";
 import { netValue } from "../utils/decay";
-import { meritsToSafety } from "../utils/scoring";
+import { meritsToSafety, meritsToNextState } from "../utils/scoring";
 import { listPowers } from "../api/powers";
 import { ppStateColor, PP_STATE_LABELS, powerColor } from "../constants/ppColors";
 import { getSpanshEnrichmentBatch, SpanshEnrichment } from "../api/spansh";
@@ -11,24 +11,10 @@ import { PlatBadge, BoomBadge, PristBadge } from "../components/SharedCells";
 
 type SortDir = "asc" | "desc";
 
-// ── Band constants (same as backend) ─────────────────────────────────────
-// Used to display "≈ N merits" labels next to progress threshold sliders
-const BAND_EXPLOITED  = 213_000;  // 333k − 120k
-const BAND_FORTIFIED  = 334_000;  // 667k − 333k
-const BAND_STRONGHOLD = 334_000;  // proxy
-const MERIT_ACQUIRE   = 120_000;
-const MERIT_FORTIFIED = 333_000;
-const MERIT_STRONGHOLD= 667_000;
-
-/** Absolute merit position given progress in a state */
+/** Absolute control-point position given progress in a state.
+ *  Used to display "≈ N merits" labels next to progress threshold sliders. */
 function meritPos(state: string | null, progress: number): number {
-  const lower = state === "Stronghold" ? MERIT_STRONGHOLD
-              : state === "Fortified"  ? MERIT_FORTIFIED
-              : MERIT_ACQUIRE;
-  const band  = state === "Stronghold" ? BAND_STRONGHOLD
-              : state === "Fortified"  ? BAND_FORTIFIED
-              : BAND_EXPLOITED;
-  return Math.round(lower + progress * band);
+  return meritsToNextState(state, progress).meritsEarned;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -765,7 +751,7 @@ export default function TargetAnalysisView() {
                     {item.system_name}
                   </a>
                   {enrichment[item.system_id64]?.has_platinum && <PlatBadge />}
-                  {enrichment[item.system_id64]?.has_boom && <BoomBadge />}
+                  {enrichment[item.system_id64]?.has_boom && <BoomBadge stations={enrichment[item.system_id64].boom_stations} />}
                   {enrichment[item.system_id64]?.has_pristine && <PristBadge />}
                 </div>
 

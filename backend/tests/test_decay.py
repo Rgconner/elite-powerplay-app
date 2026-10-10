@@ -2,197 +2,103 @@
 
 Only pure calculation functions are imported — no database, no FastAPI.
 Run with: pytest  (from the backend/ directory)
+
+The golden cases are real journal observations (EDDN/Spansh, 2026-10-09)
+of systems nobody was undermining, so their whole undermining value is
+decay.
 """
 
 import pytest
 from services.decay import (
-    MERIT_ACQUIRE,
-    MERIT_STRONGHOLD,
-    BAND_EXPLOITED,
-    BAND_STRONGHOLD,
-    _decay_rate,
+    BAND_FORTIFIED,
     compute_cp_decay,
     effective_undermining,
+    start_of_cycle_progress,
 )
 
-# ─── _decay_rate ─────────────────────────────────────────────────────────────
+
+# ─── Golden cases: real systems where undermining == decay ─────────────────
 
 
-class TestDecayRate:
-    """Tests for the internal _decay_rate helper."""
-
-    # ── below-threshold: no decay regardless of state ────────────────────────
-
-    def test_below_25_pct_no_decay_stronghold(self):
-        assert _decay_rate("Stronghold", 0.0) == 0.0
-
-    def test_below_25_pct_no_decay_fortified(self):
-        assert _decay_rate("Fortified", 0.24) == 0.0
-
-    def test_below_25_pct_no_decay_exploited(self):
-        assert _decay_rate("Exploited", 0.25) == 0.0
-
-    # ── unknown / non-decaying states ─────────────────────────────────────────
-
-    def test_unoccupied_state_no_decay(self):
-        assert _decay_rate("Unoccupied", 0.8) == 0.0
-
-    def test_contested_state_no_decay(self):
-        assert _decay_rate("Contested", 1.0) == 0.0
-
-    def test_none_state_no_decay(self):
-        assert _decay_rate(None, 0.9) == 0.0
-
-    # ── Stronghold min endpoint (25.1%) ──────────────────────────────────────
-
-    def test_stronghold_at_min_progress(self):
-        # At 25.1% → 2.6%
-        rate = _decay_rate("Stronghold", 0.251)
-        assert rate == pytest.approx(0.026, abs=1e-6)
-
-    # ── Stronghold max endpoint (100%) ──────────────────────────────────────
-
-    def test_stronghold_at_100_pct(self):
-        # At 100% → 15.6%
-        rate = _decay_rate("Stronghold", 1.0)
-        assert rate == pytest.approx(0.156, abs=1e-6)
-
-    # ── Stronghold midpoint (linear interpolation check) ─────────────────────
-
-    def test_stronghold_midpoint(self):
-        # Midpoint between 0.251 and 1.0 → midpoint rate between 0.026 and 0.156
-        mid_prog = (0.251 + 1.0) / 2
-        expected_rate = (0.026 + 0.156) / 2
-        rate = _decay_rate("Stronghold", mid_prog)
-        assert rate == pytest.approx(expected_rate, abs=1e-6)
-
-    # ── Fortified min endpoint ────────────────────────────────────────────────
-
-    def test_fortified_at_min_progress(self):
-        # At 25.1% → 0.1%
-        rate = _decay_rate("Fortified", 0.251)
-        assert rate == pytest.approx(0.001, abs=1e-6)
-
-    # ── Exploited min endpoint ────────────────────────────────────────────────
-
-    def test_exploited_at_min_progress(self):
-        # At 25.1% → 0.1%
-        rate = _decay_rate("Exploited", 0.251)
-        assert rate == pytest.approx(0.001, abs=1e-6)
-
-    # ── Progress clamped to [min_prog, max_prog] ──────────────────────────────
-
-    def test_stronghold_progress_above_1_clamped_to_max(self):
-        rate_at_100 = _decay_rate("Stronghold", 1.0)
-        rate_above = _decay_rate("Stronghold", 1.5)
-        assert rate_at_100 == pytest.approx(rate_above, abs=1e-9)
+@pytest.mark.parametrize("state, progress, r, u", [
+    # Stronghold at 100% at the tick: the maximum, 156,250
+    ("Stronghold", 0.84383, 80, 156_250),
+    ("Fortified", 0.587928, 6, 45_253),
+    ("Exploited", 0.806368, 24_137, 15_508),
+])
+def test_real_unopposed_systems_decay_equals_undermining(state, progress, r, u):
+    assert compute_cp_decay(state, progress, r, u) == u
+    assert effective_undermining(u, compute_cp_decay(state, progress, r, u)) == 0
 
 
-# ─── compute_cp_decay ────────────────────────────────────────────────────────
+# ─── Shape ──────────────────────────────────────────────────────────────────
+# Live progress already includes this cycle's R − U, so with R == U the
+# live progress equals the progress at the tick.  U is large so the cap at
+# U doesn't kick in.
+
+BIG = 10**7
 
 
-class TestComputeCpDecay:
-    """Tests for the public compute_cp_decay function."""
-
-    # ── non-decaying states return 0 ─────────────────────────────────────────
-
-    def test_unoccupied_returns_0(self):
-        assert compute_cp_decay("Unoccupied", 0.8, 10_000) == 0
-
-    def test_contested_returns_0(self):
-        assert compute_cp_decay("Contested", 0.9, 5_000) == 0
-
-    def test_none_state_returns_0(self):
-        assert compute_cp_decay(None, 0.7, 8_000) == 0
-
-    # ── zero or missing undermining returns 0 ────────────────────────────────
-
-    def test_zero_undermining_returns_0(self):
-        assert compute_cp_decay("Stronghold", 1.0, 0) == 0
-
-    def test_none_undermining_returns_0(self):
-        assert compute_cp_decay("Stronghold", 1.0, None) == 0
-
-    def test_negative_undermining_returns_0(self):
-        # Negative U should be treated as <= 0
-        assert compute_cp_decay("Stronghold", 1.0, -500) == 0
-
-    # ── below 25% progress returns 0 decay ───────────────────────────────────
-
-    def test_below_25_pct_stronghold_no_decay(self):
-        assert compute_cp_decay("Stronghold", 0.1, 50_000) == 0
-
-    # ── decay is capped at the undermining value ──────────────────────────────
-
-    def test_decay_capped_at_undermining(self):
-        # Very small undermining — decay must not exceed it
-        small_u = 10
-        decay = compute_cp_decay("Stronghold", 1.0, small_u)
-        assert decay <= small_u
-
-    # ── Stronghold at 100% progress ──────────────────────────────────────────
-
-    def test_stronghold_100pct_large_undermining(self):
-        """At 100% Stronghold, decay rate = 15.6%.
-        CP = MERIT_STRONGHOLD + 1.0 × BAND_STRONGHOLD = 667_000 + 334_000 = 1_001_000
-        raw_decay = 1_001_000 × 0.156 = 156_156
-        With enough undermining, result should equal int(156_156).
-        """
-        cp = MERIT_STRONGHOLD + 1.0 * BAND_STRONGHOLD          # 1_001_000
-        expected = int(cp * 0.156)                              # 156_156
-        decay = compute_cp_decay("Stronghold", 1.0, 1_000_000)  # large U
-        assert decay == expected
-
-    # ── Exploited at 50% progress ─────────────────────────────────────────────
-
-    def test_exploited_50pct_progress(self):
-        """At 50% Exploited:
-        decay_rate via linear interp between (0.251, 0.001) and (1.0, ~0.06195).
-        CP = MERIT_ACQUIRE + 0.5 × BAND_EXPLOITED = 120_000 + 0.5 × 213_000 = 226_500.
-        """
-        progress = 0.5
-        from services.decay import _DECAY_EXPLOITED
-        min_prog, min_rate, max_prog, max_rate = _DECAY_EXPLOITED
-        t = (progress - min_prog) / (max_prog - min_prog)
-        expected_rate = min_rate + t * (max_rate - min_rate)
-        cp = MERIT_ACQUIRE + progress * BAND_EXPLOITED
-        expected_decay = int(cp * expected_rate)
-        decay = compute_cp_decay("Exploited", progress, 1_000_000)
-        assert decay == expected_decay
-
-    # ── none / null control_progress treated as 0.0 ──────────────────────────
-
-    def test_none_progress_treated_as_zero(self):
-        # progress=None → 0.0 → below 0.251 → no decay
-        assert compute_cp_decay("Stronghold", None, 50_000) == 0
+@pytest.mark.parametrize("state, max_decay", [
+    ("Exploited", 21_875),
+    ("Fortified", 83_281),
+    ("Stronghold", 156_250),
+])
+def test_decay_at_100_percent(state, max_decay):
+    assert compute_cp_decay(state, 1.0, BIG, BIG) == pytest.approx(max_decay, abs=1)
 
 
-# ─── effective_undermining ───────────────────────────────────────────────────
+@pytest.mark.parametrize("state", ["Exploited", "Fortified", "Stronghold"])
+def test_no_decay_at_or_below_25_percent(state):
+    assert compute_cp_decay(state, 0.25, BIG, BIG) == 0
+    assert compute_cp_decay(state, 0.10, BIG, BIG) == 0
 
 
-class TestEffectiveUndermining:
-    """Tests for the effective_undermining helper."""
+def test_decay_is_linear_above_floor():
+    half = compute_cp_decay("Stronghold", 0.625, BIG, BIG)   # halfway 25%→100%
+    assert half == pytest.approx(156_250 / 2, abs=1)
 
-    def test_zero_decay_returns_undermining_unchanged(self):
-        assert effective_undermining(5_000, 0) == 5_000
 
-    def test_partial_decay_reduces_undermining(self):
-        assert effective_undermining(5_000, 2_000) == 3_000
+def test_decay_uses_start_of_cycle_progress_not_live_progress():
+    # A Fortified system at 30% at the tick, then reinforced to 60% live.
+    # Decay is fixed at the tick, so it must match the 30% value.
+    extra_r = int(0.30 * BAND_FORTIFIED)
+    at_tick = compute_cp_decay("Fortified", 0.30, BIG, BIG)
+    later = compute_cp_decay("Fortified", 0.60, BIG + extra_r, BIG)
+    assert at_tick > 0
+    assert later == at_tick
 
-    def test_full_decay_equals_undermining_returns_0(self):
-        assert effective_undermining(5_000, 5_000) == 0
 
-    def test_decay_exceeds_undermining_floors_at_0(self):
-        assert effective_undermining(5_000, 9_000) == 0
+def test_start_of_cycle_progress_backs_out_r_and_u():
+    p0 = start_of_cycle_progress("Stronghold", 0.84383, 80, 156_250)
+    assert p0 == pytest.approx(1.0, abs=1e-6)
 
-    def test_none_undermining_treated_as_0(self):
-        assert effective_undermining(None, 1_000) == 0
 
-    def test_none_decay_treated_as_0(self):
-        assert effective_undermining(3_000, None) == 3_000
+# ─── Edge cases ────────────────────────────────────────────────────────────
 
-    def test_both_none_returns_0(self):
-        assert effective_undermining(None, None) == 0
 
-    def test_zero_undermining_returns_0(self):
-        assert effective_undermining(0, 0) == 0
+@pytest.mark.parametrize("state", ["Unoccupied", "Contested", None])
+def test_non_decaying_states(state):
+    assert compute_cp_decay(state, 0.9, 0, 50_000) == 0
+
+
+@pytest.mark.parametrize("u", [0, None, -500])
+def test_no_undermining_means_no_decay(u):
+    assert compute_cp_decay("Stronghold", 1.0, 0, u) == 0
+
+
+def test_capped_at_undermining():
+    assert compute_cp_decay("Stronghold", 1.0, 0, 1_000) == 1_000
+
+
+def test_missing_progress_returns_zero():
+    assert compute_cp_decay("Stronghold", None, 0, 50_000) == 0
+
+
+# ─── effective_undermining ─────────────────────────────────────────────────
+
+
+def test_effective_undermining_subtracts_and_floors():
+    assert effective_undermining(10_000, 4_000) == 6_000
+    assert effective_undermining(1_000, 4_000) == 0
+    assert effective_undermining(None, None) == 0

@@ -59,7 +59,10 @@
  *   2.1.3  2026-10-07  Power selector is now a dropdown of all Powers instead of a
  *                      free-text search box, styled for the dark theme. Removed the
  *                      unused searchPowers() API client.
+ *   2.2.0  2026-10-10  Tier scales corrected (350k / 1M / 2M); BOOM badge shows the
+ *                      number of booming stations; LAST CYCLE badge on systems not
+ *                      observed since the Thursday tick.
  */
 
-export const FRONTEND_VERSION      = "2.1.3";
-export const FRONTEND_RELEASE_DATE = "2026-10-07T16:00:00Z";
+export const FRONTEND_VERSION      = "2.2.0";
+export const FRONTEND_RELEASE_DATE = "2026-10-10T03:00:00Z";

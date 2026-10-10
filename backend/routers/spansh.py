@@ -35,6 +35,10 @@ SPANSH_SYSTEM_DUMP_URL   = "https://spansh.co.uk/api/dump/{}"
 SPANSH_BODY_URL          = "https://spansh.co.uk/api/body/{}"
 SPANSH_BODIES_SEARCH_URL = "https://spansh.co.uk/api/bodies/search"
 BATCH_DELAY_MS           = 600  # 600 ms between individual fetch calls (rate limiting)
+# Boom is a faction state that comes and goes over days, so cached
+# enrichment has to expire; rings never change, but re-fetching them
+# alongside is cheap enough.
+ENRICH_TTL_HOURS         = 12
 
 # ── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -46,7 +50,8 @@ class BatchEnrichRequest(BaseModel):
 
 class EnrichResult(BaseModel):
     has_platinum: bool
-    has_boom: bool
+    has_boom: bool           # boom_stations > 0
+    boom_stations: int = 0   # market stations whose controlling faction is in Boom
     has_pristine: bool
 
 
@@ -115,19 +120,16 @@ async def _fetch_body(body_id64: int) -> tuple[dict | None, int]:
 
 def _check_body_for_platinum(body: dict) -> bool:
     """
-    Check a single body (unwrapped) for a Platinum signal in a Metal Rich ring.
+    Check a single body (unwrapped) for a Platinum hotspot in a Metallic ring.
 
     Platinum is found in the ring signals:
       rings[].signals[]  →  each entry is a dict with { name: str, count: int }
 
-    Only "Metal Rich" rings are checked — this was previously "Metallic",
-    which is backwards: real ED mining mechanics put Platinum/Painite/
-    precious-metal signals on Metal Rich rings, not Metallic ones (Metallic
-    rings run more Palladium/Gold-type materials). Confirmed against real
-    Spansh data 2026-09-09: Borann — a well-known real Platinum mining
-    system — has its Platinum signal on a ring Spansh types "Metal Rich";
-    the old "metallic" filter would have silently excluded it. No test
-    coverage existed to catch this before now.
+    Only "Metallic" rings count.  Metal Rich rings also carry Platinum
+    hotspots, but those don't spawn laser-minable Platinum, so they are
+    useless for the mine-and-sell merit loop this badge is for.  (A
+    2026-09-09 change switched this to "Metal Rich"; that was backwards and
+    was reported by players as counting non-metallic hotspots.)
 
     Confirmed via Spansh API (July 2026):
       GET /api/body/{id64}  →  body.rings[].signals[]
@@ -142,7 +144,7 @@ def _check_body_for_platinum(body: dict) -> bool:
         rings = body.get("rings") or []
         for ring in rings:
             ring_type = (ring.get("type") or "").lower()
-            if ring_type != "metal rich":
+            if ring_type != "metallic":
                 continue
             ring_signals = ring.get("signals") or []
             for sig in ring_signals:
@@ -153,24 +155,47 @@ def _check_body_for_platinum(body: dict) -> bool:
     return False
 
 
-def _check_system_for_boom(system: dict) -> bool:
+def _faction_is_booming(faction: dict) -> bool:
+    states = faction.get("active_states") or []
+    for state in states:
+        if isinstance(state, str) and state.upper() == "BOOM":
+            return True
+        if isinstance(state, dict) and state.get("name", "").upper() == "BOOM":
+            return True
+    return False
+
+
+def _count_boom_stations(system: dict) -> int:
     """
-    Check a system response for BOOM active state in any minor faction.
-    The system JSON has a 'minor_faction_presences' array where each entry
-    has an 'active_states' array.
+    Count the stations whose controlling minor faction is in Boom.
+
+    Boom only matters where you sell: a station's market prices follow its
+    controlling faction.  So the check is per station, via that faction's
+    active_states in 'minor_faction_presences' -- not "any faction in the
+    system" (a booming faction that owns no market is useless), and not the
+    station's own 'controlling_minor_faction_state', which holds a single
+    state and misses Boom when the faction has several active.
+
+    Fleet carriers (controlling faction "FleetCarrier") and stations without
+    a market are skipped.
     """
     try:
-        factions = system.get("minor_faction_presences") or []
-        for faction in factions:
-            states = faction.get("active_states") or []
-            for state in states:
-                if isinstance(state, str) and state.upper() == "BOOM":
-                    return True
-                if isinstance(state, dict) and state.get("name", "").upper() == "BOOM":
-                    return True
+        booming = {
+            f.get("name")
+            for f in (system.get("minor_faction_presences") or [])
+            if isinstance(f, dict) and _faction_is_booming(f)
+        }
+        if not booming:
+            return 0
+        count = 0
+        for station in system.get("stations") or []:
+            if not isinstance(station, dict) or not station.get("has_market"):
+                continue
+            if station.get("controlling_minor_faction") in booming:
+                count += 1
+        return count
     except Exception:
-        pass
-    return False
+        return 0
 
 
 def _check_system_for_pristine(system: dict) -> bool:
@@ -255,10 +280,10 @@ def _check_bodies_for_platinum(bodies: list[dict]) -> bool:
     return False
 
 
-async def _enrich_system(system_id64: int, system_name: str | None = None) -> tuple[bool, bool, bool, int]:
+async def _enrich_system(system_id64: int, system_name: str | None = None) -> tuple[bool, int, bool, int]:
     """
     Fetch Spansh enrichment data for a single system.
-    Returns (has_platinum, has_boom, has_pristine, bytes_fetched).
+    Returns (has_platinum, boom_stations, has_pristine, bytes_fetched).
     Rate-limited: caller should wait BATCH_DELAY_MS between calls.
 
     Strategy (primary → fallback):
@@ -278,9 +303,9 @@ async def _enrich_system(system_id64: int, system_name: str | None = None) -> tu
     system, sys_bytes = await _fetch_system(system_id64)
     bytes_fetched += sys_bytes
     if system is None:
-        return False, False, False, bytes_fetched
+        return False, 0, False, bytes_fetched
 
-    has_boom = _check_system_for_boom(system)
+    boom_stations = _count_boom_stations(system)
     has_platinum = False
 
     # ── Primary: bodies/search API (if we have the system name) ──────────────
@@ -294,7 +319,7 @@ async def _enrich_system(system_id64: int, system_name: str | None = None) -> tu
                 dump_data, dump_bytes = await _fetch_system_dump(system_id64)
                 bytes_fetched += dump_bytes
                 has_pristine = _check_system_for_pristine(dump_data) if dump_data else False
-                return has_platinum, has_boom, has_pristine, bytes_fetched
+                return has_platinum, boom_stations, has_pristine, bytes_fetched
             # Empty results — might be a name mismatch; try fallback below.
 
     # ── Fallback: system/{id} → per-body fetch chain ─────────────────────────
@@ -323,7 +348,7 @@ async def _enrich_system(system_id64: int, system_name: str | None = None) -> tu
     bytes_fetched += dump_bytes
     has_pristine = _check_system_for_pristine(dump_data) if dump_data else False
 
-    return has_platinum, has_boom, has_pristine, bytes_fetched
+    return has_platinum, boom_stations, has_pristine, bytes_fetched
 
 
 async def _fetch_system_dump(system_id64: int) -> tuple[dict | None, int]:
@@ -405,9 +430,9 @@ async def enrich_batch(
 ) -> BatchEnrichResponse:
     """
     Return cached PLAT/BOOM/PRISTINE enrichment for one or more systems.
-    If cache is missing, fetch fresh from Spansh. Existing cache is used
-    as-is (no TTL expiry) — data persists until explicitly cleared.
-    Returns { system_id64: { has_platinum, has_boom, has_pristine } }
+    Cache entries older than ENRICH_TTL_HOURS (or missing) are re-fetched
+    from Spansh.
+    Returns { system_id64: { has_platinum, has_boom, boom_stations, has_pristine } }
     for each requested ID.
 
     Set force_refresh=true to bypass the cache and re-fetch from Spansh.
@@ -436,21 +461,22 @@ async def enrich_batch(
         else:
             rows = db.execute(
                 text("""
-                    SELECT system_id64, has_platinum, has_boom, has_pristine
+                    SELECT system_id64, has_platinum, boom_stations, has_pristine
                     FROM spansh_enrichment
                     WHERE system_id64 = ANY(:ids)
+                      AND cached_at > NOW() - make_interval(hours => :ttl)
                 """),
-                {"ids": unique_ids},
+                {"ids": unique_ids, "ttl": ENRICH_TTL_HOURS},
             ).mappings().all()
 
             cache_map: dict[int, dict] = {r["system_id64"]: r for r in rows}
             for sid in unique_ids:
                 cached = cache_map.get(sid)
                 if cached is not None:
-                    # Cache hit — use persisted data regardless of age
                     results[sid] = EnrichResult(
                         has_platinum=cached["has_platinum"],
-                        has_boom=cached["has_boom"],
+                        has_boom=cached["boom_stations"] > 0,
+                        boom_stations=cached["boom_stations"],
                         has_pristine=cached.get("has_pristine", False),
                     )
                 else:
@@ -486,31 +512,39 @@ async def enrich_batch(
                 sys_name = name_map.get(sid)
                 t0 = time.perf_counter()
                 try:
-                    has_platinum, has_boom, has_pristine = await _enrich_system(sid, sys_name)
+                    has_platinum, boom_stations, has_pristine, n_bytes = await _enrich_system(sid, sys_name)
                     fetch_api_calls += 1
+                    fetch_bytes += n_bytes
                 except Exception:
+                    logger.exception("Spansh enrichment failed for system %d", sid)
                     fetch_api_errors += 1
                     fetch_api_calls += 1
-                    has_platinum = has_boom = has_pristine = False
+                    fetch_total_ms += (time.perf_counter() - t0) * 1000.0
+                    # Don't cache a failure as "no PLAT / no BOOM"
+                    results[sid] = EnrichResult(has_platinum=False, has_boom=False, has_pristine=False)
+                    continue
                 fetch_total_ms += (time.perf_counter() - t0) * 1000.0
 
-                # Upsert into cache (first-access persistence)
                 db.execute(
                     text("""
-                        INSERT INTO spansh_enrichment (system_id64, has_platinum, has_boom, has_pristine, cached_at)
-                        VALUES (:sid, :plat, :boom, :prist, NOW())
+                        INSERT INTO spansh_enrichment
+                            (system_id64, has_platinum, has_boom, boom_stations, has_pristine, cached_at)
+                        VALUES (:sid, :plat, :boom, :boom_n, :prist, NOW())
                         ON CONFLICT (system_id64) DO UPDATE SET
                             has_platinum = EXCLUDED.has_platinum,
                             has_boom = EXCLUDED.has_boom,
+                            boom_stations = EXCLUDED.boom_stations,
                             has_pristine = EXCLUDED.has_pristine,
                             cached_at = EXCLUDED.cached_at
                     """),
-                    {"sid": sid, "plat": has_platinum, "boom": has_boom, "prist": has_pristine},
+                    {"sid": sid, "plat": has_platinum, "boom": boom_stations > 0,
+                     "boom_n": boom_stations, "prist": has_pristine},
                 )
                 db.commit()
 
                 results[sid] = EnrichResult(
-                    has_platinum=has_platinum, has_boom=has_boom, has_pristine=has_pristine,
+                    has_platinum=has_platinum, has_boom=boom_stations > 0,
+                    boom_stations=boom_stations, has_pristine=has_pristine,
                 )
 
         # Record telemetry for this batch (fire-and-forget, errors are swallowed)
@@ -607,7 +641,8 @@ async def validate_enrich_cache(
             sys_name = name_map.get(sid)
             total_checked += 1
 
-            live_plat, live_boom, live_prist = await _enrich_system(sid, sys_name)
+            live_plat, live_boom_n, live_prist, _ = await _enrich_system(sid, sys_name)
+            live_boom = live_boom_n > 0
             cached_plat = row["has_platinum"]
             cached_boom = row["has_boom"]
             cached_prist = row.get("has_pristine", False)
@@ -640,10 +675,12 @@ async def validate_enrich_cache(
                 db.execute(
                     text("""
                         UPDATE spansh_enrichment
-                        SET has_platinum = :plat, has_boom = :boom, has_pristine = :prist, cached_at = NOW()
+                        SET has_platinum = :plat, has_boom = :boom, boom_stations = :boom_n,
+                            has_pristine = :prist, cached_at = NOW()
                         WHERE system_id64 = :sid
                     """),
-                    {"sid": sid, "plat": live_plat, "boom": live_boom, "prist": live_prist},
+                    {"sid": sid, "plat": live_plat, "boom": live_boom,
+                     "boom_n": live_boom_n, "prist": live_prist},
                 )
                 db.commit()
                 logger.info("Corrected enrichment for system %d (%s)", sid, sys_name)

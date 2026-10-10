@@ -16,6 +16,8 @@ export interface PPSystemEntry {
   undermining: number | null;
   control_progress: number | null;
   snapshot_time: string | null;
+  /** When the game data was last observed (Spansh or live EDDN), naive UTC */
+  spansh_updated_at: string | null;
   distance_from_center: number | null;
   /** undermining / reinforcement ratio 0.0–1.0; null if no data */
   undermine_ratio: number | null;

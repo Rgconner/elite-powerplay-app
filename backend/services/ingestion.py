@@ -352,25 +352,12 @@ def run_spansh_ingest(db: Session) -> IngestionRun:
                 )
                 system_db_id: int = sys_result.scalar_one()
 
-                # ── Compute CP decay (once per cycle per system) ──────────
+                # ── CP decay (derived from start-of-cycle progress, so it is
+                # the same for every snapshot of this system in a cycle) ──
                 cycle = current_cycle_start()
-                existing_decay_row = db.execute(
-                    text("""
-                        SELECT cp_decay FROM pp_system_snapshots
-                        WHERE system_id = :sid
-                          AND decay_cycle_start = :cycle
-                          AND cp_decay IS NOT NULL
-                        ORDER BY snapshot_time DESC
-                        LIMIT 1
-                    """),
-                    {"sid": system_db_id, "cycle": cycle},
-                ).fetchone()
-                if existing_decay_row is not None:
-                    cp_decay_val = existing_decay_row[0]
-                else:
-                    cp_decay_val = compute_cp_decay(
-                        power_state, control_progress, undermining
-                    )
+                cp_decay_val = compute_cp_decay(
+                    power_state, control_progress, reinforcement, undermining
+                )
 
                 # Insert a fresh snapshot row (insert-only for history)
                 db.execute(

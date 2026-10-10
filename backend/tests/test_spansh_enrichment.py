@@ -1,24 +1,22 @@
 """Unit tests for the platinum/boom/pristine detection in routers/spansh.py.
 
-No test coverage existed for this before 2026-09-09 -- that's exactly how
-the ring-type bug (Metallic vs. Metal Rich, see _check_body_for_platinum's
-docstring) went unnoticed. Golden case below is real data pulled live from
-Spansh's bodies/search API for Borann, a well-known real Platinum mining
-system, confirming the fix against the actual game data it's meant to
-model, not just internally-consistent logic.
+Platinum: only Metallic rings count (laser-minable Platinum).  A 2026-09-09
+change had flipped this to Metal Rich; players reported it as counting
+non-metallic hotspots, and it was reverted on 2026-10-10.
+
+Boom: counted per station, through the station's controlling faction's
+active_states -- see _count_boom_stations.
 """
 
 from routers.spansh import (
     _check_bodies_for_platinum,
     _check_body_for_platinum,
-    _check_system_for_boom,
     _check_system_for_pristine,
+    _count_boom_stations,
 )
 
-# Trimmed from a live Spansh bodies/search response for "Borann", 2026-09-09.
-# Borann A 2's Metal Rich ring is the real, well-known Platinum source here;
-# its Icy ring (no platinum) is included to prove the ring-type filter still
-# excludes non-matching rings on the SAME body, not just different bodies.
+# Borann A 2 (trimmed from Spansh bodies/search): its Metal Rich ring has a
+# Platinum hotspot, which must NOT count; the Icy ring is noise.
 BORANN_A2 = {
     "name": "Borann A 2",
     "rings": [
@@ -40,29 +38,29 @@ BORANN_A2 = {
 }
 
 
-def test_borann_real_data_detects_platinum_on_metal_rich_ring():
-    assert _check_body_for_platinum(BORANN_A2) is True
-
-
-def test_bodies_list_wrapper_finds_it_too():
-    assert _check_bodies_for_platinum([BORANN_A2]) is True
-
-
-def test_platinum_on_metallic_ring_is_rejected():
-    # The bug this replaces: Metallic rings run Palladium/Gold-type
-    # materials in real ED mechanics, not Platinum. A body whose ONLY
-    # platinum signal sits on a Metallic ring should NOT count.
+def test_platinum_on_metallic_ring_counts():
     body = {"rings": [{"type": "Metallic", "signals": [{"name": "Platinum"}]}]}
-    assert _check_body_for_platinum(body) is False
+    assert _check_body_for_platinum(body) is True
+
+
+def test_platinum_on_metal_rich_ring_is_rejected():
+    assert _check_body_for_platinum(BORANN_A2) is False
+    assert _check_bodies_for_platinum([BORANN_A2]) is False
+
+
+def test_bodies_list_finds_metallic_platinum_among_others():
+    metallic = {"rings": [{"type": "Metallic", "signals": [{"name": "Platinum"}]}]}
+    assert _check_bodies_for_platinum([BORANN_A2, metallic]) is True
 
 
 def test_platinum_on_icy_or_rocky_ring_is_rejected():
-    body = {"rings": [{"type": "Icy", "signals": [{"name": "Platinum"}]}]}
+    body = {"rings": [{"type": "Icy", "signals": [{"name": "Platinum"}]},
+                      {"type": "Rocky", "signals": [{"name": "Platinum"}]}]}
     assert _check_body_for_platinum(body) is False
 
 
-def test_metal_rich_ring_without_platinum_signal_is_false():
-    body = {"rings": [{"type": "Metal Rich", "signals": [{"name": "Painite"}]}]}
+def test_metallic_ring_without_platinum_signal_is_false():
+    body = {"rings": [{"type": "Metallic", "signals": [{"name": "Painite"}]}]}
     assert _check_body_for_platinum(body) is False
 
 
@@ -75,19 +73,70 @@ def test_malformed_body_does_not_raise():
     assert _check_bodies_for_platinum([None, {}, "not a dict"]) is False
 
 
-def test_boom_active_state_as_plain_string():
-    system = {"minor_faction_presences": [{"active_states": ["Boom"]}]}
-    assert _check_system_for_boom(system) is True
+# Trimmed from the live Spansh system record for Muang, 2026-10-10.
+# The Winged Hussars' station-level state reads "Boom" here, but the
+# faction also has Civil Liberty active -- the per-faction active_states
+# list is what has to be checked.
+MUANG = {
+    "minor_faction_presences": [
+        {"name": "Amsitia Holdings", "state": "Boom", "active_states": ["Boom"]},
+        {"name": "Muang Gold Posse", "state": "None", "active_states": None},
+        {"name": "The Winged Hussars", "state": "Boom", "active_states": ["Boom", "Civil Liberty"]},
+    ],
+    "stations": [
+        {"name": "Al-Khujandi Enterprise", "controlling_minor_faction": "The Winged Hussars",
+         "controlling_minor_faction_state": "Boom", "has_market": True},
+        {"name": "Morgan Terminal", "controlling_minor_faction": "Amsitia Holdings",
+         "controlling_minor_faction_state": "Boom", "has_market": None},
+        {"name": "Hyakutake Settlement", "controlling_minor_faction": "Amsitia Holdings",
+         "controlling_minor_faction_state": "Boom", "has_market": True},
+        {"name": "KFX-L2J", "controlling_minor_faction": "FleetCarrier", "has_market": True},
+    ],
+}
+
+
+def test_boom_counts_market_stations_of_booming_factions():
+    # Morgan Terminal has no market; the fleet carrier isn't a faction
+    assert _count_boom_stations(MUANG) == 2
+
+
+def test_boom_uses_faction_active_states_not_station_state():
+    # Station-level state shows the faction's other state; Boom is still active
+    system = {
+        "minor_faction_presences": [
+            {"name": "A", "state": "Civil Liberty", "active_states": ["Civil Liberty", "Boom"]},
+        ],
+        "stations": [
+            {"name": "S", "controlling_minor_faction": "A",
+             "controlling_minor_faction_state": "Civil Liberty", "has_market": True},
+        ],
+    }
+    assert _count_boom_stations(system) == 1
+
+
+def test_booming_faction_without_stations_does_not_count():
+    # The old check flagged any booming faction in the system
+    system = {
+        "minor_faction_presences": [
+            {"name": "Booming", "active_states": ["Boom"]},
+            {"name": "Owner", "active_states": ["War"]},
+        ],
+        "stations": [{"name": "S", "controlling_minor_faction": "Owner", "has_market": True}],
+    }
+    assert _count_boom_stations(system) == 0
 
 
 def test_boom_active_state_as_dict():
-    system = {"minor_faction_presences": [{"active_states": [{"name": "Boom"}]}]}
-    assert _check_system_for_boom(system) is True
+    system = {
+        "minor_faction_presences": [{"name": "A", "active_states": [{"name": "Boom"}]}],
+        "stations": [{"name": "S", "controlling_minor_faction": "A", "has_market": True}],
+    }
+    assert _count_boom_stations(system) == 1
 
 
-def test_no_boom_state_is_false():
-    system = {"minor_faction_presences": [{"active_states": ["Expansion", "War"]}]}
-    assert _check_system_for_boom(system) is False
+def test_boom_malformed_system_does_not_raise():
+    assert _count_boom_stations({}) == 0
+    assert _count_boom_stations({"minor_faction_presences": [None], "stations": ["x"]}) == 0
 
 
 def test_pristine_reserve_top_level():
