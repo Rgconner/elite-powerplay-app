@@ -344,12 +344,6 @@ def extract_pp_state(msg: dict) -> Optional[dict]:
 
     controlling = msg.get("ControllingPower") or None
     powers = msg.get("Powers") or []
-    if controlling is None and len(powers) < 2:
-        return None
-    if controlling is None:
-        # Multi-power Unoccupied: stored under the ingest's internal
-        # 'Contested' label, which every contested query filters on
-        power_state = "Contested"
 
     # Journal: [{"Power": .., "ConflictProgress": ..}]  ->  Spansh-style
     # [{"power": .., "progress": ..}] as stored by the ingest.
@@ -359,6 +353,16 @@ def extract_pp_state(msg: dict) -> Optional[dict]:
         for c in raw_conflict
         if isinstance(c, dict)
     ]
+
+    if controlling is None:
+        # Unoccupied: keep it if it's multi-power or a solo push with
+        # progress (same rule as the ingest), stored under the ingest's
+        # internal 'Contested' label that the contested/expansion queries use
+        if not powers:
+            return None
+        if len(powers) < 2 and not any((c["progress"] or 0) > 0 for c in conflict):
+            return None
+        power_state = "Contested"
 
     star_pos = msg.get("StarPos") or []
     return {

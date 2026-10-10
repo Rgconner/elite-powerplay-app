@@ -62,9 +62,7 @@ const DEFAULT_WEIGHTS: Record<string, number> = {
   // Fortify
   fortify_weight:              1,    // Global fortify score multiplier (1 = no change)
   fortify_near_center:        15,    // Bonus for systems near center (<15 LY)
-  // Expand — distance thresholds (must match scoring.py DEFAULTS)
-  expand_fortified_dist_ly:   20,    // Max LY from a Fortified anchor to qualify
-  expand_stronghold_dist_ly:  30,    // Max LY from a Stronghold anchor to qualify
+  // Expand
   expand_allegiance_match:    15,    // Bonus if allegiance matches power
 };
 
@@ -73,8 +71,6 @@ const WEIGHT_LABELS: Record<string, string> = {
   fortify_weight:              "Fortify — Global urgency score multiplier",
   fortify_near_center:         "Fortify — Bonus: near center system (<15 LY)",
   // Expand
-  expand_fortified_dist_ly:    "Expand — Max distance from Fortified anchor (LY)",
-  expand_stronghold_dist_ly:   "Expand — Max distance from Stronghold anchor (LY)",
   expand_allegiance_match:     "Expand — Bonus: allegiance matches power",
 };
 
@@ -107,12 +103,17 @@ const DEFAULT_TARGET_THRESHOLDS: Record<string, number> = {
   target_progress_critical: 10,   // ≤ this % → CRITICAL
   target_progress_high:     25,   // ≤ this % → HIGH
   target_progress_medium:   50,   // ≤ this % → MEDIUM
+  // Not a Target Analysis setting, but the same percent control: an
+  // Unoccupied system is Contested (not an expansion target) when we and a
+  // rival are each at least this far toward the 120k acquisition threshold
+  contested_min_progress:   50,
 };
 
 const TARGET_THRESHOLD_LABELS: Record<string, string> = {
   target_progress_critical: "🔴 Critical threshold — enemy nearly at collapse (%)",
   target_progress_high:     "🟠 High vulnerability threshold (%)",
   target_progress_medium:   "🟡 Medium vulnerability threshold (%)",
+  contested_min_progress:   "⚔ Contested vs Expansion — us and a rival both at least (%)",
 };
 
 // ── Fortification alert thresholds (days-to-failure) ─────────────────────────

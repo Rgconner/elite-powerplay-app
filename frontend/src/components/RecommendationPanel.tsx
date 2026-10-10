@@ -430,8 +430,9 @@ function ContestedSection({ items, loading }: { items: ContestedSystemInfo[]; lo
         </span>
       </h4>
       <p style={{ fontSize: 11, color: "#57606a", margin: "0 0 8px", lineHeight: 1.5 }}>
-        Systems with <code style={{ fontSize: 10 }}>power_state = Contested</code> near your territory.
-        Listed by proximity — no score applied.
+        Unoccupied systems where we and a rival are both well into the acquisition race
+        (threshold set in Admin, default 50%). Listed by proximity — no score applied.
+        Systems with no serious rival are under Expansion Targets instead.
       </p>
       {loading && <p style={{ fontSize: 13, color: "#57606a", margin: 0 }}>Loading…</p>}
       {!loading && items.slice(0, 20).map((item) => <ContestedRow key={item.system_id64} item={item} />)}

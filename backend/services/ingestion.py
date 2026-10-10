@@ -240,12 +240,12 @@ def _iter_power_systems(power: str, metrics: Optional[dict] = None):
 
 
 def _iter_unoccupied_systems(metrics: Optional[dict] = None):
-    """Yield each multi-power Unoccupied system from the Spansh API once.
+    """Yield each Unoccupied system with acquisition activity from Spansh once.
 
-    These are the 'contested' systems in PP2.0: power_state=Unoccupied but
-    power[] contains 2+ entries, indicating multiple powers vying for control.
-    Spansh does NOT have a 'Contested' state — the multi-power Unoccupied
-    state IS the contested representation.
+    That is every multi-power Unoccupied system, plus single-power ones where
+    that power has progress (solo expansion pushes).  Spansh has no
+    'Contested' state; which of these are contested races and which are
+    expansion targets is decided per power by scoring.classify_acquisition.
 
     Queried per power, which keeps each query small; a system with several
     powers shows up in several queries and is yielded only the first time.
@@ -258,13 +258,20 @@ def _iter_unoccupied_systems(metrics: Optional[dict] = None):
              "power": {"value": [power], "comparison": "="}},
             f"Unoccupied with '{power}'", metrics,
         ):
-            # Only yield systems with 2+ powers (the genuinely contested ones)
-            # to avoid ingesting tens of thousands of irrelevant Unoccupied rows.
+            # Keep multi-power systems, and solo pushes that have progress
+            # (the expansion targets); untouched single-power systems are
+            # thousands of rows with nothing to show.
             raw_p = r.get("power")
             sid = r.get("id64")
-            if isinstance(raw_p, list) and len(raw_p) >= 2 and sid not in seen:
-                seen.add(sid)
-                yield r
+            if not isinstance(raw_p, list) or not raw_p or sid in seen:
+                continue
+            if len(raw_p) == 1 and not any(
+                (e.get("progress") or 0) > 0
+                for e in (r.get("power_conflict_progress") or []) if isinstance(e, dict)
+            ):
+                continue
+            seen.add(sid)
+            yield r
 
 
 # ---------------------------------------------------------------------------
@@ -416,16 +423,17 @@ def run_spansh_ingest(db: Session) -> IngestionRun:
             db.commit()
             logger.info("  Finished '%s': %d systems stored", power, power_count)
 
-        # ── Second pass: Multi-power Unoccupied (Contested) systems ──────────
-        # In PP2.0, a system being fought over by multiple powers appears as:
+        # ── Second pass: Unoccupied systems with acquisition activity ────────
+        # In PP2.0 these appear as:
         #   power_state = "Unoccupied"
-        #   power       = ["A. Lavigny-Duval", "Aisling Duval", ...]  (2+ entries)
+        #   power       = ["A. Lavigny-Duval", "Aisling Duval", ...]
         #   power_conflict_progress = [{power:..., progress:...}, ...]
         #
-        # We store these with power_state='Contested' (our internal label) so
-        # the /contested endpoint can find them with a simple WHERE clause.
-        # powers_list and conflict_progress capture the full multi-power data.
-        logger.info("Starting multi-power Unoccupied (Contested) pass...")
+        # We store them all with power_state='Contested' (our internal label
+        # for "Unoccupied with acquisition activity", solo pushes included);
+        # scoring.classify_acquisition splits them into contested races and
+        # expansion targets per power.
+        logger.info("Starting Unoccupied (acquisition) pass...")
         contested_count = 0
         for system_obj in _iter_unoccupied_systems(metrics):
             system_id64_c: Optional[int] = system_obj.get("id64")

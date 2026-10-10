@@ -155,7 +155,32 @@ Version history:
                        identity assert, unused imports/f-strings cleared so
                        `pyflakes backend/` exits 0. Frontend 2.1.2: TelemetryRunSummary
                        gains bytes_downloaded/pages_fetched to match backend payload.
+    2.2.0  2026-10-10  Live EDDN state + data fixes: listener records FSDJump/
+                       Location PP state as snapshots (watchdog reconnect);
+                       tier bands corrected to 0-350k / 350k-1M / 1M-2M; decay
+                       refit from live data (k x band x (p0 - 25%), p0 = progress
+                       at the tick); Platinum = Metallic rings only; Boom counted
+                       per station via the controlling faction's active states;
+                       enrichment cache 12h TTL and fixed result unpacking;
+                       Spansh ingest schedule survives restarts.
+    2.2.1  2026-10-10  Spansh search retries 429/5xx/connection errors with
+                       backoff; one 502 used to fail the whole ingest.
+    2.2.2  2026-10-10  Contested pass queried per power: Spansh caps a search at
+                       10,000 results, so ~25k of ~35k Unoccupied systems were
+                       silently skipped every ingest. Live EDDN rows for
+                       multi-power systems now use the 'Contested' label.
+    2.2.3  2026-10-10  Spansh queries that reach the 10k cap split by X range
+                       recursively, so a power growing past 10k systems keeps
+                       ingesting fully (Aisling Duval was at 8,939).
+    2.3.0  2026-10-10  Contested vs Expansion split: a system is Contested only
+                       when we and a rival are each >= contested_min_progress
+                       (admin, default 50%); every other Unoccupied system we
+                       have progress in is an expansion target, ranked by our
+                       own progress (was reading the always-empty
+                       control_progress). Solo pushes ingested. Admin percent
+                       thresholds normalised (target_progress_* were read as
+                       10.0 instead of 0.10 once saved).
  """
 
-BACKEND_VERSION      = "2.2.3"
+BACKEND_VERSION      = "2.3.0"
 BACKEND_RELEASE_DATE = "2026-10-10T03:00:00Z"

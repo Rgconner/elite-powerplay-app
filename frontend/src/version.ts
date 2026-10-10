@@ -62,7 +62,9 @@
  *   2.2.0  2026-10-10  Tier scales corrected (350k / 1M / 2M); BOOM badge shows the
  *                      number of booming stations; LAST CYCLE badge on systems not
  *                      observed since the Thursday tick.
+ *   2.3.0  2026-10-10  Admin: Contested-vs-Expansion threshold replaces the anchor
+ *                      distance settings; Contested panel caption explains the rule.
  */
 
-export const FRONTEND_VERSION      = "2.2.0";
+export const FRONTEND_VERSION      = "2.3.0";
 export const FRONTEND_RELEASE_DATE = "2026-10-10T03:00:00Z";

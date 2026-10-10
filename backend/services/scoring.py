@@ -69,6 +69,7 @@ EXPAND PRIORITY ORDER:
 
 from __future__ import annotations
 
+import json
 import math
 import logging
 from datetime import datetime, timezone, timedelta
@@ -109,12 +110,14 @@ DEFAULTS: dict[str, float] = {
     "stronghold_threshold_urgent":   7.0,
     "stronghold_threshold_warning":  21.0,
 
-    # ── Expand ───────────────────────────────────────────────────────────────
+    # ── Expand / Contested ───────────────────────────────────────────────────
     "expand_allegiance_match":    15.0,   # allegiance matches power bonus
-    # Proximity thresholds: Unoccupied must be within these distances of an
-    # anchor system of the specified state to qualify as an expansion target.
-    "expand_fortified_dist_ly":   20.0,   # max LY from a Fortified anchor
-    "expand_stronghold_dist_ly":  30.0,   # max LY from a Stronghold anchor
+    # An Unoccupied system is listed as Contested (and not as an expansion
+    # target) when we AND at least one rival are each at or above this
+    # fraction of the 120,000 acquisition threshold.  Deliberately higher
+    # than the game's 25% conflict line (see state_classification
+    # CONFLICT_THRESHOLD): below it a rival is a nuisance, not a race.
+    "contested_min_progress":      0.50,
 
     # ── Target Analysis ───────────────────────────────────────────────────────
     # Base vulnerability scores per enemy state tier
@@ -183,20 +186,60 @@ MERIT_EXPLOITED  = 0
 MERIT_FORTIFIED  = 350_000
 MERIT_STRONGHOLD = 1_000_000
 
-# Minimum control points for a power to be considered an active participant
-# in a contested system -- the real PowerPlay conflict threshold, the point
-# where 2+ powers crossing it starts Conflict Zones (visible in-game as the
-# double-circle/crossed-swords icon on the Powerplay map). Distinct from the
-# 120,000-merit acquisition threshold, which decides who WINS the system at
-# cycle end, not whether a conflict happens at all.
-#
-# CONFIRMED 2026-09-09 against the real in-game PowerPlay Information panel
-# (Phi-2 Pavonis) -- see services/state_classification.py's CONFLICT_THRESHOLD
-# for the verification detail. 30,000 is correct, not 35,000.
-# Spansh's conflict_progress field is a NORMALIZED FRACTION (0.0–1.0+),
-# where 1.0 = 120,000 merits (acquisition threshold).
-# 30,000 merits / 120,000 = 0.25
-CONTESTED_MIN_CONTROL_POINTS: float = 30_000 / 120_000  # 0.25
+# ──────────────────────────────────────────────────────────────────────────────
+# Unoccupied systems: contested vs expansion
+# ──────────────────────────────────────────────────────────────────────────────
+# Spansh's conflict_progress is a NORMALIZED FRACTION (0.0–1.0+) where
+# 1.0 = 120,000 control points (the acquisition threshold).  Every Unoccupied
+# system a power is present in falls into exactly one bucket for that power:
+#   contested — we and >= 1 rival are each at contested_min_progress or more
+#   expansion — we have progress > 0 and it isn't contested
+# (Snapshots of these systems are stored with the internal power_state label
+# 'Contested' regardless of bucket; this function is what decides.)
+
+
+def fraction_setting(weights: dict[str, float], key: str) -> float:
+    """A progress setting as a fraction.  DEFAULTS hold fractions (0.5); the
+    Admin page's percent sliders save whole percents (50), so values above 1
+    are read as percents."""
+    value = float(weights.get(key, DEFAULTS[key]))
+    return value / 100.0 if value > 1.0 else value
+
+
+def contested_min_progress(weights: dict[str, float]) -> float:
+    return fraction_setting(weights, "contested_min_progress")
+
+
+def parse_conflict_progress(conflict_progress: Optional[str]) -> dict[str, float]:
+    """{power: progress} from a stored conflict_progress JSON string."""
+    if not conflict_progress:
+        return {}
+    try:
+        entries = json.loads(conflict_progress)
+    except (TypeError, ValueError):
+        return {}
+    return {
+        e["power"]: float(e.get("progress") or 0.0)
+        for e in entries
+        if isinstance(e, dict) and e.get("power")
+    }
+
+
+def classify_acquisition(
+    power_name: str,
+    conflict_progress: Optional[str],
+    threshold: float,
+) -> Optional[str]:
+    """'contested', 'expansion', or None (we have no progress there)."""
+    progress = parse_conflict_progress(conflict_progress)
+    ours = progress.get(power_name, 0.0)
+    if ours >= threshold and any(
+        p >= threshold for power, p in progress.items() if power != power_name
+    ):
+        return "contested"
+    if ours > 0:
+        return "expansion"
+    return None
 
 # Band widths — merits between downgrade and upgrade thresholds per state
 BAND_EXPLOITED   = MERIT_FORTIFIED  - MERIT_EXPLOITED  # 350,000
@@ -774,239 +817,98 @@ def compute_expand_scores(
 ) -> list[RecommendationItem]:
     """Score Unoccupied systems for expansion priority.
 
-    Spansh ONLY uses power_state='Unoccupied' for ALL expansion-stage systems,
-    including those being actively fought over by multiple powers.  There is no
-    'Expansion' state in the Spansh API.
+    Candidates: every Unoccupied system the power is present in that
+    classify_acquisition() puts in the 'expansion' bucket, i.e. we have
+    progress there and no rival is racing us at contested_min_progress.
+    Contested races are listed by the /contested endpoint instead, so a
+    system never appears in both.
 
-    Eligibility rules:
-      • power_state = 'Unoccupied' with 1 power in powers_list (solo push):
-          requires proximity to a Fortified/Stronghold anchor
-          (within expand_fortified_dist_ly / expand_stronghold_dist_ly).
-      • power_state = 'Unoccupied' with 2+ powers in powers_list (contested expansion):
-          anchor proximity check is skipped — already has multi-power activity.
-          The selected power must appear in powers_list.
+    No anchor-distance gate: Spansh (from the game) only lists a power on an
+    Unoccupied system when that power can acquire it.
 
-    Primary ranking: closeness to the 120,000-merit acquisition threshold.
-      merit_position   = control_progress × MERIT_ACQUIRE
-      score (0–100)    = merit_position / MERIT_ACQUIRE × 100
-
-    Secondary tiebreak: allegiance match adds a small bonus.
+    Ranking: our own progress toward the 120,000-CP acquisition threshold
+    (score 0–100+), plus a small bonus when the allegiance matches.
     """
     if not power_systems:
         return []
 
-    # ── Split anchor coords by state ────────────────────────────────────────
-    fortified_coords:  list[tuple[float, float, float]] = []
-    stronghold_coords: list[tuple[float, float, float]] = []
-    for s in power_systems:
-        state = snapshots.get(s.id, {}).get("power_state")
-        coord = (s.x or 0.0, s.y or 0.0, s.z or 0.0)
-        if state == "Fortified":
-            fortified_coords.append(coord)
-        elif state == "Stronghold":
-            stronghold_coords.append(coord)
-
-    power_coords     = [(s.x or 0.0, s.y or 0.0, s.z or 0.0) for s in power_systems]
-    power_system_ids = {s.id for s in power_systems}
     power_allegiance = POWER_ALLEGIANCE.get(power_name)
+    threshold = contested_min_progress(weights)
+    allegiance_bonus = float(weights.get("expand_allegiance_match",
+                                         DEFAULTS["expand_allegiance_match"]))
+    local_radius = float(weights.get("local_radius_ly", DEFAULTS["local_radius_ly"]))
 
-    # ── Configurable distance thresholds ────────────────────────────────────
-    fort_max = float(weights.get("expand_fortified_dist_ly",
-                                  DEFAULTS["expand_fortified_dist_ly"]))
-    sh_max   = float(weights.get("expand_stronghold_dist_ly",
-                                  DEFAULTS["expand_stronghold_dist_ly"]))
-    bbox_pad = max(fort_max, sh_max)
-
-    # ── Fetch all Unoccupied systems where selected power appears ─────────────
-    # Two categories in one query:
-    #   a) systems where power matches directly (solo push, power = power_name)
-    #   b) systems where power appears in powers_list with 2+ powers (contested push)
-    # We fetch both via powers_list ILIKE and let the anchor gate below decide.
-    # The bounding-box on pp_systems is used for (a); for (b) we do a direct DB
-    # query because the system may not be near the selected power's territory.
-    _STALE = """
-        AND (
-            spansh_updated_at > NOW() - INTERVAL '7 days'
-            OR (spansh_updated_at IS NULL AND snapshot_time > NOW() - INTERVAL '7 days')
-        )
-    """
-
-    # Contested-expansion: Unoccupied + 2 or more powers + selected power present.
-    # Stored during ingest with power_state='Contested' (our internal label) and
-    # powers_list = comma-separated list of all contesting powers.
-    # Filter: selected power + at least 1 other must have ≥ CONTESTED_MIN_CONTROL_POINTS.
-    contested_exp_rows = db.execute(text(f"""
+    # Latest snapshot per Unoccupied system the power appears in (stored
+    # under the internal 'Contested' label, solo and multi-power alike)
+    rows = db.execute(text("""
         SELECT DISTINCT ON (system_id)
-               system_id, power, power_state,
-               reinforcement, undermining, control_progress,
-               snapshot_time, spansh_updated_at, conflict_progress,
-               powers_list
+               system_id, snapshot_time, spansh_updated_at,
+               conflict_progress, powers_list
         FROM pp_system_snapshots
         WHERE power_state = 'Contested'
           AND powers_list ILIKE :pattern
-          {_STALE}
+          AND (
+              spansh_updated_at > NOW() - INTERVAL '7 days'
+              OR (spansh_updated_at IS NULL AND snapshot_time > NOW() - INTERVAL '7 days')
+          )
         ORDER BY system_id, snapshot_time DESC
     """), {"pattern": f"%{power_name}%"}).mappings().all()
 
-    # Apply CONTESTED_MIN_CONTROL_POINTS (0.25) threshold filter in Python
-    import json as _json
-    contested_exp_sys_ids = []
-    contested_exp_snaps   = {}
-    for r in contested_exp_rows:
-        cp_str = r.get("conflict_progress") or ""
-        qualifying: list[str] = []
-        if cp_str:
-            try:
-                for entry in _json.loads(cp_str):
-                    if isinstance(entry, dict) and (entry.get("progress") or 0) >= CONTESTED_MIN_CONTROL_POINTS:
-                        qualifying.append(entry.get("power", ""))
-            except Exception:
-                pass
-        if power_name in qualifying and len(qualifying) >= 2:
-            contested_exp_sys_ids.append(r["system_id"])
-            contested_exp_snaps[r["system_id"]] = dict(r)
-    contested_exp_objs    = {s.id: s for s in (
-        db.query(PPSystem).filter(PPSystem.id.in_(contested_exp_sys_ids)).all()
-        if contested_exp_sys_ids else []
+    candidates = {
+        r["system_id"]: r for r in rows
+        if power_name in (r["powers_list"] or "").split(",")
+        and classify_acquisition(power_name, r["conflict_progress"], threshold) == "expansion"
+    }
+    systems = {s.id: s for s in (
+        db.query(PPSystem).filter(PPSystem.id.in_(list(candidates))).all()
+        if candidates else []
     )}
-
-    # Solo-expansion: bounding-box candidates where snapshot power = power_name
-    # and power_state = 'Unoccupied' (single power pushing).
-    all_x = [c[0] for c in power_coords]
-    all_y = [c[1] for c in power_coords]
-    all_z = [c[2] for c in power_coords]
-    solo_candidates: list[PPSystem] = db.query(PPSystem).filter(
-        PPSystem.x.between(min(all_x) - bbox_pad, max(all_x) + bbox_pad),
-        PPSystem.y.between(min(all_y) - bbox_pad, max(all_y) + bbox_pad),
-        PPSystem.z.between(min(all_z) - bbox_pad, max(all_z) + bbox_pad),
-        PPSystem.id.notin_(power_system_ids),
-        PPSystem.id.notin_(contested_exp_sys_ids),  # don't double-count
-    ).all()
-
-    # ── Build unified (system, snap, is_contested_expansion) list ────────────
-    scored_candidates: list[tuple[PPSystem, dict, bool]] = []
-
-    for sid, snap in contested_exp_snaps.items():
-        system = contested_exp_objs.get(sid)
-        if system is not None:
-            scored_candidates.append((system, snap, True))
-
-    for system in solo_candidates:
-        snap = snapshots.get(system.id)
-        if snap is None:
-            continue
-        if snap.get("power_state") != "Unoccupied":
-            continue
-        # Must be this power's solo push
-        if snap.get("power") != power_name:
-            continue
-        sx, sy, sz = system.x or 0.0, system.y or 0.0, system.z or 0.0
-        dist_fort = min(
-            (_dist(sx, sy, sz, cx, cy, cz) for cx, cy, cz in fortified_coords),
-            default=9_999.0,
-        )
-        dist_sh = min(
-            (_dist(sx, sy, sz, cx, cy, cz) for cx, cy, cz in stronghold_coords),
-            default=9_999.0,
-        )
-        if dist_fort <= fort_max or dist_sh <= sh_max:
-            scored_candidates.append((system, snap, False))
 
     items: list[RecommendationItem] = []
 
-    for system, snap, is_contested_exp in scored_candidates:
-        sx, sy, sz  = system.x or 0.0, system.y or 0.0, system.z or 0.0
-        power_state = snap.get("power_state", "Unoccupied")
+    for sid, snap in candidates.items():
+        system = systems.get(sid)
+        if system is None:
+            continue
+        sx, sy, sz = system.x or 0.0, system.y or 0.0, system.z or 0.0
 
-        if is_contested_exp:
-            in_fort_range = False
-            in_sh_range   = False
-            dist_fort     = 9_999.0
-            dist_sh       = 9_999.0
-        else:
-            dist_fort = min(
-                (_dist(sx, sy, sz, cx, cy, cz) for cx, cy, cz in fortified_coords),
-                default=9_999.0,
-            )
-            dist_sh = min(
-                (_dist(sx, sy, sz, cx, cy, cz) for cx, cy, cz in stronghold_coords),
-                default=9_999.0,
-            )
-            in_fort_range = dist_fort <= fort_max
-            in_sh_range   = dist_sh   <= sh_max
-
-        # ── Merit-proximity score (0–100 scale) ─────────────────────────────
-        progress    = float(snap.get("control_progress") or 0.0)
+        progress    = parse_conflict_progress(snap["conflict_progress"]).get(power_name, 0.0)
         merit_pos   = round(progress * MERIT_ACQUIRE)
         merits_left = max(0, MERIT_ACQUIRE - merit_pos)
-        score       = round((merit_pos / MERIT_ACQUIRE) * 100.0, 2)
+        score       = round(progress * 100.0, 2)
 
-        # ── Allegiance tiebreak ──────────────────────────────────────────────
-        if power_allegiance and system.allegiance == power_allegiance:
-            score += float(weights.get("expand_allegiance_match",
-                                       DEFAULTS["expand_allegiance_match"]))
-
-        # ── Build reason list ────────────────────────────────────────────────
         reasons: list[str] = []
-        if merit_pos == 0:
-            reasons.append("No PP activity yet — needs 120,000 merits to acquire")
-        elif merits_left == 0:
-            reasons.append(f"🚀 Acquisition threshold reached ({merit_pos:,} merits) — claim now!")
+        if merits_left == 0:
+            reasons.append(f"🚀 Acquisition threshold reached ({merit_pos:,} CP) — claim at cycle end")
         else:
             reasons.append(
                 f"Acquisition progress: {progress:.1%} "
-                f"({merit_pos:,} / {MERIT_ACQUIRE:,} merits)"
+                f"({merit_pos:,} / {MERIT_ACQUIRE:,} CP)"
             )
-            reasons.append(f"Merits still needed: {merits_left:,}")
-
-        # ── Anchor / contested-expansion badge ──────────────────────────────
-        if is_contested_exp:
-            anchor_type = "expansion"
-            reasons.append("Multi-power contested expansion — anchor check skipped")
-        else:
-            anchor_parts: list[str] = []
-            if in_fort_range:
-                anchor_parts.append(f"Fortified system {dist_fort:.1f} LY away")
-            if in_sh_range:
-                anchor_parts.append(f"Stronghold system {dist_sh:.1f} LY away")
-            reasons.append("Anchor: " + " · ".join(anchor_parts))
-            if in_fort_range and in_sh_range:
-                anchor_type = "both"
-            elif in_fort_range:
-                anchor_type = "fortified"
-            else:
-                anchor_type = "stronghold"
+            reasons.append(f"Control points still needed: {merits_left:,}")
 
         if power_allegiance and system.allegiance == power_allegiance:
+            score += allegiance_bonus
             reasons.append(
-                f"{system.allegiance} allegiance matches power "
-                f"(+{weights.get('expand_allegiance_match', DEFAULTS['expand_allegiance_match']):.0f} pts)"
+                f"{system.allegiance} allegiance matches power (+{allegiance_bonus:.0f} pts)"
             )
 
-        # ── Distance from reference system ───────────────────────────────────
+        # Rival presence below the contested line — see services.state_classification
+        # for why snipable/gap-to-lead is a tactical read, not a verdict.
+        expansion_signal = compute_expansion_signal(power_name, snap["conflict_progress"])
+        if (expansion_signal is not None and expansion_signal.leading_rival
+                and expansion_signal.leading_rival_progress > 0):
+            reasons.append(
+                f"Rival: {expansion_signal.leading_rival} "
+                f"{expansion_signal.leading_rival_progress:.1%} (below the "
+                f"{threshold:.0%} contested line)"
+            )
+
         distance_from_center: Optional[float] = None
         if center_coords is not None:
-            cx2, cy2, cz2 = center_coords
-            distance_from_center = _dist(sx, sy, sz, cx2, cy2, cz2)
-
-        local_radius = float(weights.get("local_radius_ly", DEFAULTS["local_radius_ly"]))
+            cx, cy, cz = center_coords
+            distance_from_center = _dist(sx, sy, sz, cx, cy, cz)
         is_local = distance_from_center <= local_radius if distance_from_center is not None else None
-
-        # Snipable / gap-to-lead — see services.state_classification for why
-        # this is a tactical read only, not a verdict on whether the system
-        # is worth fighting for. Every system compute_expand_scores returns
-        # is some flavor of acquisition race, so it's always EXPANSION state
-        # (confirmed against inara.cz/elite/power-contested/4/, which uses
-        # "Expansion" for both solo and multi-power rows — there's no
-        # separate "Contested" state value, just this page's own filter).
-        expansion_signal = compute_expansion_signal(power_name, snap.get("conflict_progress"))
-        if expansion_signal is not None:
-            reasons.append(
-                f"Race: us {expansion_signal.our_progress:.1%} vs. "
-                f"{expansion_signal.leading_rival or 'no rival'} "
-                f"{expansion_signal.leading_rival_progress:.1%}"
-                + (" — snipable" if expansion_signal.snipable else "")
-            )
 
         items.append(RecommendationItem(
             system_id64=system.system_id64,
@@ -1014,7 +916,7 @@ def compute_expand_scores(
             score=round(score, 1),
             type="expand",
             reasons=reasons,
-            power_state=power_state,
+            power_state="Unoccupied",   # the game's state; 'Contested' is only our storage label
             control_progress=progress,
             distance_from_center=distance_from_center,
             threat_trend="unknown",
@@ -1022,8 +924,8 @@ def compute_expand_scores(
             buffer_merits=merit_pos,
             merits_to_safety=None,
             merits_to_upgrade=merits_left,
-            anchor_type=anchor_type,
-            conflict_progress=snap.get("conflict_progress"),
+            anchor_type="expansion",
+            conflict_progress=snap["conflict_progress"],
             state=SystemState.EXPANSION.value,
             snipable=expansion_signal.snipable if expansion_signal else None,
             gap_to_lead=expansion_signal.gap_to_lead if expansion_signal else None,
@@ -1031,7 +933,7 @@ def compute_expand_scores(
             is_local=is_local,
         ))
 
-    # Sort: score descending (highest acquisition progress first)
+    # Highest acquisition progress first
     items.sort(key=lambda x: x.score, reverse=True)
     return items[:20]
 
