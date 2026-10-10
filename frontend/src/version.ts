@@ -64,7 +64,10 @@
  *                      observed since the Thursday tick.
  *   2.3.0  2026-10-10  Admin: Contested-vs-Expansion threshold replaces the anchor
  *                      distance settings; Contested panel caption explains the rule.
+ *   2.3.1  2026-10-10  Contested races shown relative to the current leader (leader =
+ *                      100%, others as a share of the leader's points, with CP gaps);
+ *                      Table view's contested Progress column becomes our Standing.
  */
 
-export const FRONTEND_VERSION      = "2.3.0";
+export const FRONTEND_VERSION      = "2.3.1";
 export const FRONTEND_RELEASE_DATE = "2026-10-10T03:00:00Z";

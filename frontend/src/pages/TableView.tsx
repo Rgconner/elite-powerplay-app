@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { getPowerSystems, PPSystemEntry } from "../api/powers";
 import { getRecommendations, RecommendationsResponse, RecommendationItem } from "../api/recommendations";
-import { getContestedSystems, ContestedSystemInfo, parseConflictProgress, formatDataAge, isStale } from "../api/contested";
+import { getContestedSystems, ContestedSystemInfo, parseConflictProgress, rankConflict, formatDataAge, isStale } from "../api/contested";
 import { useSelectionState } from "../hooks/useSelectionState";
 import { ppStateColor, PP_STATE_LABELS } from "../constants/ppColors";
 import { netValue } from "../utils/decay";
@@ -829,7 +829,7 @@ href={`https://inara.cz/elite/starsystem/?search=${encodeURIComponent(sys.name)}
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr>
-                    {["System", "Owner", "State", "Progress", "Reinf.", "Underm.", "Net R–U", "Dist LY", "Data Age"].map(h => (
+                    {["System", "Owner", "State", "Standing", "Reinf.", "Underm.", "Net R–U", "Dist LY", "Data Age"].map(h => (
                       <th key={h} style={{
                         padding: "8px 10px", textAlign: "left", fontSize: 11, fontWeight: 700,
                         color: "#FF8C00", textTransform: "uppercase", letterSpacing: "0.05em",
@@ -876,18 +876,29 @@ href={`https://inara.cz/elite/starsystem/?search=${encodeURIComponent(item.syste
                               </span>
                             : <span style={{ color: "#555" }}>—</span>}
                         </td>
-                        {/* Progress */}
+                        {/* Standing — ours relative to the current leader */}
                         <td style={{ padding: "7px 10px" }}>
-                          {item.control_progress != null ? (
-                            <div style={{ minWidth: 60 }}>
-                              <div style={{ fontSize: 11, color: item.control_progress <= 0.2 ? "#FF4444" : item.control_progress <= 0.5 ? "#FF8C00" : "#D9A84A", fontWeight: 600, textAlign: "right" }}>
-                                {(item.control_progress * 100).toFixed(1)}%
+                          {(() => {
+                            const ranked = rankConflict(parseConflictProgress(item));
+                            const us = ranked.find(s => s.power === powerName);
+                            if (!us || ranked.length < 2) return <span style={{ color: "#555" }}>—</span>;
+                            const runnerUp = ranked[1];
+                            const leader = ranked[0];
+                            const color = us.isLeader ? "#4AD94A" : us.relative >= 0.9 ? "#D9A84A" : "#FF4444";
+                            return (
+                              <div style={{ minWidth: 90 }}
+                                   title={ranked.map(s => `${s.power}: ${s.cp.toLocaleString()} CP`).join("\n")}>
+                                <div style={{ fontSize: 11, color, fontWeight: 600, textAlign: "right", whiteSpace: "nowrap" }}>
+                                  {us.isLeader
+                                    ? `Leading +${(us.cp - runnerUp.cp).toLocaleString()} CP`
+                                    : `${(us.relative * 100).toFixed(0)}% of ${leader.power}`}
+                                </div>
+                                <div style={{ height: 3, borderRadius: 2, background: "#2a2a3a" }}>
+                                  <div style={{ height: "100%", width: `${(us.relative * 100).toFixed(1)}%`, background: color, borderRadius: 2 }} />
+                                </div>
                               </div>
-                              <div style={{ height: 3, borderRadius: 2, background: "#2a2a3a" }}>
-                                <div style={{ height: "100%", width: `${Math.min(100, item.control_progress * 100)}%`, background: "#FF8C00", borderRadius: 2 }} />
-                              </div>
-                            </div>
-                          ) : <span style={{ color: "#555" }}>—</span>}
+                            );
+                          })()}
                         </td>
                         {/* Reinforcement */}
                         <td style={{ padding: "7px 10px", textAlign: "right", color: "#4AD94A", fontVariantNumeric: "tabular-nums" }}>

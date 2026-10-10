@@ -69,6 +69,36 @@ export function parseConflictProgress(item: ContestedSystemInfo): ConflictPowerP
   }
 }
 
+/** Control points per 1.0 of conflict progress (the acquisition threshold). */
+export const ACQUIRE_CP = 120_000;
+
+export interface ConflictStanding extends ConflictPowerProgress {
+  /** Control points: progress × 120,000. */
+  cp: number;
+  /** Share of the leader's points, 0–1 (leader = 1). */
+  relative: number;
+  /** Points behind the leader (0 for the leader). */
+  gapCp: number;
+  isLeader: boolean;
+}
+
+/**
+ * Rank a contested system's powers against the current leader.  The race is
+ * won by whoever has the most points at cycle end, so the leader is the
+ * reference (100%) and everyone else is shown as a share of the leader.
+ */
+export function rankConflict(entries: ConflictPowerProgress[]): ConflictStanding[] {
+  const ranked = [...entries].sort((a, b) => b.progress - a.progress);
+  const top = ranked[0]?.progress ?? 0;
+  return ranked.map((e, i) => ({
+    ...e,
+    cp: Math.round(e.progress * ACQUIRE_CP),
+    relative: top > 0 ? Math.max(0, e.progress) / top : 0,
+    gapCp: Math.round((top - e.progress) * ACQUIRE_CP),
+    isLeader: i === 0 && top > 0,
+  }));
+}
+
 export async function getContestedSystems(
   powerName: string,
 ): Promise<ContestedSystemInfo[]> {

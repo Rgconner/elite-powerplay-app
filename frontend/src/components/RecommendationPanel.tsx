@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { RecommendationsResponse, RecommendationItem } from "../api/recommendations";
-import { ContestedSystemInfo, parseConflictProgress } from "../api/contested";
+import { ContestedSystemInfo, parseConflictProgress, rankConflict } from "../api/contested";
 import { ppStateColor, PP_STATE_LABELS, powerColor, CP_DECAY_COLOR } from "../constants/ppColors";
 import { effectiveUndermining, netValue } from "../utils/decay";
 import { MERIT_FORTIFIED, MERIT_STRONGHOLD, MERIT_MAX } from "../utils/scoring";
@@ -372,35 +372,38 @@ href={`https://inara.cz/elite/starsystem/?search=${encodeURIComponent(item.syste
         )}
       </div>
 
-      {/* Per-power conflict progress bars */}
+      {/* Per-power standings, relative to the current leader: whoever has the
+          most points at cycle end wins, so the leader is the 100% reference */}
       {conflictEntries.length > 0 ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-          {conflictEntries
-            .slice()
-            .sort((a, b) => b.progress - a.progress)
-            .map((entry) => {
-              // progress is already normalised 0–1+ where 1.0 = 120k merits acquired
-              const normPct = Math.min(100, Math.max(0, entry.progress * 100));
-              const color = powerColor(entry.power);
-              const acquired = entry.progress >= 1.0;
-              return (
-                <div key={entry.power}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#8b949e", marginBottom: 2 }}>
-                    <span style={{ color, fontWeight: 600 }}>{entry.power}</span>
-                    <span style={{ color: acquired ? "#00E5CC" : color }}>
-                      {acquired ? "🚀 Acquired!" : `${normPct.toFixed(1)}%`}
-                    </span>
-                  </div>
-                  <div style={{ height: 5, borderRadius: 3, background: "#21262d", overflow: "hidden" }}>
-                    <div style={{
-                      height: "100%", width: `${normPct}%`,
-                      background: acquired ? "#00E5CC" : color,
-                      borderRadius: 3, transition: "width 0.3s",
-                    }} />
-                  </div>
+          {rankConflict(conflictEntries).map((s) => {
+            const color = powerColor(s.power);
+            const pastThreshold = s.progress >= 1.0;
+            return (
+              <div key={s.power}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#8b949e", marginBottom: 2 }}>
+                  <span style={{ color, fontWeight: s.isLeader ? 800 : 600 }}>
+                    {s.isLeader && "👑 "}{s.power}
+                  </span>
+                  <span
+                    style={{ color: s.isLeader ? "#00E5CC" : color, fontVariantNumeric: "tabular-nums" }}
+                    title={`${s.cp.toLocaleString()} CP (${(s.progress * 100).toFixed(1)}% of the 120,000 acquisition threshold)`}
+                  >
+                    {s.isLeader
+                      ? <>Leader · {s.cp.toLocaleString()} CP{pastThreshold && " ✓ past 120k"}</>
+                      : <>{(s.relative * 100).toFixed(0)}% of leader · −{s.gapCp.toLocaleString()} CP</>}
+                  </span>
                 </div>
-              );
-            })}
+                <div style={{ height: 5, borderRadius: 3, background: "#21262d", overflow: "hidden" }}>
+                  <div style={{
+                    height: "100%", width: `${(s.relative * 100).toFixed(1)}%`,
+                    background: s.isLeader ? "#00E5CC" : color,
+                    borderRadius: 3, transition: "width 0.3s",
+                  }} />
+                </div>
+              </div>
+            );
+          })}
         </div>
       ) : (
         /* Fallback: simple single bar when no conflict data */
