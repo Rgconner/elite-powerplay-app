@@ -180,7 +180,12 @@ Version history:
                        control_progress). Solo pushes ingested. Admin percent
                        thresholds normalised (target_progress_* were read as
                        10.0 instead of 0.10 once saved).
+    2.3.1  2026-10-17  Fortify urgency uses effective undermining (decay
+                       removed). Decay is a one-off per cycle that can't take
+                       a system below 25%, but was being extrapolated as a
+                       daily attack rate, raising false WARNINGs on unattacked
+                       Strongholds.
  """
 
-BACKEND_VERSION      = "2.3.0"
+BACKEND_VERSION      = "2.3.1"
 BACKEND_RELEASE_DATE = "2026-10-10T03:00:00Z"

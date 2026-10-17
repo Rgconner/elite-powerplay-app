@@ -469,6 +469,8 @@ def _fortify_urgency(
     KEY RULE: urgency is ONLY triggered when undermining > reinforcement (net < 0).
       A system with R >= U has no threat regardless of how low progress is.
       Low progress + no undermining = normal state, no action needed.
+      *undermining* must be the EFFECTIVE value (decay removed; see the
+      caller): decay alone can never downgrade a system.
 
     days_to_failure = buffer_merits / (U - R)   [only computed when U > R]
       where buffer_merits = progress × band_width
@@ -530,7 +532,11 @@ def _fortify_urgency(
                 score = SCORE_MONITOR
                 d_str = f"~{days_to_failure:.0f}d" if days_to_failure is not None else "unknown"
                 reasons.append(f"Stronghold under minor pressure ({d_str} at current rate)")
-            reasons.append(f"Buffer: {mf['buffer_merits']:,} merits · Net: {net:+,}/day · Need {mf['merits_to_safety']:,} to safety")
+            elapsed = days_elapsed_in_cycle(snapshot_time)
+            reasons.append(
+                f"Buffer: {mf['buffer_merits']:,} merits · Cycle net: {net:+,} over {elapsed:.1f}d "
+                f"({net / elapsed:+,.0f}/day) · Need {mf['merits_to_safety']:,} to safety"
+            )
             return score, reasons, days_to_failure
         else:
             # Stronghold, healthy, no threat — skip entirely
@@ -737,8 +743,15 @@ def compute_fortify_scores(
 
         trend, daily_delta = get_progress_trend(system.id, db)
 
+        # Threat comes from real undermining only.  Decay is booked as
+        # undermining at the tick, but it is a one-off per cycle (not a daily
+        # rate) and can never take a system below 25% of its tier, so it must
+        # not drive days-to-failure.  Same figure the card's Net uses.
+        from services.decay import effective_undermining as _eff_u
+        active_undermining = _eff_u(undermining, cp_decay_val)
+
         raw_score, reasons, days_to_failure = _fortify_urgency(
-            power_state, reinforcement, undermining, control_progress,
+            power_state, reinforcement, active_undermining, control_progress,
             trend, daily_delta, snapshot_time, weights,
         )
 
@@ -757,10 +770,8 @@ def compute_fortify_scores(
                 score += weights["fortify_near_center"]
                 reasons.append(f"Close to center system ({distance_from_center:.1f} LY)")
 
-        from services.decay import effective_undermining as _eff_u
         r = reinforcement or 0
-        u = undermining   or 0
-        eff_u = _eff_u(u, cp_decay_val)
+        eff_u = active_undermining
         undermine_ratio: Optional[float] = (eff_u / r) if r > 0 else None
 
         # Absolute merit context
