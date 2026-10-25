@@ -17,6 +17,7 @@ import time
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -420,6 +421,26 @@ def _record_enrichment_stats(
         db.rollback()
 
 
+def _upsert_enrichment(db: Session, sid: int, has_platinum: bool,
+                       boom_stations: int, has_pristine: bool) -> None:
+    db.execute(
+        text("""
+            INSERT INTO spansh_enrichment
+                (system_id64, has_platinum, has_boom, boom_stations, has_pristine, cached_at)
+            VALUES (:sid, :plat, :boom, :boom_n, :prist, NOW())
+            ON CONFLICT (system_id64) DO UPDATE SET
+                has_platinum = EXCLUDED.has_platinum,
+                has_boom = EXCLUDED.has_boom,
+                boom_stations = EXCLUDED.boom_stations,
+                has_pristine = EXCLUDED.has_pristine,
+                cached_at = EXCLUDED.cached_at
+        """),
+        {"sid": sid, "plat": has_platinum, "boom": boom_stations > 0,
+         "boom_n": boom_stations, "prist": has_pristine},
+    )
+    db.commit()
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 
@@ -438,6 +459,10 @@ async def enrich_batch(
     Set force_refresh=true to bypass the cache and re-fetch from Spansh.
     This is useful after deploying detection fixes to invalidate
     stale cache entries.
+
+    The database work runs in the threadpool (run_in_threadpool): this is an
+    async endpoint, and blocking DB calls on the event loop stalled every
+    other request, each waiting ~1s behind a flood of these.
     """
     try:
         ids = body.system_ids
@@ -459,7 +484,7 @@ async def enrich_batch(
         if body.force_refresh:
             need_fetch = unique_ids
         else:
-            rows = db.execute(
+            rows = await run_in_threadpool(lambda: db.execute(
                 text("""
                     SELECT system_id64, has_platinum, boom_stations, has_pristine
                     FROM spansh_enrichment
@@ -467,7 +492,7 @@ async def enrich_batch(
                       AND cached_at > NOW() - make_interval(hours => :ttl)
                 """),
                 {"ids": unique_ids, "ttl": ENRICH_TTL_HOURS},
-            ).mappings().all()
+            ).mappings().all())
 
             cache_map: dict[int, dict] = {r["system_id64"]: r for r in rows}
             for sid in unique_ids:
@@ -495,14 +520,14 @@ async def enrich_batch(
 
             # Look up system names from pp_systems for the bodies/search API.
             # This enables the more reliable bodies/search enrichment path.
-            name_rows = db.execute(
+            name_rows = await run_in_threadpool(lambda: db.execute(
                 text("""
                     SELECT system_id64, name
                     FROM pp_systems
                     WHERE system_id64 = ANY(:ids)
                 """),
                 {"ids": need_fetch},
-            ).mappings().all()
+            ).mappings().all())
             name_map: dict[int, str] = {r["system_id64"]: r["name"] for r in name_rows}
 
             for i, sid in enumerate(need_fetch):
@@ -525,22 +550,9 @@ async def enrich_batch(
                     continue
                 fetch_total_ms += (time.perf_counter() - t0) * 1000.0
 
-                db.execute(
-                    text("""
-                        INSERT INTO spansh_enrichment
-                            (system_id64, has_platinum, has_boom, boom_stations, has_pristine, cached_at)
-                        VALUES (:sid, :plat, :boom, :boom_n, :prist, NOW())
-                        ON CONFLICT (system_id64) DO UPDATE SET
-                            has_platinum = EXCLUDED.has_platinum,
-                            has_boom = EXCLUDED.has_boom,
-                            boom_stations = EXCLUDED.boom_stations,
-                            has_pristine = EXCLUDED.has_pristine,
-                            cached_at = EXCLUDED.cached_at
-                    """),
-                    {"sid": sid, "plat": has_platinum, "boom": boom_stations > 0,
-                     "boom_n": boom_stations, "prist": has_pristine},
+                await run_in_threadpool(
+                    _upsert_enrichment, db, sid, has_platinum, boom_stations, has_pristine,
                 )
-                db.commit()
 
                 results[sid] = EnrichResult(
                     has_platinum=has_platinum, has_boom=boom_stations > 0,
@@ -549,7 +561,8 @@ async def enrich_batch(
 
         # Record telemetry for this batch (fire-and-forget, errors are swallowed)
         if cache_hits or need_fetch:
-            _record_enrichment_stats(
+            await run_in_threadpool(
+                _record_enrichment_stats,
                 db,
                 hits=cache_hits,
                 misses=len(need_fetch),

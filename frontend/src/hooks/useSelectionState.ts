@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 
 export interface SelectedSystem {
@@ -23,11 +24,15 @@ export function useSelectionState(): SelectionState {
   const refSystem: SelectedSystem | null =
     refId && refName ? { id: Number(refId), name: refName } : null;
 
-  // System list stored as comma-separated names in URL (url-encoded)
+  // System list stored as comma-separated names in URL (url-encoded).
+  // Memoised on the raw param: a fresh array every render made every
+  // consumer's useMemo/useEffect re-run each render, and the Target List's
+  // enrichment effect re-fetched in a tight loop (~12 requests/s).
   const listParam = params.get("systems");
-  const systemList: string[] = listParam
-    ? listParam.split(",").map(s => s.trim()).filter(Boolean)
-    : [];
+  const systemList: string[] = useMemo(
+    () => (listParam ? listParam.split(",").map(s => s.trim()).filter(Boolean) : []),
+    [listParam],
+  );
 
   function setPower(name: string | null) {
     setParams((prev) => {

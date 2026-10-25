@@ -69,7 +69,10 @@
  *                      Table view's contested Progress column becomes our Standing.
  *   2.3.2  2026-10-10  Contested cards fold powers under 5% of the leader into one
  *                      "+N others" line (leader and selected power always shown).
+ *   2.3.3  2026-10-25  Fix request loop: systemList was a new array every render, so
+ *                      the Target List re-fetched badges ~12x/s with a System List in
+ *                      the URL. Memoised, and the effect keyed on the id list.
  */
 
-export const FRONTEND_VERSION      = "2.3.2";
+export const FRONTEND_VERSION      = "2.3.3";
 export const FRONTEND_RELEASE_DATE = "2026-10-10T03:00:00Z";

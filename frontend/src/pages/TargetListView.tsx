@@ -199,12 +199,15 @@ export default function TargetListView() {
     });
   }, [displaySystems]);
 
-  // Fetch Spansh enrichment data — re-fetches whenever enriched systems change.
+  // Fetch Spansh enrichment data when the set of systems changes.  Keyed on
+  // the id list rather than the `enriched` array, so a re-render that builds
+  // an equal array can't trigger another fetch.
+  const enrichIdsKey = useMemo(() => enriched.map(r => r.system_id64).join(","), [enriched]);
   useEffect(() => {
-    if (enriched.length === 0) return;
+    if (!enrichIdsKey) return;
     setEnriching(true);
 
-    const ids = enriched.map(r => r.system_id64);
+    const ids = enrichIdsKey.split(",").map(Number);
     getSpanshEnrichmentBatch(ids)
       .then(result => {
         setEnrichment(result);
@@ -215,7 +218,7 @@ export default function TargetListView() {
         console.warn("Spansh enrichment fetch failed, will retry on next render");
       })
       .finally(() => setEnriching(false));
-  }, [enriched]);
+  }, [enrichIdsKey]);
 
   // Sort
   const sorted = useMemo(() => {
