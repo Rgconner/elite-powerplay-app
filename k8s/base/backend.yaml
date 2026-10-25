@@ -92,6 +92,13 @@ spec:
                   name: elite-powerplay-config
                   key: EDSM_SYNC_INTERVAL_HOURS
 
+            # ── Runtime health alerts (services/health_monitor.py) ─────────────
+            # Indexed into the homesoc anomaly board; unset to log only.
+            - name: HEALTH_ALERT_ES_URL
+              value: "http://homesoc-es.homesoc.svc:9200"
+            - name: HEALTH_ALERT_INDEX
+              value: "homesoc-anomalies"
+
             # ── DB pool tuning ─────────────────────────────────────────────────
             # All values are read by db/session.py; defaults are baked into the
             # code so this section is optional.  Listed here so the tuning is
