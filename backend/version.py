@@ -188,7 +188,11 @@ Version history:
     2.3.2  2026-10-25  enrich/batch runs its DB work in the threadpool; it is
                        async and its blocking commits stalled the event loop
                        (~1s on every request under a client request loop).
+    2.4.0  2026-10-25  Runtime health monitoring: event-loop stall detector,
+                       per-client rate limit (HTTP 429), endpoint p95 tracking;
+                       alerts logged and optionally indexed to Elasticsearch;
+                       GET /api/telemetry/health.
  """
 
-BACKEND_VERSION      = "2.3.2"
+BACKEND_VERSION      = "2.4.0"
 BACKEND_RELEASE_DATE = "2026-10-10T03:00:00Z"

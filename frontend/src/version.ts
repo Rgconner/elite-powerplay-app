@@ -72,7 +72,9 @@
  *   2.3.3  2026-10-25  Fix request loop: systemList was a new array every render, so
  *                      the Target List re-fetched badges ~12x/s with a System List in
  *                      the URL. Memoised, and the effect keyed on the id list.
+ *   2.4.0  2026-10-25  Telemetry page: Runtime Health panel (event-loop lag, busiest
+ *                      clients, slowest endpoints, recent alerts).
  */
 
-export const FRONTEND_VERSION      = "2.3.3";
+export const FRONTEND_VERSION      = "2.4.0";
 export const FRONTEND_RELEASE_DATE = "2026-10-10T03:00:00Z";

@@ -304,6 +304,14 @@ def get_telemetry(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/health")
+def get_runtime_health(admin: AdminUserDep) -> dict:
+    """Live runtime health: event-loop lag, busiest clients, slowest
+    endpoints, throttling and recent alerts (services/health_monitor.py)."""
+    from services.health_monitor import monitor
+    return monitor.snapshot()
+
+
 @router.get("/history")
 def get_telemetry_history(
     admin: AdminUserDep,

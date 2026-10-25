@@ -9,7 +9,8 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   getAdminToken, setAdminToken, clearAdminToken,
-  getTelemetry,
+  getTelemetry, getRuntimeHealth,
+  type RuntimeHealth,
   type TelemetryStatus, type TelemetryFeedIngest, type TelemetryFeedEddn,
   type TelemetryFeedEnrichment, type TelemetryRunSummary,
 } from "../api/admin";
@@ -295,11 +296,79 @@ function LoginWall({ onLogin }: { onLogin: () => void }) {
   );
 }
 
+// ── Runtime health panel ─────────────────────────────────────────────────────
+
+function RuntimePanel({ health }: { health: RuntimeHealth }) {
+  const { limits } = health;
+  const stalled = health.max_loop_lag_s > limits.loop_stall_s;
+  const status = health.recent_alerts.some(a => a.tier === "immediate") ? "red"
+               : stalled || health.throttled_requests > 0 ? "yellow" : "green";
+  const cell = { padding: "3px 8px", fontSize: 12, color: TEXT, borderBottom: `1px solid ${BORDER}` } as const;
+  const head = { ...cell, color: MUTED, fontWeight: 600 } as const;
+  return (
+    <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 8, padding: 16, maxWidth: 960, margin: "0 auto 16px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <span style={{ fontWeight: 700, color: TEXT, fontSize: 14 }}>🩺 Runtime Health</span>
+        <span style={{ color: STATUS_COLOR[status], fontWeight: 700, fontSize: 12 }}>
+          {status === "green" ? "OK" : status === "yellow" ? "Degraded" : "Alerting"}
+        </span>
+      </div>
+      <div style={{ display: "flex", gap: 24, flexWrap: "wrap", fontSize: 12, color: MUTED, marginBottom: 12 }}>
+        <span>Event-loop lag: <b style={{ color: TEXT }}>{(health.loop_lag_s * 1000).toFixed(0)} ms</b>
+          {" "}(max {(health.max_loop_lag_s * 1000).toFixed(0)} ms, stall &gt; {(limits.loop_stall_s * 1000).toFixed(0)} ms)</span>
+        <span>Stalls: <b style={{ color: health.loop_stalls ? STATUS_COLOR.yellow : TEXT }}>{fmtNum(health.loop_stalls)}</b></span>
+        <span>Throttled (429): <b style={{ color: health.throttled_requests ? STATUS_COLOR.yellow : TEXT }}>{fmtNum(health.throttled_requests)}</b></span>
+        <span>In flight: <b style={{ color: TEXT }}>{health.in_flight}</b></span>
+        <span>Up {fmtDuration(health.uptime_s)}</span>
+        <span>Alerts → <b style={{ color: TEXT }}>{limits.alerts_to ?? "log only"}</b></span>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16 }}>
+        <table style={{ borderCollapse: "collapse", width: "100%" }}>
+          <thead><tr><th style={head} align="left">Busiest client (last min)</th><th style={head} align="left">Endpoint</th><th style={head} align="right">req/min</th></tr></thead>
+          <tbody>
+            {health.busiest_clients.slice(0, 5).map(c => (
+              <tr key={c.client_ip + c.endpoint}>
+                <td style={cell}>{c.client_ip}</td>
+                <td style={{ ...cell, color: MUTED }}>{c.endpoint}</td>
+                <td style={{ ...cell, color: c.requests_per_min > limits.client_rate_per_min * 0.5 ? STATUS_COLOR.yellow : TEXT }} align="right">{c.requests_per_min}</td>
+              </tr>
+            ))}
+            {health.busiest_clients.length === 0 && <tr><td style={{ ...cell, color: MUTED }} colSpan={3}>No requests in the last minute</td></tr>}
+          </tbody>
+        </table>
+        <table style={{ borderCollapse: "collapse", width: "100%" }}>
+          <thead><tr><th style={head} align="left">Slowest endpoint</th><th style={head} align="right">p95</th><th style={head} align="right">samples</th></tr></thead>
+          <tbody>
+            {health.slowest_endpoints.slice(0, 5).map(e => (
+              <tr key={e.endpoint}>
+                <td style={{ ...cell, color: MUTED }}>{e.endpoint}</td>
+                <td style={{ ...cell, color: e.p95_s > limits.slow_p95_s ? STATUS_COLOR.red : TEXT }} align="right">{e.p95_s.toFixed(2)}s</td>
+                <td style={cell} align="right">{e.samples}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {health.recent_alerts.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ fontSize: 12, color: MUTED, fontWeight: 600, marginBottom: 4 }}>Recent alerts</div>
+          {health.recent_alerts.slice(0, 8).map(a => (
+            <div key={a.fingerprint + a.scored_at} style={{ fontSize: 12, color: a.tier === "immediate" ? STATUS_COLOR.red : STATUS_COLOR.yellow, padding: "2px 0" }}>
+              {fmtAgo(a.scored_at + "Z")} · {a.message}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function TelemetryPage() {
   const [isAuthed, setIsAuthed] = useState(!!getAdminToken());
   const [data, setData] = useState<TelemetryStatus | null>(null);
+  const [health, setHealth] = useState<RuntimeHealth | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [lastFetched, setLastFetched] = useState<Date | null>(null);
@@ -308,6 +377,7 @@ export default function TelemetryPage() {
     if (!getAdminToken()) return;
     setLoading(true);
     setError(null);
+    getRuntimeHealth().then(setHealth).catch(() => setHealth(null));
     getTelemetry()
       .then((d) => {
         setData(d);
@@ -388,6 +458,8 @@ export default function TelemetryPage() {
           Error: {error}
         </div>
       )}
+
+      {health && <RuntimePanel health={health} />}
 
       {/* Feed panels — 2×2 grid */}
       <div style={{

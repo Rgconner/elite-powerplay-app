@@ -190,3 +190,33 @@ export async function getTelemetry(): Promise<TelemetryStatus> {
   if (!res.ok) await handleFetchError(res);
   return res.json() as Promise<TelemetryStatus>;
 }
+
+// ── Runtime health (backend services/health_monitor.py) ──────────────────────
+
+export interface RuntimeAlert {
+  fingerprint: string;
+  tier: "immediate" | "investigate" | "monitor";
+  urgency_label: string;
+  message: string;
+  src_ip: string | null;
+  scored_at: string;
+}
+
+export interface RuntimeHealth {
+  uptime_s: number;
+  loop_lag_s: number;
+  max_loop_lag_s: number;
+  loop_stalls: number;
+  throttled_requests: number;
+  in_flight: number;
+  busiest_clients: { client_ip: string; endpoint: string; requests_per_min: number }[];
+  slowest_endpoints: { endpoint: string; p95_s: number; samples: number }[];
+  recent_alerts: RuntimeAlert[];
+  limits: { loop_stall_s: number; client_rate_per_min: number; slow_p95_s: number; alerts_to: string | null };
+}
+
+export async function getRuntimeHealth(): Promise<RuntimeHealth> {
+  const res = await fetch("/api/telemetry/health", { headers: getAuthHeader() });
+  if (!res.ok) await handleFetchError(res);
+  return res.json() as Promise<RuntimeHealth>;
+}

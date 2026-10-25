@@ -1,5 +1,6 @@
 """Elite Dangerous Power Play Analyzer — FastAPI application entry point."""
 
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -284,6 +285,7 @@ from routers.telemetry import router as telemetry_router  # noqa: E402
 from routers.decisions import router as decisions_router  # noqa: E402
 from routers.votes import router as votes_router  # noqa: E402
 from services.realtime_accumulator import run_realtime_accumulator  # noqa: E402
+from services.health_monitor import HealthMiddleware, monitor as health_monitor  # noqa: E402
 
 SPANSH_INGEST_INTERVAL_HOURS: int = int(os.getenv("SPANSH_INGEST_INTERVAL_HOURS", "24"))
 
@@ -348,6 +350,8 @@ async def lifespan(app: FastAPI):
     )
     scheduler.start()
     app.state.scheduler = scheduler
+    # Event-loop stall detector (services/health_monitor.py)
+    loop_watch = asyncio.create_task(health_monitor.watch_loop())
     logger.info(
         "Elite Powerplay API starting up. "
         "Spansh PP ingest scheduled every %d hour(s). "
@@ -355,6 +359,7 @@ async def lifespan(app: FastAPI):
         SPANSH_INGEST_INTERVAL_HOURS,
     )
     yield
+    loop_watch.cancel()
     scheduler.shutdown(wait=False)
     app.state.scheduler = None
     logger.info("Elite Powerplay API shutting down.")
@@ -371,6 +376,11 @@ _cors_origins_raw = os.getenv(
     "CORS_ORIGINS", "http://localhost:5173,https://ppa.example.com"
 )
 _cors_origins = [o.strip() for o in _cors_origins_raw.split(",") if o.strip()]
+
+# Request rate / latency tracking and per-client throttling.  Added before
+# CORS so it sits inside it and throttled (429) responses still carry CORS
+# headers.
+app.add_middleware(HealthMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
